@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix travel-os run dev",
+    "build": "npm --prefix travel-os run build",
+    "start": "npm --prefix travel-os run start",
+    "lint": "npm --prefix travel-os run lint"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.101.1"
+  }
+}
