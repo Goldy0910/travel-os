@@ -1,4 +1,17 @@
+# Dependencies (never commit — run npm install at repo root and in travel-os/)
 node_modules/
+**/node_modules/
+
+# Next.js
 .next/
+**/.next/
+out/
+
+# Env & local
+.env
 .env*.local
+
+# OS & tooling
 .DS_Store
+*.tsbuildinfo
+.vercel
