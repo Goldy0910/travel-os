@@ -3,7 +3,7 @@
 import { PENDING_TRIP_INVITE_KEY } from "@/lib/pending-trip-invite";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type InvitePreviewPayload = {
   found: boolean;
@@ -19,6 +19,22 @@ type Props = {
   serverJoinError: string | null;
 };
 
+function computePhase(
+  code: string,
+  preview: InvitePreviewPayload,
+  isLoggedIn: boolean,
+  serverJoinError: string | null,
+): "idle" | "to_login" | "joining" {
+  const codeMissing = code.length === 0;
+  const codeTooShort = code.length > 0 && code.length < 8;
+  const invalidCode = !codeMissing && !codeTooShort && !preview.found;
+  if (codeMissing || codeTooShort || serverJoinError || invalidCode) return "idle";
+  if (preview.found && code.length >= 8) {
+    return isLoggedIn ? "joining" : "to_login";
+  }
+  return "idle";
+}
+
 export default function JoinInviteClient({
   initialCode,
   preview,
@@ -26,22 +42,53 @@ export default function JoinInviteClient({
   serverJoinError,
 }: Props) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const redirected = useRef(false);
+  const code = initialCode.trim();
 
-  const goLoginWithPending = useCallback(() => {
-    const code = initialCode.trim();
-    if (code.length < 8) return;
+  const [phase, setPhase] = useState(() =>
+    computePhase(code, preview, isLoggedIn, serverJoinError),
+  );
+
+  const codeMissing = code.length === 0;
+  const codeTooShort = code.length > 0 && code.length < 8;
+  const invalidCode = !codeMissing && !codeTooShort && !preview.found;
+
+  useEffect(() => {
+    setPhase(computePhase(code, preview, isLoggedIn, serverJoinError));
+  }, [code, preview, isLoggedIn, serverJoinError]);
+
+  useEffect(() => {
+    if (phase !== "to_login") return;
+    if (redirected.current) return;
+    redirected.current = true;
     try {
       localStorage.setItem(PENDING_TRIP_INVITE_KEY, code);
     } catch {
       /* private mode */
     }
-    router.push("/app/login");
-  }, [initialCode, router]);
+    router.replace(`/app/login?code=${encodeURIComponent(code)}`);
+  }, [phase, code, router]);
 
-  const codeTooShort = initialCode.trim().length > 0 && initialCode.trim().length < 8;
-  const codeMissing = initialCode.trim().length === 0;
-  const invalidCode = !codeMissing && !codeTooShort && !preview.found;
+  if (phase === "to_login" || phase === "joining") {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-10">
+        <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
+          <div
+            className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900"
+            aria-hidden
+          />
+          <p className="text-base font-medium text-slate-800">
+            {phase === "joining" ? "Joining trip…" : "Taking you to sign in…"}
+          </p>
+          <p className="text-sm text-slate-500">
+            {phase === "joining"
+              ? "Almost there."
+              : "You’ll join automatically right after you log in or sign up."}
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-10">
@@ -89,27 +136,8 @@ export default function JoinInviteClient({
           </div>
         ) : null}
 
-        {preview.found && !isLoggedIn && !serverJoinError ? (
-          <div className="mt-8 space-y-3">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setBusy(true);
-                goLoginWithPending();
-              }}
-              className="h-12 w-full rounded-xl bg-slate-900 text-base font-medium text-white transition hover:bg-slate-800 disabled:opacity-70"
-            >
-              Log in or sign up to join
-            </button>
-            <p className="text-center text-xs text-slate-500">
-              We&apos;ll save this invite on this device until you&apos;re signed in.
-            </p>
-          </div>
-        ) : null}
-
-        {preview.found && isLoggedIn && serverJoinError ? (
-          <div className="mt-8 space-y-3">
+        {serverJoinError && isLoggedIn ? (
+          <div className="mt-8">
             <Link
               href="/app/home"
               className="flex h-12 w-full items-center justify-center rounded-xl border border-slate-300 bg-white text-base font-medium text-slate-900"

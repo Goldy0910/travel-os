@@ -74,7 +74,7 @@ export default async function JoinPage({ searchParams }: JoinPageProps) {
       if (jr.ok) {
         const tripId = jr.trip_id ?? preview.trip_id;
         if (tripId) {
-          redirect(`/app/trip/${tripId}`);
+          redirect(`/app/trip/${tripId}?welcome=1`);
         }
         serverJoinError =
           jr.error ?? "Could not complete join. Try again or contact support.";

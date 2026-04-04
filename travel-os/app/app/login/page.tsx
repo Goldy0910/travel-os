@@ -22,38 +22,64 @@ function postLoginPath(): string {
   }
 }
 
+/** Persist invite from ?code=, ?invite=, or ?next=/join?code=… */
+function persistInviteFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const tryStore = (c: string | undefined) => {
+      const t = c?.trim() ?? "";
+      if (t.length >= 8) {
+        localStorage.setItem(PENDING_TRIP_INVITE_KEY, t);
+        return true;
+      }
+      return false;
+    };
+    if (tryStore(params.get("code") ?? undefined)) return;
+    if (tryStore(params.get("invite") ?? undefined)) return;
+    const next = params.get("next")?.trim();
+    if (next) {
+      const url = new URL(next, window.location.origin);
+      if (tryStore(url.searchParams.get("code") ?? undefined)) return;
+    }
+  } catch {
+    /* private mode / invalid next */
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignup, setIsSignup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [joiningTrip, setJoiningTrip] = useState(false);
 
   useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code")?.trim();
-      if (code && code.length >= 8) {
-        localStorage.setItem(PENDING_TRIP_INVITE_KEY, code);
-      }
-      const legacy = params.get("invite")?.trim();
-      if (legacy && legacy.length >= 8) {
-        localStorage.setItem(PENDING_TRIP_INVITE_KEY, legacy);
-      }
-    } catch {
-      /* private mode / SSR */
-    }
+    persistInviteFromUrl();
   }, []);
+
+  const finishAfterSession = async (supabase: ReturnType<typeof createSupabaseBrowserClient>) => {
+    setJoiningTrip(true);
+    try {
+      const wentToTrip = await tryConsumePendingInvite(supabase, router);
+      if (!wentToTrip) {
+        router.push(postLoginPath());
+        router.refresh();
+      }
+    } finally {
+      setJoiningTrip(false);
+    }
+  };
 
   const handleAuth = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMessage("");
-    setSuccessMessage("");
+    setInfoMessage("");
     setIsSubmitting(true);
 
-    let supabase;
+    let supabase: ReturnType<typeof createSupabaseBrowserClient>;
     try {
       supabase = createSupabaseBrowserClient();
     } catch (error) {
@@ -74,36 +100,43 @@ export default function LoginPage() {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) {
           setErrorMessage(error.message);
-        } else if (data.session) {
-          const wentToTrip = await tryConsumePendingInvite(supabase, router);
-          if (!wentToTrip) {
-            router.push(postLoginPath());
-            router.refresh();
-          }
-        } else {
-          setSuccessMessage("Signup successful. You can now log in.");
-          setIsSignup(false);
-          setPassword("");
+          return;
         }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        if (data.session) {
+          await finishAfterSession(supabase);
+          return;
+        }
+        const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-        if (error) {
-          setErrorMessage(error.message);
-        } else {
-          const wentToTrip = await tryConsumePendingInvite(supabase, router);
-          if (!wentToTrip) {
-            router.push(postLoginPath());
-            router.refresh();
-          }
+        if (signInError) {
+          setInfoMessage(
+            "Account created. If you don’t get in automatically, confirm your email or ask your admin to disable “Confirm email” in Supabase (Auth → Providers → Email) for instant beta access.",
+          );
+          setIsSignup(false);
+          setPassword("");
+          return;
         }
+        await finishAfterSession(supabase);
+        return;
       }
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+      await finishAfterSession(supabase);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const busy = isSubmitting || joiningTrip;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-10">
@@ -116,7 +149,9 @@ export default function LoginPage() {
             {isSignup ? "Create your account" : "Welcome back"}
           </h1>
           <p className="mt-2 text-sm text-slate-600">
-            {isSignup ? "Sign up to get started." : "Log in to continue."}
+            {isSignup
+              ? "Email and password — you’ll jump straight into the trip after this."
+              : "Log in to continue to your trip."}
           </p>
         </div>
 
@@ -165,24 +200,26 @@ export default function LoginPage() {
             </p>
           ) : null}
 
-          {successMessage ? (
-            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              {successMessage}
+          {infoMessage ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {infoMessage}
             </p>
           ) : null}
 
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={busy}
             className="h-12 w-full rounded-xl bg-slate-900 text-base font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {isSubmitting
-              ? isSignup
-                ? "Creating account..."
-                : "Logging in..."
-              : isSignup
-                ? "Sign up"
-                : "Log in"}
+            {joiningTrip
+              ? "Joining trip…"
+              : isSubmitting
+                ? isSignup
+                  ? "Creating account…"
+                  : "Logging in…"
+                : isSignup
+                  ? "Sign up & continue"
+                  : "Log in"}
           </button>
         </form>
 
@@ -192,13 +229,18 @@ export default function LoginPage() {
           onClick={() => {
             setIsSignup(!isSignup);
             setErrorMessage("");
-            setSuccessMessage("");
+            setInfoMessage("");
           }}
         >
           {isSignup
             ? "Already have an account? Log in"
             : "Need an account? Sign up"}
         </button>
+
+        <p className="mt-6 text-center text-xs leading-relaxed text-slate-500">
+          Beta: turn off <strong className="font-medium text-slate-600">Confirm email</strong> in
+          Supabase (Authentication → Providers → Email) so sign-up logs in immediately.
+        </p>
       </div>
     </main>
   );

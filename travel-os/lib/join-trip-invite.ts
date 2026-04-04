@@ -39,7 +39,7 @@ export async function tryConsumePendingInvite(
     } catch {
       /* ignore */
     }
-    router.push(`/app/trip/${tripId}`);
+    router.push(`/app/trip/${tripId}?welcome=1`);
     router.refresh();
     return true;
   }

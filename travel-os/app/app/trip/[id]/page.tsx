@@ -9,6 +9,7 @@ import {
   type MemberLabelRow,
 } from "@/lib/trip-entity-comments";
 import type { EntityCommentDTO } from "./_components/entity-comments-block";
+import JoinWelcomeBanner from "./_components/join-welcome-banner";
 import TripItineraryShell, {
   type ItineraryItemDTO,
 } from "./_components/trip-itinerary-shell";
@@ -99,6 +100,8 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     typeof errorParam === "string" && errorParam.length > 0
       ? decodeURIComponent(errorParam)
       : "";
+  const showJoinWelcome =
+    query.welcome === "1" || query.welcome === "true";
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -248,6 +251,10 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
           <BackLink href="/app/trips">All trips</BackLink>
           <BackLink href="/app/home">Home</BackLink>
         </div>
+
+        {showJoinWelcome ? (
+          <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
+        ) : null}
 
         <TripItineraryShell
           tripId={tripId}

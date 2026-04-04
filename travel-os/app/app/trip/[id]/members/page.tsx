@@ -1,9 +1,9 @@
 import BackLink from "@/app/app/_components/back-link";
 import DeleteForm from "@/app/app/_components/delete-form";
+import { getPublicSiteUrl } from "@/lib/public-site-url";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getMemberRole, isTripMember } from "@/lib/trip-membership";
 import { deleteMemberAction } from "../data-actions";
-import { addTripMember } from "./actions";
 import InviteShareBlock from "./invite-share-block";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -36,12 +36,10 @@ export default async function TripMembersPage({
   const { id: tripId } = await params;
   const query = (await searchParams) ?? {};
   const errorParam = query.error;
-  const successParam = query.success;
   const error =
     typeof errorParam === "string" && errorParam.length > 0
       ? decodeURIComponent(errorParam)
       : "";
-  const showSuccess = successParam === "1" || successParam === "true";
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -81,10 +79,7 @@ export default async function TripMembersPage({
 
   const rows = (membersData ?? []) as GenericRecord[];
 
-  const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(
-    /\/$/,
-    "",
-  );
+  const baseUrl = getPublicSiteUrl();
   const hasInviteCode = inviteCode.length > 0;
   const joinUrl = hasInviteCode
     ? `${baseUrl}/join?code=${encodeURIComponent(inviteCode)}`
@@ -115,11 +110,6 @@ export default async function TripMembersPage({
           </div>
         </section>
 
-        {showSuccess ? (
-          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-            Member added. They will get access when they sign up with that email.
-          </p>
-        ) : null}
         {error ? (
           <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
         ) : null}
@@ -128,8 +118,8 @@ export default async function TripMembersPage({
           <div className="border-b border-slate-100 pb-4">
             <h2 className="text-lg font-semibold text-slate-900">Invite people</h2>
             <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
-              Share this link so others can join the trip. Copy it or open WhatsApp to send it in a
-              chat.
+              Share this link. They&apos;ll sign in (or sign up) and land in the trip automatically —
+              no separate accept step.
             </p>
           </div>
           <div className="pt-5">
@@ -144,7 +134,7 @@ export default async function TripMembersPage({
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex items-baseline justify-between gap-2">
-            <h2 className="text-lg font-semibold text-slate-900">Members</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Who&apos;s on the trip</h2>
             <span className="text-sm tabular-nums text-slate-500">{rows.length}</span>
           </div>
 
@@ -154,7 +144,7 @@ export default async function TripMembersPage({
             </p>
           ) : rows.length === 0 ? (
             <p className="mt-4 text-sm leading-relaxed text-slate-600">
-              No one is on this trip yet. Share an invite or add someone by email below.
+              No members yet. Share the invite link above.
             </p>
           ) : (
             <ul className="mt-4 divide-y divide-slate-100">
@@ -188,7 +178,9 @@ export default async function TripMembersPage({
                         </p>
                         <p className="break-all text-sm text-slate-600">{displayEmail}</p>
                         {pending ? (
-                          <p className="text-xs font-medium text-amber-700">Pending invitation</p>
+                          <p className="text-xs text-slate-500">
+                            Not in the app yet — send them the invite link.
+                          </p>
                         ) : null}
                       </div>
 
@@ -221,32 +213,6 @@ export default async function TripMembersPage({
             </ul>
           )}
         </section>
-
-        {canInvite ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-semibold text-slate-900">Add member</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              Enter their email. If they do not have an account yet, they will be linked when they
-              sign up with the same email.
-            </p>
-            <form action={addTripMember.bind(null, tripId)} className="mt-4 space-y-3">
-              <input
-                type="email"
-                name="email"
-                required
-                autoComplete="email"
-                placeholder="friend@example.com"
-                className="h-12 w-full rounded-xl border border-slate-300 px-4 text-base text-slate-900 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-              />
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-slate-900 py-3 text-base font-medium text-white"
-              >
-                Add member
-              </button>
-            </form>
-          </section>
-        ) : null}
       </div>
     </main>
   );
