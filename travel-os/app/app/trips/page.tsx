@@ -3,8 +3,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchTripsViaMembership } from "@/lib/trip-membership";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { formatInr } from "@/app/app/trip/[id]/expenses/_lib/format-inr";
 import {
-  formatCurrency,
   formatDate,
   pickFirstDate,
   pickFirstNumber,
@@ -116,7 +116,7 @@ export default async function TripsPage() {
                     <p className="text-sm text-slate-500">{dateLabel}</p>
                     {summary && summary.count > 0 ? (
                       <p className="pt-0.5 text-sm font-medium text-slate-800">
-                        {formatCurrency(summary.total)}
+                        {formatInr(summary.total)}
                         <span className="font-normal text-slate-500">
                           {" "}
                           · {summary.count} expense{summary.count === 1 ? "" : "s"}
@@ -151,7 +151,7 @@ export default async function TripsPage() {
 
       <Link
         href="/app/create-trip"
-        className="fixed bottom-24 right-4 z-[110] min-h-11 rounded-full bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-slate-900/25 transition hover:bg-slate-800"
+        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] min-h-11 rounded-full bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-slate-900/25 transition hover:bg-slate-800"
       >
         + Add Trip
       </Link>

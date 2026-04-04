@@ -1,3 +1,8 @@
+import {
+  ACTIVITY_LOG_FEED_LIMIT,
+  HOME_TODAY_ITINERARY_LIMIT,
+  activityListScrollAreaClass,
+} from "@/app/app/_lib/activity-scroll-styles";
 import { fetchTripActivityLogs, formatActivityLogTime } from "@/lib/activity-log";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { countTripMembers, fetchTripsViaMembership } from "@/lib/trip-membership";
@@ -247,7 +252,8 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
         .select("id, date, activity_name, title, location, time")
         .eq("trip_id", activeTripId)
         .eq("date", todayYmd)
-        .order("time", { ascending: true }),
+        .order("time", { ascending: true })
+        .limit(HOME_TODAY_ITINERARY_LIMIT),
       supabase
         .from("itinerary_items")
         .select("id, date, activity_name, title, location, time")
@@ -285,7 +291,11 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
 
   const reminders = buildReminders(todayItems);
 
-  const { data: activityRows } = await fetchTripActivityLogs(supabase, activeTripId, 10);
+  const { data: activityRows } = await fetchTripActivityLogs(
+    supabase,
+    activeTripId,
+    ACTIVITY_LOG_FEED_LIMIT,
+  );
   const topFeed = (activityRows ?? []).map((row) => ({
     id: String(row.id ?? ""),
     text: typeof row.action === "string" ? row.action : "",
@@ -339,24 +349,30 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
                   </Link>
                 </div>
               ) : (
-                <ul className="space-y-3">
-                  {todayItems.map((item) => (
-                    <li
-                      key={String(item.id)}
-                      className="rounded-2xl border border-slate-100 bg-slate-50/50 px-4 py-3"
-                    >
-                      <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">
-                        {item.time || "Time TBD"}
-                      </p>
-                      <p className="mt-1 font-semibold text-slate-900">
-                        {item.activity_name || item.title || "Activity"}
-                      </p>
-                      {item.location ? (
-                        <p className="mt-1 text-sm text-slate-600">{item.location}</p>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
+                <div
+                  className={activityListScrollAreaClass}
+                  role="region"
+                  aria-label="Today’s activities"
+                >
+                  <ul className="space-y-3">
+                    {todayItems.map((item) => (
+                      <li
+                        key={String(item.id)}
+                        className="rounded-2xl border border-slate-100 bg-slate-50/50 px-4 py-3"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">
+                          {item.time || "Time TBD"}
+                        </p>
+                        <p className="mt-1 font-semibold text-slate-900">
+                          {item.activity_name || item.title || "Activity"}
+                        </p>
+                        {item.location ? (
+                          <p className="mt-1 text-sm text-slate-600">{item.location}</p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {todayItems.length > 0 ? (
                 <Link
@@ -493,16 +509,22 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
               {topFeed.length === 0 ? (
                 <p className="mt-2 text-sm text-slate-500">No recent updates.</p>
               ) : (
-                <ul className="mt-2 space-y-2">
-                  {topFeed.map((f) => (
-                    <li key={f.id || f.text} className="text-sm text-slate-700">
-                      <span className="text-slate-400">·</span> {f.text}
-                      {f.when ? (
-                        <span className="mt-0.5 block text-xs text-slate-400">{f.when}</span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
+                <div
+                  className={`mt-2 ${activityListScrollAreaClass}`}
+                  role="region"
+                  aria-label="Recent trip activity"
+                >
+                  <ul className="space-y-2">
+                    {topFeed.map((f) => (
+                      <li key={f.id || f.text} className="text-sm text-slate-700">
+                        <span className="text-slate-400">·</span> {f.text}
+                        {f.when ? (
+                          <span className="mt-0.5 block text-xs text-slate-400">{f.when}</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           </section>

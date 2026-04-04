@@ -1,4 +1,5 @@
 import BackLink from "@/app/app/_components/back-link";
+import { pruneItineraryOutsideTripRange } from "@/lib/itinerary-trip-range";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { countTripMembers, getMemberRole, isTripMember } from "@/lib/trip-membership";
 import { redirect } from "next/navigation";
@@ -127,6 +128,19 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     redirect("/app/home");
   }
 
+  const trip = tripData as TripRecord;
+  const startRawEarly = pickFirstString(trip, ["start_date", "startDate", "date_from"], "");
+  const endRawEarly = pickFirstString(trip, ["end_date", "endDate", "date_to"], "");
+  const ymdStart = extractYMD(startRawEarly);
+  const ymdEnd = extractYMD(endRawEarly);
+  if (ymdStart && ymdEnd) {
+    try {
+      await pruneItineraryOutsideTripRange(supabase, tripId, ymdStart, ymdEnd);
+    } catch {
+      /* ignore prune errors; display still restricted to trip range */
+    }
+  }
+
   const memberCount = await countTripMembers(supabase, tripId);
   const myRole = await getMemberRole(supabase, tripId, user.id);
   const canDeleteTrip = myRole === "organizer";
@@ -189,32 +203,28 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     if (key) activityKeysFromItems.add(key);
   });
 
-  const trip = tripData as TripRecord;
-  const startRaw = pickFirstString(trip, ["start_date", "startDate", "date_from"], "");
-  const endRaw = pickFirstString(trip, ["end_date", "endDate", "date_to"], "");
-  const ymdStart = extractYMD(startRaw);
-  const ymdEnd = extractYMD(endRaw);
   const rangeDates =
     ymdStart && ymdEnd ? enumerateDateStrings(ymdStart, ymdEnd) : [];
 
+  /** Only show days inside the trip range when start/end are set (ignore orphan itinerary rows). */
   const orderedDates =
     rangeDates.length > 0
-      ? [...new Set([...rangeDates, ...activityKeysFromItems])].sort((a, b) =>
-          a < b ? -1 : a > b ? 1 : 0,
-        )
+      ? [...rangeDates]
       : [...activityKeysFromItems].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
   const groupedMap = new Map<string, ItineraryItem[]>();
   orderedDates.forEach((d) => groupedMap.set(d, []));
 
   items.forEach((item) => {
-    const key =
+    const raw =
       item.date ??
       (item.itinerary_day_id != null
         ? dayById.get(String(item.itinerary_day_id))?.date ?? null
         : null);
-    if (!key) return;
-    if (!groupedMap.has(key)) groupedMap.set(key, []);
+    if (!raw) return;
+    const key = extractYMD(String(raw)) ?? String(raw).trim().slice(0, 10);
+    if (ymdStart && ymdEnd && (key < ymdStart || key > ymdEnd)) return;
+    if (!groupedMap.has(key)) return;
     groupedMap.get(key)?.push(item);
   });
 

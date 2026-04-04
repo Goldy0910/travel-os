@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useState } from "react";
 
 const LAST_TRIP_STORAGE_KEY = "travel-os-last-trip-id";
 
@@ -100,23 +100,24 @@ export default function MobileBottomNav() {
   const searchParams = useSearchParams();
   const pathname = usePathname() || "";
 
-  const storedLastTripId = useMemo(() => {
-    void pathname;
-    if (typeof window === "undefined") return null;
-    try {
-      return sessionStorage.getItem(LAST_TRIP_STORAGE_KEY);
-    } catch {
-      return null;
-    }
-  }, [pathname]);
+  /** Only set after mount so first client render matches SSR (avoids hydration mismatch). */
+  const [storedLastTripId, setStoredLastTripId] = useState<string | null>(null);
 
   useEffect(() => {
     const fromPath = extractTripIdFromPath(pathname);
-    if (!fromPath) return;
+    if (fromPath) {
+      try {
+        sessionStorage.setItem(LAST_TRIP_STORAGE_KEY, fromPath);
+      } catch {
+        /* ignore */
+      }
+    }
     try {
-      sessionStorage.setItem(LAST_TRIP_STORAGE_KEY, fromPath);
+      const v = sessionStorage.getItem(LAST_TRIP_STORAGE_KEY);
+      const trimmed = v?.trim() ?? "";
+      setStoredLastTripId(trimmed.length > 0 ? trimmed : null);
     } catch {
-      /* ignore */
+      setStoredLastTripId(null);
     }
   }, [pathname]);
 
@@ -194,7 +195,7 @@ export default function MobileBottomNav() {
           const Icon = tab.icon;
           return (
             <Link
-              key={`${tab.label}-${tab.href}`}
+              key={tab.label}
               href={tab.href}
               prefetch={false}
               className="relative z-[101] flex min-h-12 w-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 touch-manipulation"

@@ -7,6 +7,8 @@ import {
   formatItineraryActivityAddedAction,
   insertTripActivityLog,
 } from "@/lib/activity-log";
+import { actionError, actionSuccess, type FormActionResult } from "@/lib/form-action-result";
+import { extractYMD, pruneItineraryOutsideTripRange } from "@/lib/itinerary-trip-range";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getMemberRole, isTripMember } from "@/lib/trip-membership";
 import { revalidatePath } from "next/cache";
@@ -14,8 +16,16 @@ import { redirect } from "next/navigation";
 
 const DOCS_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCS_BUCKET || "trip-docs";
 
-function errRedirect(tripId: string, msg: string) {
-  redirect(`/app/trip/${tripId}?error=${encodeURIComponent(msg)}`);
+async function canMutateExpense(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  tripId: string,
+  userId: string,
+  expenseUserId: string | null,
+): Promise<boolean> {
+  const role = await getMemberRole(supabase, tripId, userId);
+  if (role === "organizer") return true;
+  if (expenseUserId != null && expenseUserId === userId) return true;
+  return false;
 }
 
 async function ensureItineraryDayId(
@@ -49,7 +59,10 @@ async function ensureItineraryDayId(
   return newDay.id;
 }
 
-export async function saveItineraryActivityAction(tripId: string, formData: FormData) {
+export async function saveItineraryActivityAction(
+  tripId: string,
+  formData: FormData,
+): Promise<FormActionResult> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -60,15 +73,30 @@ export async function saveItineraryActivityAction(tripId: string, formData: Form
   const itemIdRaw = String(formData.get("itemId") ?? "").trim();
   const activityName = String(formData.get("activityName") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
-  const time = String(formData.get("time") ?? "").trim();
+  const timeRaw = String(formData.get("time") ?? "").trim();
+  const time = timeRaw.length > 0 ? timeRaw : null;
   const date = String(formData.get("date") ?? "").trim();
 
-  if (!activityName || !location || !time || !date) {
-    errRedirect(tripId, "Please fill all fields");
+  if (!activityName || !location || !date) {
+    return actionError("Please fill activity name, location, and date.");
   }
 
   const allowed = await isTripMember(supabase, tripId, user.id);
   if (!allowed) redirect("/app/home");
+
+  const { data: tripRow } = await supabase
+    .from("trips")
+    .select("start_date, end_date")
+    .eq("id", tripId)
+    .maybeSingle();
+
+  const tr = (tripRow ?? {}) as Record<string, string | null>;
+  const tripStart = extractYMD(String(tr.start_date ?? "")) ?? "";
+  const tripEnd = extractYMD(String(tr.end_date ?? "")) ?? "";
+  const dateYmd = extractYMD(date) ?? date.trim().slice(0, 10);
+  if (tripStart && tripEnd && (dateYmd < tripStart || dateYmd > tripEnd)) {
+    return actionError("Activity date must be within the trip start and end dates.");
+  }
 
   try {
     const dayId = await ensureItineraryDayId(supabase, tripId, user.id, date);
@@ -82,7 +110,7 @@ export async function saveItineraryActivityAction(tripId: string, formData: Form
         .maybeSingle();
 
       if (!existing?.id) {
-        errRedirect(tripId, "Activity not found");
+        return actionError("Activity not found.");
       }
 
       const { error: updateError } = await supabase
@@ -99,7 +127,7 @@ export async function saveItineraryActivityAction(tripId: string, formData: Form
         .eq("trip_id", tripId);
 
       if (updateError) {
-        errRedirect(tripId, updateError.message || "Could not update activity");
+        return actionError(updateError.message || "Could not update activity.");
       }
     } else {
       const { error: itemInsertError } = await supabase.from("itinerary_items").insert({
@@ -114,7 +142,7 @@ export async function saveItineraryActivityAction(tripId: string, formData: Form
       });
 
       if (itemInsertError) {
-        errRedirect(tripId, itemInsertError.message || "Could not add activity");
+        return actionError(itemInsertError.message || "Could not add activity.");
       }
       await insertTripActivityLog(supabase, {
         tripId,
@@ -126,15 +154,20 @@ export async function saveItineraryActivityAction(tripId: string, formData: Form
       });
     }
   } catch (e) {
-    errRedirect(tripId, e instanceof Error ? e.message : "Could not save activity");
+    return actionError(e instanceof Error ? e.message : "Could not save activity.");
   }
 
   revalidatePath(`/app/trip/${tripId}`);
   revalidatePath("/app/home");
-  redirect(`/app/trip/${tripId}`);
+  return actionSuccess(
+    itemIdRaw ? "Activity updated." : "Activity added.",
+  );
 }
 
-export async function updateTripDetailsAction(tripId: string, formData: FormData) {
+export async function updateTripDetailsAction(
+  tripId: string,
+  formData: FormData,
+): Promise<FormActionResult> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -143,7 +176,7 @@ export async function updateTripDetailsAction(tripId: string, formData: FormData
 
   const role = await getMemberRole(supabase, tripId, user.id);
   if (role !== "organizer") {
-    errRedirect(tripId, "Only organizers can update trip details.");
+    return actionError("Only organizers can update trip details.");
   }
 
   const title = String(formData.get("title") ?? "").trim();
@@ -152,11 +185,11 @@ export async function updateTripDetailsAction(tripId: string, formData: FormData
   const endDate = String(formData.get("endDate") ?? "").trim();
 
   if (!title || !location || !startDate || !endDate) {
-    errRedirect(tripId, "Please fill all trip fields.");
+    return actionError("Please fill all trip fields.");
   }
 
   if (new Date(endDate) < new Date(startDate)) {
-    errRedirect(tripId, "End date must be on or after start date.");
+    return actionError("End date must be on or after start date.");
   }
 
   const { error } = await supabase
@@ -170,16 +203,25 @@ export async function updateTripDetailsAction(tripId: string, formData: FormData
     .eq("id", tripId);
 
   if (error) {
-    errRedirect(tripId, error.message || "Could not update trip.");
+    return actionError(error.message || "Could not update trip.");
+  }
+
+  try {
+    await pruneItineraryOutsideTripRange(supabase, tripId, startDate, endDate);
+  } catch {
+    /* non-fatal */
   }
 
   revalidatePath(`/app/trip/${tripId}`);
   revalidatePath("/app/home");
   revalidatePath("/app/trips");
-  redirect(`/app/trip/${tripId}`);
+  return actionSuccess("Trip details updated.");
 }
 
-export async function deleteTripAction(tripId: string, _formData: FormData) {
+export async function deleteTripAction(
+  tripId: string,
+  _formData: FormData,
+): Promise<FormActionResult> {
   void _formData;
   const supabase = await createSupabaseServerClient();
   const {
@@ -189,7 +231,7 @@ export async function deleteTripAction(tripId: string, _formData: FormData) {
 
   const role = await getMemberRole(supabase, tripId, user.id);
   if (role !== "organizer") {
-    errRedirect(tripId, "Only organizers can delete a trip.");
+    return actionError("Only organizers can delete a trip.");
   }
 
   await supabase.from("documents").delete().eq("trip_id", tripId);
@@ -200,19 +242,19 @@ export async function deleteTripAction(tripId: string, _formData: FormData) {
 
   const { error } = await supabase.from("trips").delete().eq("id", tripId);
   if (error) {
-    errRedirect(tripId, error.message || "Could not delete trip.");
+    return actionError(error.message || "Could not delete trip.");
   }
 
   revalidatePath("/app/trips");
   revalidatePath("/app/home");
-  redirect("/app/trips");
+  return actionSuccess("Trip deleted.", "/app/trips");
 }
 
 export async function deleteItineraryItemAction(
   tripId: string,
   itemId: string,
   _formData: FormData,
-) {
+): Promise<FormActionResult> {
   void _formData;
   const supabase = await createSupabaseServerClient();
   const {
@@ -230,18 +272,19 @@ export async function deleteItineraryItemAction(
     .eq("trip_id", tripId);
 
   if (error) {
-    errRedirect(tripId, error.message || "Could not delete activity.");
+    return actionError(error.message || "Could not delete activity.");
   }
 
   revalidatePath(`/app/trip/${tripId}`);
-  redirect(`/app/trip/${tripId}`);
+  revalidatePath("/app/home");
+  return actionSuccess("Activity removed.");
 }
 
 export async function deleteExpenseAction(
   tripId: string,
   expenseId: string,
   _formData: FormData,
-) {
+): Promise<FormActionResult> {
   void _formData;
   const supabase = await createSupabaseServerClient();
   const {
@@ -252,6 +295,25 @@ export async function deleteExpenseAction(
   const ok = await isTripMember(supabase, tripId, user.id);
   if (!ok) redirect("/app/home");
 
+  const { data: existing } = await supabase
+    .from("expenses")
+    .select("user_id")
+    .eq("id", expenseId)
+    .eq("trip_id", tripId)
+    .maybeSingle();
+
+  if (!existing) {
+    return actionError("Expense not found.");
+  }
+
+  const creatorId =
+    existing.user_id != null && String(existing.user_id).length > 0
+      ? String(existing.user_id)
+      : null;
+  if (!(await canMutateExpense(supabase, tripId, user.id, creatorId))) {
+    return actionError("Only the person who added this expense or an organiser can delete it.");
+  }
+
   const { error } = await supabase
     .from("expenses")
     .delete()
@@ -259,16 +321,18 @@ export async function deleteExpenseAction(
     .eq("trip_id", tripId);
 
   if (error) {
-    redirect(
-      `/app/trip/${tripId}/expenses?error=${encodeURIComponent(error.message || "Could not delete expense.")}`,
-    );
+    return actionError(error.message || "Could not delete expense.");
   }
 
   revalidatePath(`/app/trip/${tripId}/expenses`);
-  redirect(`/app/trip/${tripId}/expenses`);
+  revalidatePath("/app/home");
+  return actionSuccess("Expense deleted.");
 }
 
-export async function saveExpenseAction(tripId: string, formData: FormData) {
+export async function saveExpenseAction(
+  tripId: string,
+  formData: FormData,
+): Promise<FormActionResult> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -284,9 +348,7 @@ export async function saveExpenseAction(tripId: string, formData: FormData) {
   const date = String(formData.get("date") ?? "").trim();
 
   if (!title || !Number.isFinite(amount) || amount <= 0 || !paidBy || !splitType || !date) {
-    redirect(
-      `/app/trip/${tripId}/expenses?error=${encodeURIComponent("Please fill all fields correctly.")}`,
-    );
+    return actionError("Please fill all fields correctly.");
   }
 
   const ok = await isTripMember(supabase, tripId, user.id);
@@ -303,6 +365,25 @@ export async function saveExpenseAction(tripId: string, formData: FormData) {
   };
 
   if (expenseIdRaw) {
+    const { data: existing } = await supabase
+      .from("expenses")
+      .select("user_id")
+      .eq("id", expenseIdRaw)
+      .eq("trip_id", tripId)
+      .maybeSingle();
+
+    if (!existing) {
+      return actionError("Expense not found.");
+    }
+
+    const creatorId =
+      existing.user_id != null && String(existing.user_id).length > 0
+        ? String(existing.user_id)
+        : null;
+    if (!(await canMutateExpense(supabase, tripId, user.id, creatorId))) {
+      return actionError("Only the person who added this expense or an organiser can edit it.");
+    }
+
     const { error } = await supabase
       .from("expenses")
       .update(payload)
@@ -310,11 +391,7 @@ export async function saveExpenseAction(tripId: string, formData: FormData) {
       .eq("trip_id", tripId);
 
     if (error) {
-      redirect(
-        `/app/trip/${tripId}/expenses?error=${encodeURIComponent(
-          error.message || "Could not update expense.",
-        )}`,
-      );
+      return actionError(error.message || "Could not update expense.");
     }
   } else {
     const { error: insertError } = await supabase.from("expenses").insert({
@@ -324,11 +401,7 @@ export async function saveExpenseAction(tripId: string, formData: FormData) {
     });
 
     if (insertError) {
-      redirect(
-        `/app/trip/${tripId}/expenses?error=${encodeURIComponent(
-          insertError.message || "Could not add expense.",
-        )}`,
-      );
+      return actionError(insertError.message || "Could not add expense.");
     }
     await insertTripActivityLog(supabase, {
       tripId,
@@ -339,14 +412,14 @@ export async function saveExpenseAction(tripId: string, formData: FormData) {
 
   revalidatePath(`/app/trip/${tripId}/expenses`);
   revalidatePath("/app/home");
-  redirect(`/app/trip/${tripId}/expenses`);
+  return actionSuccess(expenseIdRaw ? "Expense updated." : "Expense added.");
 }
 
 export async function deleteDocumentAction(
   tripId: string,
   documentId: string,
   _formData: FormData,
-) {
+): Promise<FormActionResult> {
   void _formData;
   const supabase = await createSupabaseServerClient();
   const {
@@ -388,20 +461,19 @@ export async function deleteDocumentAction(
     .eq("trip_id", tripId);
 
   if (error) {
-    redirect(
-      `/app/trip/${tripId}/docs?error=${encodeURIComponent(error.message || "Could not delete document.")}`,
-    );
+    return actionError(error.message || "Could not delete document.");
   }
 
   revalidatePath(`/app/trip/${tripId}/docs`);
-  redirect(`/app/trip/${tripId}/docs`);
+  revalidatePath("/app/home");
+  return actionSuccess("Document removed.");
 }
 
 export async function deleteMemberAction(
   tripId: string,
   memberRowId: string,
   _formData: FormData,
-) {
+): Promise<FormActionResult> {
   void _formData;
   const supabase = await createSupabaseServerClient();
   const {
@@ -411,9 +483,7 @@ export async function deleteMemberAction(
 
   const role = await getMemberRole(supabase, tripId, user.id);
   if (role !== "organizer") {
-    redirect(
-      `/app/trip/${tripId}/members?error=${encodeURIComponent("Only organizers can remove members.")}`,
-    );
+    return actionError("Only organizers can remove members.");
   }
 
   const { data: row } = await supabase
@@ -424,9 +494,7 @@ export async function deleteMemberAction(
     .maybeSingle();
 
   if (!row) {
-    redirect(
-      `/app/trip/${tripId}/members?error=${encodeURIComponent("Member not found.")}`,
-    );
+    return actionError("Member not found.");
   }
 
   if (row.role === "organizer") {
@@ -437,10 +505,8 @@ export async function deleteMemberAction(
       .eq("role", "organizer");
 
     if (!cErr && (count ?? 0) <= 1) {
-      redirect(
-        `/app/trip/${tripId}/members?error=${encodeURIComponent(
-          "This trip must keep at least one organizer. Add another organizer first.",
-        )}`,
+      return actionError(
+        "This trip must keep at least one organizer. Add another organizer first.",
       );
     }
   }
@@ -452,12 +518,10 @@ export async function deleteMemberAction(
     .eq("trip_id", tripId);
 
   if (error) {
-    redirect(
-      `/app/trip/${tripId}/members?error=${encodeURIComponent(error.message || "Could not remove member.")}`,
-    );
+    return actionError(error.message || "Could not remove member.");
   }
 
   revalidatePath(`/app/trip/${tripId}/members`);
   revalidatePath(`/app/trip/${tripId}`);
-  redirect(`/app/trip/${tripId}/members`);
+  return actionSuccess("Member removed.");
 }

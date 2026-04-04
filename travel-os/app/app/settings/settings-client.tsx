@@ -1,9 +1,12 @@
 "use client";
 
+import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { upsertProfileOrUserMetadata } from "@/lib/profiles-fallback";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 
 const PROFILE_BUCKET = "profile-images";
 
@@ -37,30 +40,14 @@ export default function SettingsClient({
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-
-  const showSuccess = useCallback(() => {
-    setSuccess(true);
-    window.setTimeout(() => setSuccess(false), 3200);
-  }, []);
 
   const upsertProfileRow = async (row: {
     name: string | null;
     avatar_url: string | null;
   }) => {
     const supabase = createSupabaseBrowserClient();
-    const { error: upErr } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          id: userId,
-          name: row.name,
-          avatar_url: row.avatar_url,
-        },
-        { onConflict: "id" },
-      );
-    if (upErr) throw upErr;
+    await upsertProfileOrUserMetadata(supabase, userId, row);
   };
 
   const onPickAvatar = () => fileRef.current?.click();
@@ -71,11 +58,15 @@ export default function SettingsClient({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setError("Please choose an image file.");
+      const msg = "Please choose an image file.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
     if (file.size > 4 * 1024 * 1024) {
-      setError("Image must be 4MB or smaller.");
+      const msg = "Image must be 4MB or smaller.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -103,11 +94,13 @@ export default function SettingsClient({
         name: name.trim() || null,
         avatar_url: publicUrl,
       });
-      showSuccess();
+      toast.success("Profile photo updated.");
       router.refresh();
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Could not upload image.");
+      const msg = err instanceof Error ? err.message : "Could not upload image.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setUploading(false);
     }
@@ -123,11 +116,13 @@ export default function SettingsClient({
         name: name.trim() || null,
         avatar_url: stableUrl,
       });
-      showSuccess();
+      toast.success("Profile updated.");
       router.refresh();
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Could not save profile.");
+      const msg = err instanceof Error ? err.message : "Could not save profile.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -139,11 +134,14 @@ export default function SettingsClient({
     try {
       const supabase = createSupabaseBrowserClient();
       await supabase.auth.signOut();
+      toast.success("Signed out.");
       router.push("/app/login");
       router.refresh();
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Could not log out.");
+      const msg = err instanceof Error ? err.message : "Could not log out.";
+      setError(msg);
+      toast.error(msg);
       setLoggingOut(false);
     }
   };
@@ -166,15 +164,6 @@ export default function SettingsClient({
         <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
         <p className="mt-2 text-sm text-slate-600">Your profile and account</p>
       </header>
-
-      {success ? (
-        <p
-          className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-900"
-          role="status"
-        >
-          Profile updated
-        </p>
-      ) : null}
 
       {error ? (
         <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-center text-sm text-rose-800">
@@ -220,9 +209,16 @@ export default function SettingsClient({
             type="button"
             onClick={onPickAvatar}
             disabled={uploading}
-            className="mt-4 min-h-12 rounded-2xl border-2 border-slate-900 bg-white px-6 text-sm font-semibold text-slate-900 shadow-sm transition active:scale-[0.99] disabled:opacity-50"
+            className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-2xl border-2 border-slate-900 bg-white px-6 text-sm font-semibold text-slate-900 shadow-sm transition active:scale-[0.99] disabled:opacity-50"
           >
-            {uploading ? "Uploading…" : "Change photo"}
+            {uploading ? (
+              <>
+                <ButtonSpinner className="h-4 w-4 text-slate-900" />
+                Uploading…
+              </>
+            ) : (
+              "Change photo"
+            )}
           </button>
         </div>
 
@@ -245,9 +241,16 @@ export default function SettingsClient({
           <button
             type="submit"
             disabled={saving || uploading}
-            className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-slate-900 text-base font-semibold text-white shadow-md transition active:scale-[0.99] disabled:opacity-50"
+            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 text-base font-semibold text-white shadow-md transition active:scale-[0.99] disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? (
+              <>
+                <ButtonSpinner className="h-4 w-4 text-white" />
+                Saving…
+              </>
+            ) : (
+              "Save"
+            )}
           </button>
         </form>
       </section>
@@ -259,9 +262,16 @@ export default function SettingsClient({
           type="button"
           onClick={onLogout}
           disabled={loggingOut}
-          className="mt-5 flex min-h-14 w-full items-center justify-center rounded-2xl border-2 border-rose-200 bg-rose-50 text-base font-semibold text-rose-800 transition active:scale-[0.99] disabled:opacity-50"
+          className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-rose-200 bg-rose-50 text-base font-semibold text-rose-800 transition active:scale-[0.99] disabled:opacity-50"
         >
-          {loggingOut ? "Logging out…" : "Logout"}
+          {loggingOut ? (
+            <>
+              <ButtonSpinner className="h-4 w-4 text-rose-800" />
+              Logging out…
+            </>
+          ) : (
+            "Logout"
+          )}
         </button>
       </section>
     </div>

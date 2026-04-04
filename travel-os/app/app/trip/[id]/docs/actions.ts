@@ -5,6 +5,7 @@ import {
   formatDocumentUploadedAction,
   insertTripActivityLog,
 } from "@/lib/activity-log";
+import { actionError, actionSuccess, type FormActionResult } from "@/lib/form-action-result";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isTripMember } from "@/lib/trip-membership";
 import { revalidatePath } from "next/cache";
@@ -12,13 +13,11 @@ import { redirect } from "next/navigation";
 
 const DOCS_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCS_BUCKET || "trip-docs";
 
-export type SaveDocumentResult = { ok: true } | { ok: false; error: string };
-
 export async function saveDocumentRecord(input: {
   tripId: string;
   filePath: string;
   fileName: string;
-}): Promise<SaveDocumentResult> {
+}): Promise<FormActionResult> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -30,12 +29,12 @@ export async function saveDocumentRecord(input: {
 
   const expectedPrefix = `${user.id}/${input.tripId}/`;
   if (!input.filePath.startsWith(expectedPrefix)) {
-    return { ok: false, error: "Invalid upload path." };
+    return actionError("Invalid upload path.");
   }
 
   const allowed = await isTripMember(supabase, input.tripId, user.id);
   if (!allowed) {
-    return { ok: false, error: "Trip not found or access denied." };
+    return actionError("Trip not found or access denied.");
   }
 
   const { data: publicUrlData } = supabase.storage
@@ -50,7 +49,7 @@ export async function saveDocumentRecord(input: {
   });
 
   if (insertError) {
-    return { ok: false, error: insertError.message };
+    return actionError(insertError.message);
   }
 
   await insertTripActivityLog(supabase, {
@@ -61,14 +60,14 @@ export async function saveDocumentRecord(input: {
 
   revalidatePath(`/app/trip/${input.tripId}/docs`);
   revalidatePath("/app/home");
-  return { ok: true };
+  return actionSuccess("Document uploaded.");
 }
 
 export async function updateDocumentFileName(input: {
   tripId: string;
   documentId: string;
   fileName: string;
-}): Promise<SaveDocumentResult> {
+}): Promise<FormActionResult> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -80,12 +79,12 @@ export async function updateDocumentFileName(input: {
 
   const name = input.fileName.trim();
   if (!name) {
-    return { ok: false, error: "File name is required." };
+    return actionError("File name is required.");
   }
 
   const allowed = await isTripMember(supabase, input.tripId, user.id);
   if (!allowed) {
-    return { ok: false, error: "Trip not found or access denied." };
+    return actionError("Trip not found or access denied.");
   }
 
   const { error } = await supabase
@@ -95,9 +94,9 @@ export async function updateDocumentFileName(input: {
     .eq("trip_id", input.tripId);
 
   if (error) {
-    return { ok: false, error: error.message };
+    return actionError(error.message);
   }
 
   revalidatePath(`/app/trip/${input.tripId}/docs`);
-  return { ok: true };
+  return actionSuccess("Document renamed.");
 }

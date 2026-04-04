@@ -12,13 +12,16 @@ export default async function SettingsPage() {
     redirect("/app/login");
   }
 
-  const { data: profile } = await supabase
+  const profileRes = await supabase
     .from("profiles")
     .select("name, avatar_url")
     .eq("id", user.id)
     .maybeSingle();
 
+  const profile = profileRes.error ? null : profileRes.data;
+
   const metaName = user.user_metadata?.full_name;
+  const metaAvatar = user.user_metadata?.avatar_url;
   const initialName =
     (typeof profile?.name === "string" && profile.name.trim()) ||
     (typeof metaName === "string" && metaName.trim()) ||
@@ -26,9 +29,10 @@ export default async function SettingsPage() {
     "";
 
   const initialAvatarUrl =
-    typeof profile?.avatar_url === "string" && profile.avatar_url.trim()
+    (typeof profile?.avatar_url === "string" && profile.avatar_url.trim()
       ? profile.avatar_url.trim()
-      : null;
+      : null) ??
+    (typeof metaAvatar === "string" && metaAvatar.trim() ? metaAvatar.trim() : null);
 
   return (
     <main className="min-h-screen bg-slate-50">

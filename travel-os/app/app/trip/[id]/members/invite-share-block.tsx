@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { toast } from "sonner";
 
 type Props = {
   /** Full join URL including ?code= when available */
@@ -24,9 +25,12 @@ export default function InviteShareBlock({
     try {
       await navigator.clipboard.writeText(joinUrl);
       setCopied(true);
+      toast.success("Invite link copied.");
       window.setTimeout(() => setCopied(false), 2200);
     } catch {
-      setError("Could not copy. Select the link below and copy manually.");
+      const msg = "Could not copy. Select the link below and copy manually.";
+      setError(msg);
+      toast.error(msg);
     }
   }, [joinUrl]);
 

@@ -2,8 +2,11 @@
 
 import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
 import BackLink from "@/app/app/_components/back-link";
+import ButtonSpinner from "@/app/app/_components/button-spinner";
+import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { deleteDocumentAction } from "../../data-actions";
@@ -141,6 +144,7 @@ function DocumentRowMenu({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const { pending: deletePending, runAction: runDeleteDoc } = useFormActionFeedback();
 
   const setMenuOpen = (next: boolean) => {
     setOpen(next);
@@ -195,22 +199,25 @@ function DocumentRowMenu({
           >
             Rename
           </button>
-          <form
-            action={deleteDocumentAction.bind(null, tripId, doc.id)}
-            onSubmit={(e) => {
-              if (!window.confirm("Delete this document? It will be removed from storage and cannot be undone.")) {
-                e.preventDefault();
+          <button
+            type="button"
+            role="menuitem"
+            disabled={deletePending}
+            className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+            onClick={() => {
+              if (
+                !window.confirm(
+                  "Delete this document? It will be removed from storage and cannot be undone.",
+                )
+              ) {
+                return;
               }
+              setMenuOpen(false);
+              runDeleteDoc(() => deleteDocumentAction(tripId, doc.id, new FormData()));
             }}
           >
-            <button
-              type="submit"
-              role="menuitem"
-              className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-600 hover:bg-rose-50"
-            >
-              Delete
-            </button>
-          </form>
+            {deletePending ? "Deleting…" : "Delete"}
+          </button>
         </div>
       ) : null}
     </div>
@@ -304,9 +311,11 @@ function DocsUploadSheet({
       if (!saveResult.ok) {
         setError(saveResult.error);
         setUploading(false);
+        toast.error(saveResult.error);
         return;
       }
 
+      toast.success(saveResult.message);
       if (inputRef.current) inputRef.current.value = "";
       setDisplayName("");
       onClose();
@@ -380,9 +389,16 @@ function DocsUploadSheet({
           <button
             type="submit"
             disabled={uploading}
-            className="min-h-11 flex-1 rounded-xl bg-slate-900 py-3 text-base font-medium text-white shadow-md shadow-slate-900/20 disabled:opacity-60"
+            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-base font-medium text-white shadow-md shadow-slate-900/20 disabled:opacity-60"
           >
-            {uploading ? "Uploading…" : "Upload"}
+            {uploading ? (
+              <>
+                <ButtonSpinner className="h-4 w-4 text-white" />
+                Uploading…
+              </>
+            ) : (
+              "Upload"
+            )}
           </button>
         </div>
       </form>
@@ -432,9 +448,11 @@ function RenameDocumentSheet({
       });
       if (!res.ok) {
         setError(res.error);
+        toast.error(res.error);
         setPending(false);
         return;
       }
+      toast.success(res.message);
       onClose();
       onRenamed();
     } catch {
@@ -477,9 +495,16 @@ function RenameDocumentSheet({
           <button
             type="submit"
             disabled={pending}
-            className="min-h-11 flex-1 rounded-xl bg-slate-900 py-3 text-base font-medium text-white disabled:opacity-60"
+            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-base font-medium text-white disabled:opacity-60"
           >
-            {pending ? "Saving…" : "Save"}
+            {pending ? (
+              <>
+                <ButtonSpinner className="h-4 w-4 text-white" />
+                Saving…
+              </>
+            ) : (
+              "Save"
+            )}
           </button>
         </div>
       </form>
@@ -607,7 +632,7 @@ export default function TripDocsClient({
         type="button"
         aria-label="Upload document"
         onClick={() => setUploadOpen(true)}
-        className="fixed bottom-6 right-6 z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95"
+        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95"
       >
         +
       </button>

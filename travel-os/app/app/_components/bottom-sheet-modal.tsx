@@ -48,11 +48,12 @@ export default function BottomSheetModal({
 
   return (
     <div
-      className={`fixed inset-0 flex flex-col justify-end sm:px-4 ${zClass} ${open ? "pointer-events-auto" : "pointer-events-none"}`}
+      className={`fixed inset-0 flex flex-col justify-end overflow-hidden sm:px-4 ${zClass} ${open ? "pointer-events-auto" : "pointer-events-none"}`}
       aria-hidden={!open}
     >
       <button
         type="button"
+        tabIndex={open ? 0 : -1}
         aria-label="Close dialog"
         className={`absolute inset-0 z-0 bg-slate-900/50 transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
         onClick={onClose}
@@ -62,7 +63,11 @@ export default function BottomSheetModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby={title ? titleId : undefined}
-          className={`flex min-h-0 w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.12)] transition-transform duration-300 ease-out ${panelClassName} ${open ? "translate-y-0" : "translate-y-full"}`}
+          className={`flex min-h-0 w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.12)] transition-transform duration-300 ease-out will-change-transform ${panelClassName} ${
+            open
+              ? "translate-y-0"
+              : "translate-y-[calc(100%+var(--travel-os-bottom-nav-h,4rem))]"
+          }`}
         >
           {showHandle ? (
             <div className="flex shrink-0 justify-center pt-3 pb-2">

@@ -1,8 +1,10 @@
 "use client";
 
 import BackLink from "@/app/app/_components/back-link";
+import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 export type ChatMessageDTO = {
   id: string;
@@ -156,14 +158,16 @@ export default function TripChatClient({
       console.error(error);
       const code = "code" in error ? String((error as { code?: string }).code) : "";
       if (code === "PGRST205") {
-        setSendError(
-          "Chat isn’t set up on the database yet. In Supabase → SQL Editor, run the migration that creates the messages table (see travel-os/supabase/migrations/20260413_trip_messages.sql), then try again.",
-        );
+        const msg =
+          "Chat isn’t set up on the database yet. In Supabase → SQL Editor, run the migration that creates the messages table (see travel-os/supabase/migrations/20260413_trip_messages.sql), then try again.";
+        setSendError(msg);
+        toast.error(msg);
       } else {
-        setSendError(
+        const msg =
           (error as { message?: string }).message?.trim() ||
-            "Could not send. Check your connection and try again.",
-        );
+          "Could not send. Check your connection and try again.";
+        setSendError(msg);
+        toast.error(msg);
       }
       return;
     }
@@ -300,7 +304,10 @@ export default function TripChatClient({
             className="flex h-[3.25rem] min-w-[6.25rem] shrink-0 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-white shadow-md transition enabled:bg-sky-600 enabled:active:scale-[0.97] enabled:hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none"
           >
             {sending ? (
-              <span className="text-lg leading-none">…</span>
+              <>
+                <ButtonSpinner className="h-5 w-5 text-white" />
+                <span>Sending…</span>
+              </>
             ) : (
               <>
                 <SendIcon className="h-5 w-5 shrink-0" />

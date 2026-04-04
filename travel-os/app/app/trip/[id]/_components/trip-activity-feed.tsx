@@ -1,3 +1,7 @@
+import {
+  ACTIVITY_LOG_FEED_LIMIT,
+  activityListScrollAreaClass,
+} from "@/app/app/_lib/activity-scroll-styles";
 import { fetchTripActivityLogs, formatActivityLogTime } from "@/lib/activity-log";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isTripMember } from "@/lib/trip-membership";
@@ -21,7 +25,11 @@ export default async function TripActivityFeed({ tripId }: Props) {
     return null;
   }
 
-  const { data: logs, error } = await fetchTripActivityLogs(supabase, tripId, 10);
+  const { data: logs, error } = await fetchTripActivityLogs(
+    supabase,
+    tripId,
+    ACTIVITY_LOG_FEED_LIMIT,
+  );
 
   if (error) {
     return (
@@ -43,24 +51,30 @@ export default async function TripActivityFeed({ tripId }: Props) {
           No activity yet. Add an expense, upload a doc, or plan an itinerary item.
         </p>
       ) : (
-        <ul className="mt-4 space-y-3">
-          {rows.map((row) => {
-            const id = row.id != null ? String(row.id) : "";
-            const action = typeof row.action === "string" ? row.action : "";
-            const when = formatActivityLogTime(
-              typeof row.created_at === "string" ? row.created_at : undefined,
-            );
-            return (
-              <li
-                key={id || action}
-                className="flex flex-col gap-0.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5"
-              >
-                <p className="text-sm font-medium leading-snug text-slate-900">{action}</p>
-                {when ? <p className="text-xs text-slate-500">{when}</p> : null}
-              </li>
-            );
-          })}
-        </ul>
+        <div
+          className={`mt-4 ${activityListScrollAreaClass}`}
+          role="region"
+          aria-label="Trip activity"
+        >
+          <ul className="space-y-3">
+            {rows.map((row) => {
+              const id = row.id != null ? String(row.id) : "";
+              const action = typeof row.action === "string" ? row.action : "";
+              const when = formatActivityLogTime(
+                typeof row.created_at === "string" ? row.created_at : undefined,
+              );
+              return (
+                <li
+                  key={id || action}
+                  className="flex flex-col gap-0.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5"
+                >
+                  <p className="text-sm font-medium leading-snug text-slate-900">{action}</p>
+                  {when ? <p className="text-xs text-slate-500">{when}</p> : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
     </section>
   );

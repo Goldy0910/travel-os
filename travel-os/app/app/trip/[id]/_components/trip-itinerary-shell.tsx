@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import {
   deleteItineraryItemAction,
   deleteTripAction,
@@ -69,6 +70,14 @@ function IconDotsVertical({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
+function IconPlusSmall({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2.25} aria-hidden>
+      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function useDismissOnOutsideClick(
   open: boolean,
   onClose: () => void,
@@ -102,6 +111,7 @@ function TripHeaderMenu({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const { pending: deleteTripPending, runAction: runDeleteTrip } = useFormActionFeedback();
 
   useDismissOnOutsideClick(open, () => setOpen(false), wrapRef);
 
@@ -145,26 +155,25 @@ function TripHeaderMenu({
               >
                 Update trip
               </button>
-              <form
-                action={deleteTripAction.bind(null, tripId)}
-                onSubmit={(e) => {
+              <button
+                type="button"
+                role="menuitem"
+                disabled={deleteTripPending}
+                className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-200 hover:bg-white/10 disabled:opacity-50"
+                onClick={() => {
                   if (
                     !window.confirm(
                       "Delete this trip permanently? This removes itinerary, expenses, documents, and members.",
                     )
                   ) {
-                    e.preventDefault();
+                    return;
                   }
+                  setOpen(false);
+                  runDeleteTrip(() => deleteTripAction(tripId, new FormData()));
                 }}
               >
-                <button
-                  type="submit"
-                  role="menuitem"
-                  className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-200 hover:bg-white/10"
-                >
-                  Delete trip
-                </button>
-              </form>
+                {deleteTripPending ? "Deleting…" : "Delete trip"}
+              </button>
             </>
           ) : null}
         </div>
@@ -185,6 +194,7 @@ function ActivityRowMenu({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const { pending: deletePending, runAction: runDeleteActivity } = useFormActionFeedback();
 
   useDismissOnOutsideClick(open, () => setOpen(false), wrapRef);
 
@@ -218,22 +228,23 @@ function ActivityRowMenu({
           >
             Update
           </button>
-          <form
-            action={deleteItineraryItemAction.bind(null, tripId, item.id)}
-            onSubmit={(e) => {
+          <button
+            type="button"
+            role="menuitem"
+            disabled={deletePending}
+            className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+            onClick={() => {
               if (!window.confirm("Delete this activity? This cannot be undone.")) {
-                e.preventDefault();
+                return;
               }
+              setOpen(false);
+              runDeleteActivity(() =>
+                deleteItineraryItemAction(tripId, item.id, new FormData()),
+              );
             }}
           >
-            <button
-              type="submit"
-              role="menuitem"
-              className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-600 hover:bg-rose-50"
-            >
-              Delete
-            </button>
-          </form>
+            {deletePending ? "Deleting…" : "Delete"}
+          </button>
         </div>
       ) : null}
     </div>
@@ -283,6 +294,18 @@ export default function TripItineraryShell({
       date: defaultDateForAdd,
     });
     setFormKey(`new-${formKeySeq.current}`);
+    setSheetOpen(true);
+  };
+
+  const openAddForDate = (date: string) => {
+    formKeySeq.current += 1;
+    setSheetInitial({
+      activityName: "",
+      location: "",
+      time: "",
+      date,
+    });
+    setFormKey(`new-${date}-${formKeySeq.current}`);
     setSheetOpen(true);
   };
 
@@ -385,9 +408,19 @@ export default function TripItineraryShell({
                   <p className="text-sm font-semibold text-slate-900">{formatDateLabel(date)}</p>
                   <div className="mt-3 space-y-2">
                     {dateItems.length === 0 ? (
-                      <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-500">
-                        No activities planned for this day
-                      </p>
+                      <div className="flex items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 py-2 pl-3 pr-1.5">
+                        <p className="min-w-0 flex-1 text-sm text-slate-500">
+                          No activities planned for this day
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => openAddForDate(date)}
+                          aria-label={`Add activity on ${formatDateLabel(date)}`}
+                          className="flex h-8 w-8 shrink-0 touch-manipulation items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200/90 hover:text-slate-800 active:scale-95"
+                        >
+                          <IconPlusSmall className="h-4 w-4" />
+                        </button>
+                      </div>
                     ) : (
                       dateItems.map((item) => (
                         <article
@@ -431,7 +464,7 @@ export default function TripItineraryShell({
         type="button"
         onClick={openAdd}
         aria-label="Add activity"
-        className="fixed bottom-6 right-6 z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95"
+        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95"
       >
         +
       </button>

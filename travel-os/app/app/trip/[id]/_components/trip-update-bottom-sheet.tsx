@@ -1,6 +1,8 @@
 "use client";
 
 import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
+import ButtonSpinner from "@/app/app/_components/button-spinner";
+import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import { updateTripDetailsAction } from "../data-actions";
 import { useCallback } from "react";
 
@@ -38,6 +40,7 @@ export default function TripUpdateBottomSheet({
     (fd: FormData) => updateTripDetailsAction(tripId, fd),
     [tripId],
   );
+  const { pending, handleForm } = useFormActionFeedback();
 
   return (
     <BottomSheetModal
@@ -48,7 +51,11 @@ export default function TripUpdateBottomSheet({
       panelClassName="max-h-[75vh]"
       titleId="trip-update-sheet-title"
     >
-      <form key={formKey} action={saveAction} className="flex flex-col gap-4 pb-1">
+      <form
+        key={formKey}
+        onSubmit={(e) => handleForm(e, saveAction, onClose)}
+        className="flex flex-col gap-4 pb-1"
+      >
         <label className="block">
           <span className="text-sm font-medium text-slate-700">Trip title</span>
           <input
@@ -98,15 +105,24 @@ export default function TripUpdateBottomSheet({
           <button
             type="button"
             onClick={onClose}
-            className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white py-3 text-base font-medium text-slate-800 shadow-sm active:bg-slate-50"
+            disabled={pending}
+            className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white py-3 text-base font-medium text-slate-800 shadow-sm active:bg-slate-50 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="min-h-11 flex-1 rounded-xl bg-slate-900 py-3 text-base font-medium text-white shadow-md shadow-slate-900/20"
+            disabled={pending}
+            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-base font-medium text-white shadow-md shadow-slate-900/20 disabled:opacity-60"
           >
-            Save
+            {pending ? (
+              <>
+                <ButtonSpinner className="h-4 w-4 text-white" />
+                Saving…
+              </>
+            ) : (
+              "Save"
+            )}
           </button>
         </div>
       </form>

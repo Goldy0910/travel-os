@@ -1,6 +1,9 @@
 "use client";
 
 import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
+import ButtonSpinner from "@/app/app/_components/button-spinner";
+import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
+import type { FormActionResult } from "@/lib/form-action-result";
 
 export type ActivitySheetInitial = {
   itemId?: string;
@@ -15,7 +18,7 @@ type ActivityBottomSheetProps = {
   onClose: () => void;
   initial: ActivitySheetInitial;
   formKey: string;
-  saveAction: (formData: FormData) => Promise<void>;
+  saveAction: (formData: FormData) => Promise<FormActionResult>;
 };
 
 function mergeTimeForInput(raw: string): string {
@@ -42,6 +45,7 @@ export default function ActivityBottomSheet({
   saveAction,
 }: ActivityBottomSheetProps) {
   const timeDefault = mergeTimeForInput(initial.time);
+  const { pending, handleForm } = useFormActionFeedback();
 
   return (
     <BottomSheetModal
@@ -53,7 +57,11 @@ export default function ActivityBottomSheet({
       panelClassName="max-h-[70vh] min-h-[min(70vh,520px)]"
     >
       <div className="flex min-h-[min(65vh,480px)] flex-col">
-        <form key={formKey} action={saveAction} className="flex flex-1 flex-col gap-4">
+        <form
+          key={formKey}
+          onSubmit={(e) => handleForm(e, saveAction, onClose)}
+          className="flex flex-1 flex-col gap-4"
+        >
           {initial.itemId ? <input type="hidden" name="itemId" value={initial.itemId} /> : null}
 
           <label className="block">
@@ -82,11 +90,13 @@ export default function ActivityBottomSheet({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-medium text-slate-700">Time</span>
+              <span className="text-sm font-medium text-slate-700">
+                Time{" "}
+                <span className="font-normal text-slate-400">(optional)</span>
+              </span>
               <input
                 type="time"
                 name="time"
-                required
                 defaultValue={timeDefault}
                 className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
               />
@@ -107,15 +117,24 @@ export default function ActivityBottomSheet({
             <button
               type="button"
               onClick={onClose}
-              className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white py-3 text-base font-medium text-slate-800 shadow-sm active:bg-slate-50"
+              disabled={pending}
+              className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white py-3 text-base font-medium text-slate-800 shadow-sm active:bg-slate-50 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="min-h-11 flex-1 rounded-xl bg-slate-900 py-3 text-base font-medium text-white shadow-md shadow-slate-900/20 active:bg-slate-800"
+              disabled={pending}
+              className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-base font-medium text-white shadow-md shadow-slate-900/20 active:bg-slate-800 disabled:opacity-60"
             >
-              Save
+              {pending ? (
+                <>
+                  <ButtonSpinner className="h-4 w-4 text-white" />
+                  Saving…
+                </>
+              ) : (
+                "Save"
+              )}
             </button>
           </div>
         </form>

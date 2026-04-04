@@ -2,6 +2,8 @@
 
 import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
 import BackLink from "@/app/app/_components/back-link";
+import ButtonSpinner from "@/app/app/_components/button-spinner";
+import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import Link from "next/link";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -21,12 +23,24 @@ export type ExpenseCardDTO = {
   dateInput: string;
   myShare: number;
   isPaidByYou: boolean;
+  /** Who created the row in DB; null for legacy rows without user_id. */
+  createdByUserId: string | null;
+  /** Creator or trip organiser may update/delete. */
+  canManage: boolean;
+};
+
+export type PaidByMemberOption = {
+  userId: string;
+  /** Stored in `expenses.paid_by` — profile / member display name. */
+  label: string;
+  email: string | null;
 };
 
 type TripExpensesClientProps = {
   tripId: string;
   tripTitle: string;
   defaultPaidBy: string;
+  paidByMemberOptions: PaidByMemberOption[];
   memberCount: number;
   totalSpent: number;
   yourShareTotal: number;
@@ -90,6 +104,7 @@ function ExpenseRowMenu({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const { pending: deletePending, runAction: runDeleteExpense } = useFormActionFeedback();
   useDismissOnOutsideClick(open, () => setOpen(false), wrapRef);
 
   return (
@@ -122,22 +137,23 @@ function ExpenseRowMenu({
           >
             Update
           </button>
-          <form
-            action={deleteExpenseAction.bind(null, tripId, expenseId)}
-            onSubmit={(e) => {
+          <button
+            type="button"
+            role="menuitem"
+            disabled={deletePending}
+            className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+            onClick={() => {
               if (!window.confirm("Delete this expense? This cannot be undone.")) {
-                e.preventDefault();
+                return;
               }
+              setOpen(false);
+              runDeleteExpense(() =>
+                deleteExpenseAction(tripId, expenseId, new FormData()),
+              );
             }}
           >
-            <button
-              type="submit"
-              role="menuitem"
-              className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-600 hover:bg-rose-50"
-            >
-              Delete
-            </button>
-          </form>
+            {deletePending ? "Deleting…" : "Delete"}
+          </button>
         </div>
       ) : null}
     </div>
@@ -148,6 +164,33 @@ function isoDateLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function resolvePaidBySelectDefault(
+  editing: ExpenseCardDTO | null,
+  defaultPaidBy: string,
+  options: PaidByMemberOption[],
+): string {
+  if (!editing) return defaultPaidBy;
+  const stored = editing.paidBy.trim();
+  if (!stored) return defaultPaidBy;
+
+  const byLabel = options.find((o) => o.label === stored);
+  if (byLabel) return byLabel.label;
+
+  const byUserId = options.find((o) => o.userId === stored);
+  if (byUserId) return byUserId.label;
+
+  const lower = stored.toLowerCase();
+  for (const o of options) {
+    const em = o.email?.trim();
+    if (!em) continue;
+    if (em.toLowerCase() === lower) return o.label;
+    const local = em.split("@")[0]?.toLowerCase();
+    if (local && local === lower) return o.label;
+  }
+
+  return stored;
+}
+
 function ExpenseFormSheet({
   open,
   onClose,
@@ -155,6 +198,7 @@ function ExpenseFormSheet({
   formKey,
   editing,
   defaultPaidBy,
+  paidByMemberOptions,
 }: {
   open: boolean;
   onClose: () => void;
@@ -162,14 +206,20 @@ function ExpenseFormSheet({
   formKey: string;
   editing: ExpenseCardDTO | null;
   defaultPaidBy: string;
+  paidByMemberOptions: PaidByMemberOption[];
 }) {
   const saveAction = useCallback((fd: FormData) => saveExpenseAction(tripId, fd), [tripId]);
+  const { pending, handleForm } = useFormActionFeedback();
 
   const titleDefault = editing?.title ?? "";
   const amountDefault = editing ? String(editing.amount) : "";
-  const paidByDefault = editing?.paidBy ?? defaultPaidBy;
+  const paidByDefault = resolvePaidBySelectDefault(editing, defaultPaidBy, paidByMemberOptions);
   const splitDefault = editing?.splitTypeRaw ?? "equal";
   const dateDefault = editing?.dateInput?.trim() || isoDateLocal(new Date());
+
+  const paidByOptionLabels = new Set(paidByMemberOptions.map((o) => o.label));
+  const showLegacyPaidByOption =
+    paidByDefault.length > 0 && !paidByOptionLabels.has(paidByDefault);
 
   return (
     <BottomSheetModal
@@ -180,7 +230,11 @@ function ExpenseFormSheet({
       panelClassName="max-h-[72vh]"
       titleId="expense-sheet-title"
     >
-      <form key={formKey} action={saveAction} className="flex flex-col gap-4 pb-1">
+      <form
+        key={formKey}
+        onSubmit={(e) => handleForm(e, saveAction, onClose)}
+        className="flex flex-col gap-4 pb-1"
+      >
         {editing ? <input type="hidden" name="expenseId" value={editing.id} /> : null}
 
         <label className="block">
@@ -211,13 +265,21 @@ function ExpenseFormSheet({
 
         <label className="block">
           <span className="text-sm font-medium text-slate-700">Paid by</span>
-          <input
+          <select
             name="paidBy"
             required
             defaultValue={paidByDefault}
-            placeholder="Name or email"
             className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
-          />
+          >
+            {showLegacyPaidByOption ? (
+              <option value={paidByDefault}>{paidByDefault}</option>
+            ) : null}
+            {paidByMemberOptions.map((o) => (
+              <option key={o.userId} value={o.label}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </label>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -251,15 +313,24 @@ function ExpenseFormSheet({
           <button
             type="button"
             onClick={onClose}
-            className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white py-3 text-base font-medium text-slate-800 shadow-sm active:bg-slate-50"
+            disabled={pending}
+            className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white py-3 text-base font-medium text-slate-800 shadow-sm active:bg-slate-50 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="min-h-11 flex-1 rounded-xl bg-slate-900 py-3 text-base font-medium text-white shadow-md shadow-slate-900/20"
+            disabled={pending}
+            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-base font-medium text-white shadow-md shadow-slate-900/20 disabled:opacity-60"
           >
-            Save
+            {pending ? (
+              <>
+                <ButtonSpinner className="h-4 w-4 text-white" />
+                Saving…
+              </>
+            ) : (
+              "Save"
+            )}
           </button>
         </div>
       </form>
@@ -271,6 +342,7 @@ export default function TripExpensesClient({
   tripId,
   tripTitle,
   defaultPaidBy,
+  paidByMemberOptions,
   memberCount,
   totalSpent,
   yourShareTotal,
@@ -430,7 +502,9 @@ export default function TripExpensesClient({
                         ) : null}
                       </div>
                     </div>
-                    <ExpenseRowMenu tripId={tripId} expenseId={row.id} onEdit={() => openEdit(row)} />
+                    {row.canManage ? (
+                      <ExpenseRowMenu tripId={tripId} expenseId={row.id} onEdit={() => openEdit(row)} />
+                    ) : null}
                   </div>
                   <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
                     <EntityCommentsBlock
@@ -453,7 +527,7 @@ export default function TripExpensesClient({
         type="button"
         aria-label="Add expense"
         onClick={openAdd}
-        className="fixed bottom-6 right-6 z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95"
+        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95"
       >
         +
       </button>
@@ -465,6 +539,7 @@ export default function TripExpensesClient({
         formKey={formKey}
         editing={editing}
         defaultPaidBy={defaultPaidBy}
+        paidByMemberOptions={paidByMemberOptions}
       />
     </>
   );

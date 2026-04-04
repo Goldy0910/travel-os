@@ -1,7 +1,9 @@
 "use client";
 
+import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export type EntityCommentDTO = {
   id: string;
@@ -88,13 +90,14 @@ export default function EntityCommentsBlock({
           ? String((insertError as { code?: string }).code)
           : "";
       if (code === "PGRST205") {
-        setError(
-          "Comments table not found. Apply migration 20260414_entity_comments.sql in Supabase.",
-        );
+        const msg =
+          "Comments table not found. Apply migration 20260414_entity_comments.sql in Supabase.";
+        setError(msg);
+        toast.error(msg);
       } else {
-        setError(
-          insertError.message?.trim() || "Could not post comment. Try again.",
-        );
+        const msg = insertError.message?.trim() || "Could not post comment. Try again.";
+        setError(msg);
+        toast.error(msg);
       }
       return;
     }
@@ -110,6 +113,7 @@ export default function EntityCommentsBlock({
       });
     }
     setDraft("");
+    toast.success("Comment posted.");
   }
 
   const heading =
@@ -172,9 +176,16 @@ export default function EntityCommentsBlock({
         <button
           type="submit"
           disabled={sending || !draft.trim()}
-          className="min-h-10 shrink-0 rounded-lg bg-slate-800 px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+          className="flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-slate-800 px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
         >
-          {sending ? "…" : "Post"}
+          {sending ? (
+            <>
+              <ButtonSpinner className="h-3.5 w-3.5 text-white" />
+              Post
+            </>
+          ) : (
+            "Post"
+          )}
         </button>
       </form>
     </div>

@@ -21,7 +21,10 @@ export default function TripCommandFab({ tripId }: { tripId: string }) {
   }, [open]);
 
   return (
-    <div ref={rootRef} className="fixed bottom-24 right-4 z-[120] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+    <div
+      ref={rootRef}
+      className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[120] flex flex-col items-end gap-3"
+    >
       {open ? (
         <div
           className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/15"

@@ -47,7 +47,7 @@ export async function insertTripActivityLog(
 export async function fetchTripActivityLogs(
   supabase: SupabaseClient,
   tripId: string,
-  limit = 10,
+  limit = 20,
 ) {
   return supabase
     .from("activity_logs")

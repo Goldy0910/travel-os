@@ -1,29 +1,19 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
-
-function DeleteSubmit() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 shadow-sm hover:bg-rose-50 disabled:opacity-50"
-    >
-      {pending ? "…" : "Delete"}
-    </button>
-  );
-}
+import ButtonSpinner from "@/app/app/_components/button-spinner";
+import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
+import type { FormActionResult } from "@/lib/form-action-result";
 
 type DeleteFormProps = {
-  action: (formData: FormData) => Promise<void>;
+  action: (formData: FormData) => Promise<FormActionResult>;
   noun: string;
 };
 
 export default function DeleteForm({ action, noun }: DeleteFormProps) {
+  const { pending, handleForm } = useFormActionFeedback();
+
   return (
     <form
-      action={action}
       onSubmit={(e) => {
         if (
           !window.confirm(
@@ -31,11 +21,26 @@ export default function DeleteForm({ action, noun }: DeleteFormProps) {
           )
         ) {
           e.preventDefault();
+          return;
         }
+        handleForm(e, action);
       }}
       className="inline"
     >
-      <DeleteSubmit />
+      <button
+        type="submit"
+        disabled={pending}
+        className="inline-flex min-h-8 min-w-[4.25rem] items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 shadow-sm hover:bg-rose-50 disabled:opacity-50"
+      >
+        {pending ? (
+          <>
+            <ButtonSpinner className="h-3.5 w-3.5 text-rose-600" />
+            …
+          </>
+        ) : (
+          "Delete"
+        )}
+      </button>
     </form>
   );
 }
