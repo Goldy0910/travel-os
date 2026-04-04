@@ -16,6 +16,7 @@ import {
   pickActiveTripId,
   tripDayContext,
 } from "@/app/app/_lib/trip-command-helpers";
+import AppHeaderMenu from "./app-header-menu";
 import HomeTripSwitcher from "./home-trip-switcher";
 import TripCommandFab from "./trip-command-fab";
 
@@ -179,7 +180,8 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
     return (
       <main className="min-h-screen bg-slate-50 px-4 py-6 pb-32">
         <div className="mx-auto w-full max-w-md space-y-6">
-          <header className="text-center">
+          <header className="relative text-center">
+            <AppHeaderMenu className="absolute right-0 top-0 z-10" variant="light" />
             <p className="text-sm font-medium uppercase tracking-wider text-slate-500">
               Travel OS
             </p>
@@ -313,6 +315,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
                   {memberCount} member{memberCount === 1 ? "" : "s"}
                 </p>
               </div>
+              <AppHeaderMenu variant="dark" />
             </div>
             <HomeTripSwitcher trips={tripOptions} currentId={activeTripId} />
           </div>

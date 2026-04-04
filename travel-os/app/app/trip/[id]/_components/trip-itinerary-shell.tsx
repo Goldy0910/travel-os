@@ -105,8 +105,6 @@ function TripHeaderMenu({
 
   useDismissOnOutsideClick(open, () => setOpen(false), wrapRef);
 
-  if (!canDeleteTrip) return null;
-
   return (
     <div className="relative shrink-0" ref={wrapRef}>
       <button
@@ -126,37 +124,49 @@ function TripHeaderMenu({
           role="menu"
           className="absolute right-0 top-full z-50 mt-1 min-w-[10rem] overflow-hidden rounded-xl border border-white/10 bg-slate-800 py-1 shadow-lg"
         >
-          <button
-            type="button"
+          <Link
+            href="/app/settings"
             role="menuitem"
             className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-white hover:bg-white/10"
-            onClick={() => {
-              setOpen(false);
-              onUpdateTrip();
-            }}
+            onClick={() => setOpen(false)}
           >
-            Update trip
-          </button>
-          <form
-            action={deleteTripAction.bind(null, tripId)}
-            onSubmit={(e) => {
-              if (
-                !window.confirm(
-                  "Delete this trip permanently? This removes itinerary, expenses, documents, and members.",
-                )
-              ) {
-                e.preventDefault();
-              }
-            }}
-          >
-            <button
-              type="submit"
-              role="menuitem"
-              className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-200 hover:bg-white/10"
-            >
-              Delete trip
-            </button>
-          </form>
+            Settings
+          </Link>
+          {canDeleteTrip ? (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-white hover:bg-white/10"
+                onClick={() => {
+                  setOpen(false);
+                  onUpdateTrip();
+                }}
+              >
+                Update trip
+              </button>
+              <form
+                action={deleteTripAction.bind(null, tripId)}
+                onSubmit={(e) => {
+                  if (
+                    !window.confirm(
+                      "Delete this trip permanently? This removes itinerary, expenses, documents, and members.",
+                    )
+                  ) {
+                    e.preventDefault();
+                  }
+                }}
+              >
+                <button
+                  type="submit"
+                  role="menuitem"
+                  className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-200 hover:bg-white/10"
+                >
+                  Delete trip
+                </button>
+              </form>
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>
