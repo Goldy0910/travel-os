@@ -1,6 +1,6 @@
 import BackLink from "@/app/app/_components/back-link";
 import DeleteForm from "@/app/app/_components/delete-form";
-import { getPublicSiteUrl } from "@/lib/public-site-url";
+import { getResolvedPublicSiteUrl } from "@/lib/public-site-url";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getMemberRole, isTripMember } from "@/lib/trip-membership";
 import { deleteMemberAction } from "../data-actions";
@@ -79,7 +79,7 @@ export default async function TripMembersPage({
 
   const rows = (membersData ?? []) as GenericRecord[];
 
-  const baseUrl = getPublicSiteUrl();
+  const baseUrl = await getResolvedPublicSiteUrl();
   const hasInviteCode = inviteCode.length > 0;
   const joinUrl = hasInviteCode
     ? `${baseUrl}/join?code=${encodeURIComponent(inviteCode)}`
