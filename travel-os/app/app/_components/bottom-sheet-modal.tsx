@@ -1,0 +1,89 @@
+"use client";
+
+import { useEffect } from "react";
+
+type BottomSheetModalProps = {
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  description?: string;
+  titleId?: string;
+  children: React.ReactNode;
+  /** Panel sizing (Tailwind classes). Default ~70vh max height. */
+  panelClassName?: string;
+  /** Root z-index class */
+  zClass?: string;
+  /** If false, omit drag handle */
+  showHandle?: boolean;
+};
+
+export default function BottomSheetModal({
+  open,
+  onClose,
+  title,
+  description,
+  titleId = "bottom-sheet-title",
+  children,
+  panelClassName = "max-h-[70vh]",
+  zClass = "z-[200]",
+  showHandle = true,
+}: BottomSheetModalProps) {
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  return (
+    <div
+      className={`fixed inset-0 flex flex-col justify-end sm:px-4 ${zClass} ${open ? "pointer-events-auto" : "pointer-events-none"}`}
+      aria-hidden={!open}
+    >
+      <button
+        type="button"
+        aria-label="Close dialog"
+        className={`absolute inset-0 z-0 bg-slate-900/50 transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
+        onClick={onClose}
+      />
+      <div className="relative z-10 mx-auto w-full max-w-md">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={title ? titleId : undefined}
+          className={`flex min-h-0 w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.12)] transition-transform duration-300 ease-out ${panelClassName} ${open ? "translate-y-0" : "translate-y-full"}`}
+        >
+          {showHandle ? (
+            <div className="flex shrink-0 justify-center pt-3 pb-2">
+              <div className="h-1 w-10 rounded-full bg-slate-200" aria-hidden />
+            </div>
+          ) : null}
+          {title || description ? (
+            <div className="shrink-0 px-5 pt-1 pb-2">
+              {title ? (
+                <h2 id={titleId} className="text-lg font-semibold text-slate-900">
+                  {title}
+                </h2>
+              ) : null}
+              {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
+            </div>
+          ) : null}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
