@@ -1,4 +1,4 @@
-import BackLink from "@/app/app/_components/back-link";
+import { SetAppHeader } from "@/components/AppHeader";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { redirect } from "next/navigation";
 import CreateTripForm from "./create-trip-form";
@@ -24,13 +24,10 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-6 pb-28">
-      <div className="mx-auto w-full max-w-md space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <BackLink href="/app/trips">Back to trips</BackLink>
-          <BackLink href="/app/home">Home</BackLink>
-        </div>
-
+    <>
+      <SetAppHeader title="Create trip" showBack />
+      <main className="min-h-screen bg-slate-50 px-4 py-6 pb-28">
+        <div className="mx-auto w-full max-w-md space-y-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-6">
             <p className="text-sm text-slate-500">New Trip</p>
@@ -43,7 +40,8 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
 
           <CreateTripForm />
         </div>
-      </div>
-    </main>
+        </div>
+      </main>
+    </>
   );
 }

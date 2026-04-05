@@ -1,5 +1,6 @@
 "use client";
 
+import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -31,28 +32,31 @@ export default function TripCommandFab({ tripId }: { tripId: string }) {
           role="menu"
         >
           <Link
-            href={`/app/trip/${tripId}`}
+            href={`/app/trip/${tripId}?tab=itinerary`}
             role="menuitem"
-            className="min-h-11 whitespace-nowrap rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50"
+            className="flex min-h-11 items-center justify-between gap-2 whitespace-nowrap rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50"
             onClick={() => setOpen(false)}
           >
             Add activity
+            <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-700" />
           </Link>
           <Link
-            href={`/app/trip/${tripId}/expenses`}
+            href={`/app/trip/${tripId}?tab=expenses`}
             role="menuitem"
-            className="min-h-11 whitespace-nowrap rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50"
+            className="flex min-h-11 items-center justify-between gap-2 whitespace-nowrap rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50"
             onClick={() => setOpen(false)}
           >
             Add expense
+            <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-700" />
           </Link>
           <Link
-            href={`/app/trip/${tripId}/docs`}
+            href={`/app/trip/${tripId}?tab=docs`}
             role="menuitem"
-            className="min-h-11 whitespace-nowrap rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50"
+            className="flex min-h-11 items-center justify-between gap-2 whitespace-nowrap rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50"
             onClick={() => setOpen(false)}
           >
             Upload doc
+            <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-700" />
           </Link>
         </div>
       ) : null}

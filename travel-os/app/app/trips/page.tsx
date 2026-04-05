@@ -1,4 +1,4 @@
-import BackLink from "@/app/app/_components/back-link";
+import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchTripsViaMembership } from "@/lib/trip-membership";
 import Link from "next/link";
@@ -50,8 +50,6 @@ export default async function TripsPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-6 pb-28">
       <div className="mx-auto w-full max-w-md space-y-5">
-        <BackLink href="/app/home">Home</BackLink>
-
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Trips</h1>
           <p className="mt-1 text-sm text-slate-600">
@@ -106,7 +104,14 @@ export default async function TripsPage() {
                   : null;
 
               const summary = tripId ? expenseSummary.get(tripId) : undefined;
-              const unsplashSrc = `https://source.unsplash.com/featured/?${encodeURIComponent(location)}`;
+              const initials =
+                title
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((w) => w[0] ?? "")
+                  .join("")
+                  .toUpperCase() || "·";
 
               const cardInner = (
                 <div className="flex min-h-[120px] w-full overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm transition active:bg-slate-50/90">
@@ -124,21 +129,24 @@ export default async function TripsPage() {
                       </p>
                     ) : null}
                   </div>
-                  <div className="relative w-[36%] max-w-[140px] shrink-0 self-stretch bg-slate-200">
-                    {/* Unsplash featured URL is dynamic per trip; next/image is optional here */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={unsplashSrc}
-                      alt=""
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
+                  <div
+                    className="relative flex w-[36%] max-w-[140px] shrink-0 items-center justify-center self-stretch bg-gradient-to-br from-slate-500 to-slate-700"
+                    aria-hidden
+                  >
+                    <span className="text-lg font-bold text-white/90">{initials}</span>
                   </div>
                 </div>
               );
 
               return tripId ? (
-                <Link key={tripId} href={`/app/trip/${tripId}`} className="block">
+                <Link
+                  key={tripId}
+                  href={`/app/trip/${tripId}`}
+                  className="relative block"
+                >
+                  <span className="pointer-events-none absolute right-3 top-3 z-10 inline-flex rounded-full bg-white/90 p-1 shadow-sm">
+                    <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-700" />
+                  </span>
                   {cardInner}
                 </Link>
               ) : (
@@ -151,9 +159,10 @@ export default async function TripsPage() {
 
       <Link
         href="/app/create-trip"
-        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] min-h-11 rounded-full bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-slate-900/25 transition hover:bg-slate-800"
+        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] inline-flex min-h-11 items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-slate-900/25 transition hover:bg-slate-800"
       >
         + Add Trip
+        <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-white" />
       </Link>
     </main>
   );

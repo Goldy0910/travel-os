@@ -21,7 +21,8 @@ import {
   pickActiveTripId,
   tripDayContext,
 } from "@/app/app/_lib/trip-command-helpers";
-import AppHeaderMenu from "./app-header-menu";
+import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
+import { SetAppHeader } from "@/components/AppHeader";
 import HomeTripSwitcher from "./home-trip-switcher";
 import TripCommandFab from "./trip-command-fab";
 
@@ -183,18 +184,19 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
 
   if (!activeTripId) {
     return (
-      <main className="min-h-screen bg-slate-50 px-4 py-6 pb-32">
-        <div className="mx-auto w-full max-w-md space-y-6">
-          <header className="relative text-center">
-            <AppHeaderMenu className="absolute right-0 top-0 z-10" variant="light" />
-            <p className="text-sm font-medium uppercase tracking-wider text-slate-500">
-              Travel OS
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold text-slate-900">Trip command center</h1>
-            <p className="mt-2 text-sm text-slate-600">
-              Your live home for everything happening on the road.
-            </p>
-          </header>
+      <>
+        <SetAppHeader title="Travel Till 99" showBack={false} />
+        <main className="min-h-screen bg-slate-50 px-4 py-6 pb-32">
+          <div className="mx-auto w-full max-w-md space-y-6">
+            <header className="relative text-center">
+              <p className="text-sm font-medium uppercase tracking-wider text-slate-500">
+                Travel OS
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold text-slate-900">Trip command center</h1>
+              <p className="mt-2 text-sm text-slate-600">
+                Your live home for everything happening on the road.
+              </p>
+            </header>
           <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
             <div className="text-4xl" aria-hidden>
               ✈️
@@ -205,22 +207,29 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
             </p>
             <Link
               href="/app/create-trip"
-              className="mt-6 inline-flex min-h-11 items-center justify-center rounded-2xl bg-slate-900 px-6 text-sm font-semibold text-white shadow-md"
+              className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 text-sm font-semibold text-white shadow-md"
             >
               Create trip
+              <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-white" />
             </Link>
             <Link
               href="/app/trips"
-              className="mt-3 block text-sm font-medium text-slate-600 underline"
+              className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-slate-600 underline"
             >
               Browse all trips
+              <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-500" />
             </Link>
-            <Link href="/" className="mt-2 block text-sm text-slate-500 underline">
+            <Link
+              href="/"
+              className="mt-2 inline-flex items-center gap-2 text-sm text-slate-500 underline"
+            >
               Website
+              <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-400" />
             </Link>
           </div>
         </div>
       </main>
+      </>
     );
   }
 
@@ -305,11 +314,12 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
   }));
 
   return (
-    <main className="min-h-screen bg-slate-100 pb-36 pt-0">
-      <div className="mx-auto w-full max-w-md">
-        <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-slate-50/95 px-4 py-4 shadow-sm shadow-slate-900/5 backdrop-blur-md">
-          <div className="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 p-4 text-white shadow-inner">
-            <div className="flex items-start justify-between gap-3">
+    <>
+      <SetAppHeader title="Travel Till 99" showBack={false} />
+      <main className="min-h-screen bg-slate-100 pb-36 pt-0">
+        <div className="mx-auto w-full max-w-md">
+          <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-slate-50/95 px-4 py-4 shadow-sm shadow-slate-900/5 backdrop-blur-md">
+            <div className="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 p-4 text-white shadow-inner">
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
                   Active trip
@@ -325,11 +335,9 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
                   {memberCount} member{memberCount === 1 ? "" : "s"}
                 </p>
               </div>
-              <AppHeaderMenu variant="dark" />
+              <HomeTripSwitcher trips={tripOptions} currentId={activeTripId} />
             </div>
-            <HomeTripSwitcher trips={tripOptions} currentId={activeTripId} />
-          </div>
-        </header>
+          </header>
 
         <div className="space-y-5 px-4 py-5">
           <section className="overflow-hidden rounded-3xl bg-white shadow-md shadow-slate-900/8 ring-1 ring-slate-200/80">
@@ -343,9 +351,10 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
                   <p className="text-sm font-medium text-slate-700">No plans yet for today</p>
                   <Link
                     href={`/app/trip/${activeTripId}`}
-                    className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white"
+                    className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white"
                   >
                     + Add activity
+                    <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-white" />
                   </Link>
                 </div>
               ) : (
@@ -377,9 +386,10 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
               {todayItems.length > 0 ? (
                 <Link
                   href={`/app/trip/${activeTripId}`}
-                  className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 shadow-sm"
+                  className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 shadow-sm"
                 >
                   + Add activity
+                  <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-700" />
                 </Link>
               ) : null}
             </div>
@@ -392,8 +402,12 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
             {docs.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-600 shadow-sm">
                 No documents yet.{" "}
-                <Link href={`/app/trip/${activeTripId}/docs`} className="font-semibold text-slate-900 underline">
+                <Link
+                  href={`/app/trip/${activeTripId}?tab=docs`}
+                  className="inline-flex items-center gap-1 font-semibold text-slate-900 underline"
+                >
                   Upload
+                  <LinkLoadingIndicator spinnerClassName="h-3 w-3 text-slate-700" />
                 </Link>
               </div>
             ) : (
@@ -460,10 +474,11 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
               {net === 0 && <>You&apos;re settled up on this trip</>}
             </div>
             <Link
-              href={`/app/trip/${activeTripId}/expenses`}
-              className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white"
+              href={`/app/trip/${activeTripId}?tab=expenses`}
+              className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 text-sm font-semibold text-white"
             >
               + Add expense
+              <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-white" />
             </Link>
           </section>
 
@@ -471,10 +486,11 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Group</h2>
               <Link
-                href={`/app/trip/${activeTripId}/members`}
-                className="min-h-9 text-sm font-semibold text-indigo-600"
+                href={`/app/trip/${activeTripId}?tab=members`}
+                className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-indigo-600"
               >
                 Manage
+                <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-indigo-600" />
               </Link>
             </div>
             <ul className="mt-4 flex flex-wrap gap-3">
@@ -553,9 +569,10 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
             )}
             <Link
               href={`/app/trip/${activeTripId}`}
-              className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-indigo-600"
+              className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-indigo-600"
             >
               Full itinerary →
+              <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-indigo-600" />
             </Link>
           </section>
 
@@ -574,19 +591,27 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
             </section>
           ) : null}
 
-          <footer className="pb-4 text-center">
-            <Link href="/app/trips" className="text-sm font-medium text-slate-600 underline">
+          <footer className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 pb-4 text-center">
+            <Link
+              href="/app/trips"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 underline"
+            >
               All trips
+              <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-500" />
             </Link>
-            <span className="mx-2 text-slate-300">·</span>
-            <Link href="/" className="text-sm font-medium text-slate-600 underline">
+            <span className="text-slate-300">·</span>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 underline"
+            >
               Website
+              <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-500" />
             </Link>
           </footer>
         </div>
+        <TripCommandFab tripId={activeTripId} />
       </div>
-
-      <TripCommandFab tripId={activeTripId} />
-    </main>
+      </main>
+    </>
   );
 }

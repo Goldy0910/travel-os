@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import MobileNavTabInner from "./mobile-nav-tab-inner";
 
 const LAST_TRIP_STORAGE_KEY = "travel-os-last-trip-id";
 
@@ -112,13 +113,15 @@ export default function MobileBottomNav() {
         /* ignore */
       }
     }
-    try {
-      const v = sessionStorage.getItem(LAST_TRIP_STORAGE_KEY);
-      const trimmed = v?.trim() ?? "";
-      setStoredLastTripId(trimmed.length > 0 ? trimmed : null);
-    } catch {
-      setStoredLastTripId(null);
-    }
+    queueMicrotask(() => {
+      try {
+        const v = sessionStorage.getItem(LAST_TRIP_STORAGE_KEY);
+        const trimmed = v?.trim() ?? "";
+        setStoredLastTripId(trimmed.length > 0 ? trimmed : null);
+      } catch {
+        setStoredLastTripId(null);
+      }
+    });
   }, [pathname]);
 
   const pathForUi = pathname;
@@ -136,12 +139,22 @@ export default function MobileBottomNav() {
     (tripFromHome && tripFromHome.length > 0 ? tripFromHome : null) ||
     storedLastTripId;
 
+  const tripTabParam = searchParams.get("tab");
+  const isTripTabTool =
+    !!pathTripId &&
+    (tripTabParam === "docs" ||
+      tripTabParam === "expenses" ||
+      tripTabParam === "members" ||
+      tripTabParam === "chat" ||
+      tripTabParam === "guides");
+
   const onTripToolPage =
     !!extractTripIdFromPath(pathForUi) &&
     (normalizedPath.includes("/docs") ||
       normalizedPath.includes("/expenses") ||
       normalizedPath.includes("/members") ||
-      normalizedPath.includes("/chat"));
+      normalizedPath.includes("/chat") ||
+      isTripTabTool);
 
   const tabs = [
     {
@@ -162,25 +175,25 @@ export default function MobileBottomNav() {
     {
       label: "Docs",
       href: effectiveTripId
-        ? `/app/trip/${encodeURIComponent(effectiveTripId)}/docs`
+        ? `/app/trip/${encodeURIComponent(effectiveTripId)}?tab=docs`
         : "/app/docs",
-      active: normalizedPath.includes("/docs"),
+      active: normalizedPath.includes("/docs") || tripTabParam === "docs",
       icon: DocsIcon,
     },
     {
       label: "Expenses",
       href: effectiveTripId
-        ? `/app/trip/${encodeURIComponent(effectiveTripId)}/expenses`
+        ? `/app/trip/${encodeURIComponent(effectiveTripId)}?tab=expenses`
         : "/app/expenses",
-      active: normalizedPath.includes("/expenses"),
+      active: normalizedPath.includes("/expenses") || tripTabParam === "expenses",
       icon: ExpensesIcon,
     },
     {
       label: "Members",
       href: effectiveTripId
-        ? `/app/trip/${encodeURIComponent(effectiveTripId)}/members`
+        ? `/app/trip/${encodeURIComponent(effectiveTripId)}?tab=members`
         : "/app/trips",
-      active: normalizedPath.includes("/members"),
+      active: normalizedPath.includes("/members") || tripTabParam === "members",
       icon: MembersIcon,
     },
   ];
@@ -197,17 +210,9 @@ export default function MobileBottomNav() {
             <Link
               key={tab.label}
               href={tab.href}
-              prefetch={false}
               className="relative z-[101] flex min-h-12 w-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 touch-manipulation"
             >
-              <Icon active={tab.active} />
-              <span
-                className={`max-w-full truncate px-0.5 text-center text-[10px] font-medium sm:text-xs ${
-                  tab.active ? "text-slate-900" : "text-slate-500"
-                }`}
-              >
-                {tab.label}
-              </span>
+              <MobileNavTabInner Icon={Icon} active={tab.active} label={tab.label} />
             </Link>
           );
         })}

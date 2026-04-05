@@ -1,10 +1,11 @@
 "use client";
 
 import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
-import BackLink from "@/app/app/_components/back-link";
 import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { useTripActiveTab } from "../../_lib/trip-active-tab-context";
+import { useTripFabRegistry } from "../../_lib/trip-tab-fab-registry";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { RefObject } from "react";
@@ -519,6 +520,8 @@ export default function TripDocsClient({
   initialError,
 }: TripDocsClientProps) {
   const router = useRouter();
+  const activeTripTab = useTripActiveTab();
+  const { setOpenUpload } = useTripFabRegistry();
   const [uploadOpen, setUploadOpen] = useState(false);
   const [docMenuOpenId, setDocMenuOpenId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{
@@ -531,6 +534,21 @@ export default function TripDocsClient({
   const refresh = useCallback(() => {
     router.refresh();
   }, [router]);
+
+  const openUploadSheet = useCallback(() => {
+    setUploadOpen(true);
+  }, []);
+
+  useEffect(() => {
+    setOpenUpload(openUploadSheet);
+    return () => setOpenUpload(null);
+  }, [setOpenUpload, openUploadSheet]);
+
+  useEffect(() => {
+    if (activeTripTab !== "docs") {
+      setUploadOpen(false);
+    }
+  }, [activeTripTab]);
 
   const openViewer = (doc: DocumentDTO) => {
     const url = doc.file_url ?? "";
@@ -549,18 +567,10 @@ export default function TripDocsClient({
 
   return (
     <>
-      <header className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <BackLink href="/app/trips">All trips</BackLink>
-          <BackLink href="/app/home">Home</BackLink>
-        </div>
-        <div className="space-y-2">
-          <BackLink href={`/app/trip/${tripId}`}>Back to trip</BackLink>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Documents</h1>
-            <p className="mt-1 text-sm text-slate-600">Tickets, PDFs, and travel paperwork.</p>
-          </div>
-        </div>
+      <header className="space-y-1">
+        <p className="text-sm text-slate-600">
+          Tickets, PDFs, and travel paperwork for this trip.
+        </p>
       </header>
 
       {initialSuccess ? (
@@ -627,15 +637,6 @@ export default function TripDocsClient({
           </ul>
         )}
       </section>
-
-      <button
-        type="button"
-        aria-label="Upload document"
-        onClick={() => setUploadOpen(true)}
-        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95"
-      >
-        +
-      </button>
 
       <DocsUploadSheet
         open={uploadOpen}

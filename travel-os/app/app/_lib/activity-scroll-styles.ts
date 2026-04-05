@@ -9,4 +9,4 @@ export const HOME_TODAY_ITINERARY_LIMIT = 24;
  * Wrap the list only; keep section headings outside.
  */
 export const activityListScrollAreaClass =
-  "max-h-[min(38vh,18.5rem)] overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] pr-1";
+  "max-h-[min(38vh,18.5rem)] touch-pan-y overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] pr-1";

@@ -1,8 +1,8 @@
 "use client";
 
 import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
-import BackLink from "@/app/app/_components/back-link";
 import ButtonSpinner from "@/app/app/_components/button-spinner";
+import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import Link from "next/link";
 import type { RefObject } from "react";
@@ -10,6 +10,8 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import EntityCommentsBlock, {
   type EntityCommentDTO,
 } from "../../_components/entity-comments-block";
+import { useTripActiveTab } from "../../_lib/trip-active-tab-context";
+import { useTripFabRegistry } from "../../_lib/trip-tab-fab-registry";
 import { deleteExpenseAction, saveExpenseAction } from "../../data-actions";
 import { formatInr } from "../_lib/format-inr";
 
@@ -353,17 +355,31 @@ export default function TripExpensesClient({
   memberLabelByUserId,
   expenseCommentsById,
 }: TripExpensesClientProps) {
+  const activeTripTab = useTripActiveTab();
+  const { setOpenExpense } = useTripFabRegistry();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseCardDTO | null>(null);
   const formKeySeq = useRef(0);
   const [formKey, setFormKey] = useState("expense-new-0");
 
-  const openAdd = () => {
+  const openAdd = useCallback(() => {
     formKeySeq.current += 1;
     setEditing(null);
     setFormKey(`expense-new-${formKeySeq.current}`);
     setSheetOpen(true);
-  };
+  }, []);
+
+  useEffect(() => {
+    setOpenExpense(openAdd);
+    return () => setOpenExpense(null);
+  }, [setOpenExpense, openAdd]);
+
+  useEffect(() => {
+    if (activeTripTab !== "expenses") {
+      setSheetOpen(false);
+      setEditing(null);
+    }
+  }, [activeTripTab]);
 
   const openEdit = (row: ExpenseCardDTO) => {
     formKeySeq.current += 1;
@@ -384,20 +400,15 @@ export default function TripExpensesClient({
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
-        <BackLink href="/app/trips">All trips</BackLink>
-        <BackLink href="/app/home">Home</BackLink>
-      </div>
-
       <section className="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-white shadow-md">
-        <p className="text-sm text-slate-300">{tripTitle}</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Expenses</h1>
+        <p className="text-sm font-medium text-slate-200">{tripTitle}</p>
         <p className="mt-2 text-xs text-slate-400">{membersLabel}</p>
         <Link
-          href={`/app/trip/${tripId}`}
-          className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/15"
+          href={`/app/trip/${tripId}?tab=itinerary`}
+          className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/15"
         >
-          Trip overview
+          Itinerary
+          <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-white" />
         </Link>
       </section>
 
@@ -522,15 +533,6 @@ export default function TripExpensesClient({
           </ul>
         )}
       </section>
-
-      <button
-        type="button"
-        aria-label="Add expense"
-        onClick={openAdd}
-        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95"
-      >
-        +
-      </button>
 
       <ExpenseFormSheet
         open={sheetOpen}

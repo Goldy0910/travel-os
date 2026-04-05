@@ -1,9 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
+import { useTripActiveTab } from "../_lib/trip-active-tab-context";
+import { useTripFabRegistry } from "../_lib/trip-tab-fab-registry";
 import {
   deleteItineraryItemAction,
   deleteTripAction,
@@ -99,7 +101,7 @@ function useDismissOnOutsideClick(
   }, [open, onClose, excludeRef]);
 }
 
-function TripHeaderMenu({
+function TripManageMenu({
   tripId,
   canDeleteTrip,
   onUpdateTrip,
@@ -115,67 +117,57 @@ function TripHeaderMenu({
 
   useDismissOnOutsideClick(open, () => setOpen(false), wrapRef);
 
+  if (!canDeleteTrip) return null;
+
   return (
-    <div className="relative shrink-0" ref={wrapRef}>
+    <div className="relative shrink-0 self-start" ref={wrapRef}>
       <button
         type="button"
         aria-expanded={open}
         aria-haspopup="true"
         aria-controls={menuId}
         onClick={() => setOpen((v) => !v)}
-        className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-white/90 transition hover:bg-white/10 active:bg-white/15"
+        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15"
       >
-        <span className="sr-only">Trip options</span>
-        <IconDotsVertical className="h-6 w-6" />
+        Manage trip
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open ? (
         <div
           id={menuId}
           role="menu"
-          className="absolute right-0 top-full z-50 mt-1 min-w-[10rem] overflow-hidden rounded-xl border border-white/10 bg-slate-800 py-1 shadow-lg"
+          className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-white/10 bg-slate-800 py-1 shadow-lg sm:left-auto sm:right-0 sm:min-w-[12rem]"
         >
-          <Link
-            href="/app/settings"
+          <button
+            type="button"
             role="menuitem"
             className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-white hover:bg-white/10"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+              onUpdateTrip();
+            }}
           >
-            Settings
-          </Link>
-          {canDeleteTrip ? (
-            <>
-              <button
-                type="button"
-                role="menuitem"
-                className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-white hover:bg-white/10"
-                onClick={() => {
-                  setOpen(false);
-                  onUpdateTrip();
-                }}
-              >
-                Update trip
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                disabled={deleteTripPending}
-                className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-200 hover:bg-white/10 disabled:opacity-50"
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      "Delete this trip permanently? This removes itinerary, expenses, documents, and members.",
-                    )
-                  ) {
-                    return;
-                  }
-                  setOpen(false);
-                  runDeleteTrip(() => deleteTripAction(tripId, new FormData()));
-                }}
-              >
-                {deleteTripPending ? "Deleting…" : "Delete trip"}
-              </button>
-            </>
-          ) : null}
+            Update trip
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={deleteTripPending}
+            className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-200 hover:bg-white/10 disabled:opacity-50"
+            onClick={() => {
+              if (
+                !window.confirm(
+                  "Delete this trip permanently? This removes itinerary, expenses, documents, and members.",
+                )
+              ) {
+                return;
+              }
+              setOpen(false);
+              runDeleteTrip(() => deleteTripAction(tripId, new FormData()));
+            }}
+          >
+            {deleteTripPending ? "Deleting…" : "Delete trip"}
+          </button>
         </div>
       ) : null}
     </div>
@@ -266,6 +258,10 @@ export default function TripItineraryShell({
   currentUserId,
   memberLabelByUserId,
 }: TripItineraryShellProps) {
+  const activeTripTab = useTripActiveTab();
+  const itineraryTabActive = activeTripTab === "itinerary";
+  const { setOpenActivity } = useTripFabRegistry();
+
   const tripEditDefaults = tripEditDefaultsProp ?? FALLBACK_TRIP_EDIT_DEFAULTS;
   const [sheetOpen, setSheetOpen] = useState(false);
   const [tripUpdateOpen, setTripUpdateOpen] = useState(false);
@@ -280,12 +276,19 @@ export default function TripItineraryShell({
   const [formKey, setFormKey] = useState("new-0");
   const formKeySeq = useRef(0);
 
+  useEffect(() => {
+    if (!itineraryTabActive) {
+      setSheetOpen(false);
+      setTripUpdateOpen(false);
+    }
+  }, [itineraryTabActive]);
+
   const saveAction = useCallback(
     (fd: FormData) => saveItineraryActivityAction(tripId, fd),
     [tripId],
   );
 
-  const openAdd = () => {
+  const openAdd = useCallback(() => {
     formKeySeq.current += 1;
     setSheetInitial({
       activityName: "",
@@ -295,7 +298,12 @@ export default function TripItineraryShell({
     });
     setFormKey(`new-${formKeySeq.current}`);
     setSheetOpen(true);
-  };
+  }, [defaultDateForAdd]);
+
+  useEffect(() => {
+    setOpenActivity(openAdd);
+    return () => setOpenActivity(null);
+  }, [setOpenActivity, openAdd]);
 
   const openAddForDate = (date: string) => {
     formKeySeq.current += 1;
@@ -349,7 +357,7 @@ export default function TripItineraryShell({
               Shared with {memberCount} {memberCount === 1 ? "member" : "members"}
             </p>
           </div>
-          <TripHeaderMenu
+          <TripManageMenu
             tripId={tripId}
             canDeleteTrip={canDeleteTrip}
             onUpdateTrip={() => {
@@ -358,33 +366,6 @@ export default function TripItineraryShell({
               setTripUpdateOpen(true);
             }}
           />
-        </div>
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Link
-            href={`/app/trip/${tripId}/chat`}
-            className="inline-flex min-h-11 items-center rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/15"
-          >
-            Chat
-          </Link>
-          <Link
-            href={`/app/trip/${tripId}/members`}
-            className="inline-flex min-h-11 items-center rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/15"
-          >
-            Members
-          </Link>
-          <Link
-            href={`/app/trip/${tripId}/docs`}
-            className="inline-flex min-h-11 items-center rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/15"
-          >
-            Documents
-          </Link>
-          <Link
-            href={`/app/trip/${tripId}/expenses`}
-            className="inline-flex min-h-11 items-center rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/15"
-          >
-            Expenses
-          </Link>
         </div>
       </section>
 
@@ -460,30 +441,25 @@ export default function TripItineraryShell({
         ) : null}
       </section>
 
-      <button
-        type="button"
-        onClick={openAdd}
-        aria-label="Add activity"
-        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95"
-      >
-        +
-      </button>
+      {itineraryTabActive ? (
+        <ActivityBottomSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          initial={sheetInitial}
+          formKey={formKey}
+          saveAction={saveAction}
+        />
+      ) : null}
 
-      <ActivityBottomSheet
-        open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        initial={sheetInitial}
-        formKey={formKey}
-        saveAction={saveAction}
-      />
-
-      <TripUpdateBottomSheet
-        open={tripUpdateOpen}
-        onClose={() => setTripUpdateOpen(false)}
-        tripId={tripId}
-        defaults={tripEditDefaults}
-        formKey={`${tripId}-${tripUpdateFormKey}`}
-      />
+      {itineraryTabActive ? (
+        <TripUpdateBottomSheet
+          open={tripUpdateOpen}
+          onClose={() => setTripUpdateOpen(false)}
+          tripId={tripId}
+          defaults={tripEditDefaults}
+          formKey={`${tripId}-${tripUpdateFormKey}`}
+        />
+      ) : null}
     </>
   );
 }

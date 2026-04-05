@@ -1,6 +1,8 @@
 "use client";
 
 import BackLink from "@/app/app/_components/back-link";
+import ButtonSpinner from "@/app/app/_components/button-spinner";
+import { SetAppHeader } from "@/components/AppHeader";
 import { tryConsumePendingInvite } from "@/lib/join-trip-invite";
 import { PENDING_TRIP_INVITE_KEY } from "@/lib/pending-trip-invite";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
@@ -78,6 +80,9 @@ export default function LoginPage() {
     setErrorMessage("");
     setInfoMessage("");
     setIsSubmitting(true);
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
 
     let supabase: ReturnType<typeof createSupabaseBrowserClient>;
     try {
@@ -112,7 +117,7 @@ export default function LoginPage() {
         });
         if (signInError) {
           setInfoMessage(
-            "Account created. If you don’t get in automatically, confirm your email or ask your admin to disable “Confirm email” in Supabase (Auth → Providers → Email) for instant beta access.",
+            "Account created. Confirm your email, then log in here.",
           );
           setIsSignup(false);
           setPassword("");
@@ -139,7 +144,9 @@ export default function LoginPage() {
   const busy = isSubmitting || joiningTrip;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-10">
+    <>
+      <SetAppHeader title="Log in" showBack />
+      <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-10">
       <div className="mb-6 w-full max-w-md self-start sm:self-center">
         <BackLink href="/">Back to website</BackLink>
       </div>
@@ -155,7 +162,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form className="space-y-4" onSubmit={handleAuth}>
+        <form className="space-y-4" onSubmit={handleAuth} aria-busy={busy}>
           <div>
             <label
               htmlFor="email"
@@ -209,17 +216,24 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy}
-            className="h-12 w-full rounded-xl bg-slate-900 text-base font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 text-base font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {joiningTrip
-              ? "Joining trip…"
-              : isSubmitting
-                ? isSignup
-                  ? "Creating account…"
-                  : "Logging in…"
-                : isSignup
-                  ? "Sign up & continue"
-                  : "Log in"}
+            {busy ? (
+              <>
+                <ButtonSpinner className="h-5 w-5 shrink-0 text-white" />
+                <span>
+                  {joiningTrip
+                    ? "Joining trip…"
+                    : isSignup
+                      ? "Creating account…"
+                      : "Logging in…"}
+                </span>
+              </>
+            ) : isSignup ? (
+              "Sign up & continue"
+            ) : (
+              "Log in"
+            )}
           </button>
         </form>
 
@@ -236,12 +250,8 @@ export default function LoginPage() {
             ? "Already have an account? Log in"
             : "Need an account? Sign up"}
         </button>
-
-        <p className="mt-6 text-center text-xs leading-relaxed text-slate-500">
-          Beta: turn off <strong className="font-medium text-slate-600">Confirm email</strong> in
-          Supabase (Authentication → Providers → Email) so sign-up logs in immediately.
-        </p>
       </div>
     </main>
+    </>
   );
 }

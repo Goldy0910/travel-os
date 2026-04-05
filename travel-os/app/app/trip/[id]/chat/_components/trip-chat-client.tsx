@@ -1,6 +1,5 @@
 "use client";
 
-import BackLink from "@/app/app/_components/back-link";
 import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -74,12 +73,10 @@ export default function TripChatClient({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
-    const el = listRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    bottomRef.current?.scrollIntoView({ block: "end" });
   }, []);
 
   useEffect(() => {
@@ -186,17 +183,9 @@ export default function TripChatClient({
   }
 
   return (
-    <div className="flex h-dvh max-h-dvh flex-col bg-slate-50 pb-28">
-      <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="mx-auto flex w-full max-w-md items-center gap-3">
-          <BackLink href={`/app/trip/${tripId}`}>Trip</BackLink>
-          <h1 className="text-lg font-semibold text-slate-900">Chat</h1>
-        </div>
-      </header>
-
+    <div className="flex flex-col bg-slate-50">
       <div
-        ref={listRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3"
+        className="px-4 py-3"
         role="log"
         aria-live="polite"
         aria-relevant="additions"
@@ -260,6 +249,7 @@ export default function TripChatClient({
               );
             })
           )}
+          <div ref={bottomRef} className="h-0 w-full shrink-0" aria-hidden />
         </div>
       </div>
 

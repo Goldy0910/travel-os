@@ -44,6 +44,14 @@ function labelFor(
   return memberLabelByUserId[userId]?.trim() || "Member";
 }
 
+/** Newest first for display */
+function sortCommentsNewestFirst(list: EntityCommentDTO[]) {
+  return [...list].sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+}
+
 export default function EntityCommentsBlock({
   tripId,
   entityType,
@@ -53,10 +61,7 @@ export default function EntityCommentsBlock({
   memberLabelByUserId,
 }: EntityCommentsBlockProps) {
   const [comments, setComments] = useState<EntityCommentDTO[]>(() =>
-    [...initialComments].sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    ),
+    sortCommentsNewestFirst(initialComments),
   );
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -106,10 +111,7 @@ export default function EntityCommentsBlock({
       setComments((prev) => {
         const row = data as EntityCommentDTO;
         if (prev.some((c) => c.id === row.id)) return prev;
-        return [...prev, row].sort(
-          (a, b) =>
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-        );
+        return sortCommentsNewestFirst([...prev, row]);
       });
     }
     setDraft("");
@@ -125,31 +127,41 @@ export default function EntityCommentsBlock({
         {heading}
       </p>
 
-      {comments.length > 0 ? (
-        <ul className="space-y-2">
-          {comments.map((c) => {
-            const name = labelFor(c.user_id, memberLabelByUserId);
-            return (
-              <li
-                key={c.id}
-                className="rounded-xl bg-white/80 px-3 py-2 text-sm ring-1 ring-slate-200/80"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                  <span className="font-medium text-slate-800">{name}</span>
-                  <span className="text-[11px] text-slate-400">
-                    {formatCommentTime(c.created_at)}
-                  </span>
-                </div>
-                <p className="mt-1 whitespace-pre-wrap break-words text-slate-700">
-                  {c.content}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p className="text-xs text-slate-500">No comments yet.</p>
-      )}
+      <div
+        className="min-h-[4.5rem] overflow-hidden rounded-xl border border-slate-200/90 bg-slate-50/80"
+        aria-label={heading}
+      >
+        {comments.length > 0 ? (
+          <ul
+            className="max-h-44 space-y-2 overflow-y-auto overscroll-contain px-2 py-2 [-webkit-overflow-scrolling:touch] [scrollbar-gutter:stable]"
+            role="list"
+          >
+            {comments.map((c) => {
+              const name = labelFor(c.user_id, memberLabelByUserId);
+              return (
+                <li
+                  key={c.id}
+                  className="rounded-lg bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-slate-200/80"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                    <span className="font-medium text-slate-800">{name}</span>
+                    <span className="text-[11px] text-slate-400">
+                      {formatCommentTime(c.created_at)}
+                    </span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-slate-700">
+                    {c.content}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="flex h-full min-h-[4.5rem] items-center justify-center px-3 py-4">
+            <p className="text-center text-xs text-slate-500">No comments yet.</p>
+          </div>
+        )}
+      </div>
 
       {error ? (
         <p className="rounded-lg bg-rose-50 px-2 py-1.5 text-xs text-rose-800">

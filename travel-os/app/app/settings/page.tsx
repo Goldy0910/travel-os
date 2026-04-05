@@ -1,3 +1,4 @@
+import { SetAppHeader } from "@/components/AppHeader";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { redirect } from "next/navigation";
 import SettingsClient from "./settings-client";
@@ -35,13 +36,16 @@ export default async function SettingsPage() {
     (typeof metaAvatar === "string" && metaAvatar.trim() ? metaAvatar.trim() : null);
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <SettingsClient
-        userId={user.id}
-        email={user.email ?? ""}
-        initialName={initialName}
-        initialAvatarUrl={initialAvatarUrl}
-      />
-    </main>
+    <>
+      <SetAppHeader title="Settings" showBack />
+      <main className="min-h-screen bg-slate-50">
+        <SettingsClient
+          userId={user.id}
+          email={user.email ?? ""}
+          initialName={initialName}
+          initialAvatarUrl={initialAvatarUrl}
+        />
+      </main>
+    </>
   );
 }

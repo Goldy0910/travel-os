@@ -324,6 +324,7 @@ export async function deleteExpenseAction(
     return actionError(error.message || "Could not delete expense.");
   }
 
+  revalidatePath(`/app/trip/${tripId}`);
   revalidatePath(`/app/trip/${tripId}/expenses`);
   revalidatePath("/app/home");
   return actionSuccess("Expense deleted.");
@@ -410,6 +411,7 @@ export async function saveExpenseAction(
     });
   }
 
+  revalidatePath(`/app/trip/${tripId}`);
   revalidatePath(`/app/trip/${tripId}/expenses`);
   revalidatePath("/app/home");
   return actionSuccess(expenseIdRaw ? "Expense updated." : "Expense added.");
@@ -464,6 +466,7 @@ export async function deleteDocumentAction(
     return actionError(error.message || "Could not delete document.");
   }
 
+  revalidatePath(`/app/trip/${tripId}`);
   revalidatePath(`/app/trip/${tripId}/docs`);
   revalidatePath("/app/home");
   return actionSuccess("Document removed.");

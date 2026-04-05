@@ -3,7 +3,6 @@
 import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { upsertProfileOrUserMetadata } from "@/lib/profiles-fallback";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -151,18 +150,8 @@ export default function SettingsClient({
 
   return (
     <div className="mx-auto w-full max-w-md space-y-8 px-4 py-6 pb-28">
-      <div className="flex items-center justify-between gap-3">
-        <Link
-          href="/app/home"
-          className="min-h-11 text-sm font-semibold text-slate-600 underline-offset-2 hover:underline"
-        >
-          ← Home
-        </Link>
-      </div>
-
       <header className="text-center">
-        <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-        <p className="mt-2 text-sm text-slate-600">Your profile and account</p>
+        <p className="text-sm text-slate-600">Your profile and account</p>
       </header>
 
       {error ? (

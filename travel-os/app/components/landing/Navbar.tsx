@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LandingLink from "./landing-link";
 
 export default function Navbar() {
   return (
@@ -10,12 +11,12 @@ export default function Navbar() {
         >
           Travel OS
         </Link>
-        <Link
+        <LandingLink
           href="/app/login"
           className="inline-flex min-h-11 min-w-[5.25rem] items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition active:scale-[0.98] touch-manipulation"
         >
           Log in
-        </Link>
+        </LandingLink>
       </div>
     </header>
   );

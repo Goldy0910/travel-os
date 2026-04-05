@@ -58,6 +58,7 @@ export async function saveDocumentRecord(input: {
     action: formatDocumentUploadedAction(actorDisplayName(user), input.fileName),
   });
 
+  revalidatePath(`/app/trip/${input.tripId}`);
   revalidatePath(`/app/trip/${input.tripId}/docs`);
   revalidatePath("/app/home");
   return actionSuccess("Document uploaded.");
@@ -97,6 +98,7 @@ export async function updateDocumentFileName(input: {
     return actionError(error.message);
   }
 
+  revalidatePath(`/app/trip/${input.tripId}`);
   revalidatePath(`/app/trip/${input.tripId}/docs`);
   return actionSuccess("Document renamed.");
 }

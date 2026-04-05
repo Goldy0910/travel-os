@@ -1,5 +1,6 @@
 "use client";
 
+import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
 import { PENDING_TRIP_INVITE_KEY } from "@/lib/pending-trip-invite";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -140,16 +141,21 @@ export default function JoinInviteClient({
           <div className="mt-8">
             <Link
               href="/app/home"
-              className="flex h-12 w-full items-center justify-center rounded-xl border border-slate-300 bg-white text-base font-medium text-slate-900"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white text-base font-medium text-slate-900"
             >
               Go to home
+              <LinkLoadingIndicator spinnerClassName="h-4 w-4 text-slate-700" />
             </Link>
           </div>
         ) : null}
 
         <p className="mt-8 text-center text-sm text-slate-500">
-          <Link href="/" className="font-medium text-slate-700 underline">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 font-medium text-slate-700 underline"
+          >
             Back to website
+            <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-600" />
           </Link>
         </p>
       </div>

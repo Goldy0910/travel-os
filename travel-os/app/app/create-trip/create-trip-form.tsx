@@ -2,6 +2,7 @@
 
 import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
+import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
 import Link from "next/link";
 import { createTripAction } from "./actions";
 
@@ -54,8 +55,12 @@ export default function CreateTripForm() {
       </div>
 
       <div className="pt-2 text-sm">
-        <Link href="/app/trips" className="text-slate-500 underline">
+        <Link
+          href="/app/trips"
+          className="inline-flex items-center gap-2 text-slate-500 underline"
+        >
           Cancel
+          <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-500" />
         </Link>
       </div>
 

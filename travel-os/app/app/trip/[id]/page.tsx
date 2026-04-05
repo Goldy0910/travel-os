@@ -1,8 +1,10 @@
-import BackLink from "@/app/app/_components/back-link";
+import { SetAppHeader } from "@/components/AppHeader";
+import { getTravelGuidesForPlace } from "@/lib/travelGuides";
 import { pruneItineraryOutsideTripRange } from "@/lib/itinerary-trip-range";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { countTripMembers, getMemberRole, isTripMember } from "@/lib/trip-membership";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import TripActivityFeed from "./_components/trip-activity-feed";
 import {
   groupCommentsByEntityId,
@@ -14,6 +16,15 @@ import JoinWelcomeBanner from "./_components/join-welcome-banner";
 import TripItineraryShell, {
   type ItineraryItemDTO,
 } from "./_components/trip-itinerary-shell";
+import TripMembersPanel from "./_components/trip-members-panel";
+import TripGuidesPanel from "./_components/trip-guides-panel";
+import TripSwipeTabs from "./_components/trip-swipe-tabs";
+import TripTabsFallback from "./_components/trip-tabs-fallback";
+import TripChatClient from "./chat/_components/trip-chat-client";
+import TripDocsClient from "./docs/_components/trip-docs-client";
+import TripExpensesClient from "./expenses/_components/trip-expenses-client";
+import { loadTripTabPanelsData } from "./_lib/load-trip-panels-data";
+import { parseTripTabParam } from "./_lib/trip-tab-keys";
 
 type TripPageProps = {
   params: Promise<{ id: string }>;
@@ -93,14 +104,28 @@ function toItemDTO(item: ItineraryItem): ItineraryItemDTO {
   };
 }
 
+function pickFirstQuery(
+  query: Record<string, string | string[] | undefined>,
+  key: string,
+): string {
+  const v = query[key];
+  if (typeof v === "string") return v;
+  if (Array.isArray(v) && v[0] != null && typeof v[0] === "string") return v[0];
+  return "";
+}
+
+function decodeOptionalQueryParam(raw: string): string {
+  if (!raw) return "";
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export default async function TripPage({ params, searchParams }: TripPageProps) {
   const { id: tripId } = await params;
   const query = (await searchParams) ?? {};
-  const errorParam = query.error;
-  const error =
-    typeof errorParam === "string" && errorParam.length > 0
-      ? decodeURIComponent(errorParam)
-      : "";
   const showJoinWelcome =
     query.welcome === "1" || query.welcome === "true";
 
@@ -235,6 +260,12 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
 
   const title = pickFirstString(trip, ["title", "name", "trip_name"], "Trip");
   const location = pickFirstString(trip, ["location", "destination", "city"], "");
+  const tripPlace = pickFirstString(
+    trip,
+    ["place", "location", "destination", "city"],
+    "",
+  );
+  const guidesBundle = getTravelGuidesForPlace(tripPlace);
   const tripEditDefaults = {
     title,
     location: location || title,
@@ -254,36 +285,66 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const defaultDateForAdd = orderedDates[0] ?? todayYmd;
 
+  const tabKeyForErrors = parseTripTabParam(pickFirstQuery(query, "tab"));
+  const rawError = decodeOptionalQueryParam(pickFirstQuery(query, "error"));
+  const itineraryError = tabKeyForErrors === "itinerary" ? rawError : "";
+  const docsSuccess = decodeOptionalQueryParam(pickFirstQuery(query, "success"));
+
+  const panels = await loadTripTabPanelsData(supabase, tripId, user, trip, title, {
+    expensesError: tabKeyForErrors === "expenses" ? rawError : "",
+    docsSuccess,
+    docsError: tabKeyForErrors === "docs" ? rawError : "",
+    membersError: tabKeyForErrors === "members" ? rawError : "",
+  });
+
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-6 pb-28">
-      <div className="mx-auto w-full max-w-md space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <BackLink href="/app/trips">All trips</BackLink>
-          <BackLink href="/app/home">Home</BackLink>
+    <>
+      <SetAppHeader title={title} showBack />
+      <main className="flex w-full flex-col bg-slate-50 pb-28">
+        <div className="mx-auto flex w-full max-w-md flex-col">
+          <Suspense fallback={<TripTabsFallback />}>
+            <TripSwipeTabs
+              itinerary={
+                <div className="space-y-5">
+                  {showJoinWelcome ? (
+                    <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
+                  ) : null}
+                  <TripItineraryShell
+                    tripId={tripId}
+                    tripTitle={title}
+                    dateRangeLabel={dateRangeLabel}
+                    memberCount={memberCount}
+                    canDeleteTrip={canDeleteTrip}
+                    tripEditDefaults={tripEditDefaults}
+                    orderedDates={orderedDates}
+                    grouped={grouped}
+                    initialError={itineraryError}
+                    defaultDateForAdd={defaultDateForAdd}
+                    activityCommentsByItemId={activityCommentsByItemId}
+                    currentUserId={user.id}
+                    memberLabelByUserId={memberLabelByUserId}
+                  />
+                  <TripActivityFeed tripId={tripId} />
+                </div>
+              }
+              expenses={<TripExpensesClient tripId={tripId} {...panels.expenses} />}
+              chat={
+                <TripChatClient
+                  tripId={tripId}
+                  currentUserId={user.id}
+                  initialMessages={panels.chat.initialMessages}
+                  memberLabelByUserId={panels.chat.memberLabelByUserId}
+                />
+              }
+              docs={<TripDocsClient tripId={tripId} {...panels.docs} />}
+              guides={
+                <TripGuidesPanel bundle={guidesBundle} destinationLabel={tripPlace || location} />
+              }
+              members={<TripMembersPanel {...panels.members} />}
+            />
+          </Suspense>
         </div>
-
-        {showJoinWelcome ? (
-          <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
-        ) : null}
-
-        <TripItineraryShell
-          tripId={tripId}
-          tripTitle={title}
-          dateRangeLabel={dateRangeLabel}
-          memberCount={memberCount}
-          canDeleteTrip={canDeleteTrip}
-          tripEditDefaults={tripEditDefaults}
-          orderedDates={orderedDates}
-          grouped={grouped}
-          initialError={error}
-          defaultDateForAdd={defaultDateForAdd}
-          activityCommentsByItemId={activityCommentsByItemId}
-          currentUserId={user.id}
-          memberLabelByUserId={memberLabelByUserId}
-        />
-
-        <TripActivityFeed tripId={tripId} />
-      </div>
-    </main>
+      </main>
+    </>
   );
 }

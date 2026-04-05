@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import Footer from "./components/landing/Footer";
+import LandingLink from "./components/landing/landing-link";
 import Navbar from "./components/landing/Navbar";
 import StickyMobileCta from "./components/landing/StickyMobileCta";
 
@@ -128,12 +128,12 @@ export default function HomePage() {
                 entire trip in one simple app.
               </p>
               <div className="mt-7 flex w-full flex-col gap-3">
-                <Link
+                <LandingLink
                   href="/app/login"
                   className="inline-flex min-h-[3rem] w-full items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-lg transition active:scale-[0.98] touch-manipulation"
                 >
                   Start your trip
-                </Link>
+                </LandingLink>
                 <a
                   href="#preview"
                   className="inline-flex min-h-[3rem] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-3 text-base font-semibold text-slate-800 shadow-sm transition active:scale-[0.98] touch-manipulation"
@@ -316,12 +316,12 @@ export default function HomePage() {
               <p className="relative mt-2 text-xs text-slate-300">
                 Free to try. No credit card required.
               </p>
-              <Link
+              <LandingLink
                 href="/app/create-trip"
                 className="relative mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-white px-6 py-3 text-base font-semibold text-slate-900 shadow-md transition active:scale-[0.98] touch-manipulation"
               >
                 Create trip
-              </Link>
+              </LandingLink>
             </div>
           </section>
 
