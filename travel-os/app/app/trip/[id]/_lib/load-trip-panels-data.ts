@@ -56,7 +56,16 @@ function toDateInput(raw: string) {
   return m?.[1] ?? "";
 }
 
-function computeMyShare(expense: ExpenseRecord): number {
+/** When `expense_participants` rows exist, each member's `computed_amount` is the canonical share. */
+function resolveYourShare(
+  expense: ExpenseRecord,
+  expenseId: string,
+  currentUserId: string,
+  computedByUserIdByExpense: Map<string, Map<string, number>>,
+): number {
+  const fromParticipant = computedByUserIdByExpense.get(expenseId)?.get(currentUserId);
+  if (fromParticipant !== undefined) return fromParticipant;
+
   const amount = pickFirstNumber(expense, ["amount", "total_amount"]);
   const explicitShare = pickFirstNumber(expense, ["your_share", "share_amount"]);
   if (explicitShare > 0) return explicitShare;
@@ -89,6 +98,8 @@ function expensePaidByCurrentUser(
   userEmail: string | undefined,
   displayLabel: string,
 ): boolean {
+  const paidByUserId = pickFirstString(expense, ["paid_by_user_id"], "");
+  if (paidByUserId && paidByUserId === userId) return true;
   const paidBy = pickFirstString(expense, ["paid_by", "payer"], "");
   return paidByIsCurrentUser(paidBy, userId, userEmail, displayLabel);
 }
@@ -101,6 +112,36 @@ function chatMemberDisplayLabel(m: MemberRow): string {
   const email = typeof m.email === "string" ? m.email.trim() : "";
   if (email.length > 0) return email.split("@")[0] ?? email;
   return "Member";
+}
+
+function normalizeProfileName(value: unknown): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "";
+}
+
+function resolvePaidByDisplayLabel(
+  paidByRaw: string,
+  options: PaidByMemberOption[],
+): string {
+  const paidBy = paidByRaw.trim();
+  if (!paidBy) return "Unknown";
+
+  const lower = paidBy.toLowerCase();
+  const byUserId = options.find((o) => o.userId === paidBy);
+  if (byUserId) return byUserId.label;
+
+  const byLabel = options.find((o) => o.label.toLowerCase() === lower);
+  if (byLabel) return byLabel.label;
+
+  const byEmail = options.find((o) => (o.email ?? "").toLowerCase() === lower);
+  if (byEmail) return byEmail.label;
+
+  const byEmailLocal = options.find((o) => {
+    const local = (o.email ?? "").split("@")[0]?.toLowerCase();
+    return !!local && local === lower;
+  });
+  if (byEmailLocal) return byEmailLocal.label;
+
+  return paidBy;
 }
 
 export type TripTabPanelsData = {
@@ -183,23 +224,69 @@ export async function loadTripTabPanelsData(
   ]);
 
   const expenses = (expensesData ?? []) as ExpenseRecord[];
+  const expenseIds = expenses
+    .map((e) => (e.id != null && String(e.id).length > 0 ? String(e.id) : null))
+    .filter((id): id is string => id != null);
+
+  const computedByUserIdByExpense = new Map<string, Map<string, number>>();
+  if (expenseIds.length > 0) {
+    const { data: participantRows } = await supabase
+      .from("expense_participants")
+      .select("expense_id, user_id, computed_amount")
+      .in("expense_id", expenseIds);
+    for (const raw of participantRows ?? []) {
+      const row = raw as ExpenseRecord;
+      const eid =
+        row.expense_id != null && String(row.expense_id).length > 0
+          ? String(row.expense_id)
+          : "";
+      const uid =
+        row.user_id != null && String(row.user_id).length > 0 ? String(row.user_id) : "";
+      if (!eid || !uid) continue;
+      const computed = pickFirstNumber(row, ["computed_amount"]);
+      if (!computedByUserIdByExpense.has(eid)) computedByUserIdByExpense.set(eid, new Map());
+      computedByUserIdByExpense.get(eid)!.set(uid, computed);
+    }
+  }
+
   const expenseCommentsById = groupCommentsByEntityId(
     (expenseCommentsData ?? []) as EntityCommentDTO[],
   );
+
+  const memberUserIds = Array.from(
+    new Set(
+      [...(membersForExpenseLabels ?? []), ...(membersDataChat ?? []), ...(membersRowsData ?? [])]
+        .map((row) => {
+          const userId = (row as { user_id?: string | number | null }).user_id;
+          return userId == null ? "" : String(userId);
+        })
+        .filter((id) => id.length > 0),
+    ),
+  );
+
+  const { data: profilesData } =
+    memberUserIds.length > 0
+      ? await supabase.from("profiles").select("id, name").in("id", memberUserIds)
+      : { data: [] as Array<{ id: string; name: string | null }> };
+
+  const profileNameByUserId: Record<string, string> = {};
+  for (const row of profilesData ?? []) {
+    const id = typeof row.id === "string" ? row.id : String(row.id ?? "");
+    const name = normalizeProfileName(row.name);
+    if (id && name) profileNameByUserId[id] = name;
+  }
 
   const memberLabelByUserId: Record<string, string> = {};
   for (const row of membersForExpenseLabels ?? []) {
     const m = row as MemberLabelRow;
     if (m.user_id) {
-      memberLabelByUserId[m.user_id] = memberDisplayLabel(m);
+      const uid = String(m.user_id);
+      memberLabelByUserId[uid] = profileNameByUserId[uid] || memberDisplayLabel(m);
     }
   }
   const metaName = user.user_metadata?.full_name;
   const profileRow = profileRes.error ? null : profileRes.data;
-  const profileNameFromDb =
-    profileRow && typeof profileRow.name === "string" && profileRow.name.trim().length > 0
-      ? profileRow.name.trim()
-      : null;
+  const profileNameFromDb = profileRow ? normalizeProfileName(profileRow.name) : "";
   const profileName =
     profileNameFromDb ||
     (typeof metaName === "string" && metaName.trim().length > 0 ? metaName.trim() : null);
@@ -246,28 +333,27 @@ export async function loadTripTabPanelsData(
     0,
   );
 
-  const yourShareTotal = expenses.reduce((sum, expense) => sum + computeMyShare(expense), 0);
+  const yourShareTotal = expenses.reduce((sum, expense) => {
+    const expenseId =
+      expense.id != null && String(expense.id).length > 0 ? String(expense.id) : "";
+    if (!expenseId) return sum;
+    return sum + resolveYourShare(expense, expenseId, user.id, computedByUserIdByExpense);
+  }, 0);
 
   const netBalance = expenses.reduce((sum, expense) => {
+    const expenseId =
+      expense.id != null && String(expense.id).length > 0 ? String(expense.id) : "";
+    if (!expenseId) return sum;
+
     const amount = pickFirstNumber(expense, ["amount", "total_amount"]);
-    const explicitShare = pickFirstNumber(expense, ["your_share", "share_amount"]);
-    const splitType = pickFirstString(expense, ["split_type"], "equal").toLowerCase();
-    const paidBy = pickFirstString(expense, ["paid_by", "payer"], "unknown");
-    const isPaidByYou = paidByIsCurrentUser(
-      paidBy,
+    const isPaidByYou = expensePaidByCurrentUser(
+      expense,
       user.id,
       user.email ?? undefined,
       currentUserDisplayLabel,
     );
 
-    const share =
-      explicitShare > 0
-        ? explicitShare
-        : splitType === "full"
-          ? amount
-          : splitType === "none"
-            ? 0
-            : amount / 2;
+    const share = resolveYourShare(expense, expenseId, user.id, computedByUserIdByExpense);
 
     if (isPaidByYou) return sum + (amount - share);
     return sum - share;
@@ -281,7 +367,10 @@ export async function loadTripTabPanelsData(
 
       const title = pickFirstString(expense, ["title", "name"], `Expense ${index + 1}`);
       const amount = pickFirstNumber(expense, ["amount", "total_amount"]);
-      const paidBy = pickFirstString(expense, ["paid_by", "payer"], "Unknown");
+      const paidBy = resolvePaidByDisplayLabel(
+        pickFirstString(expense, ["paid_by", "payer"], "Unknown"),
+        paidByMemberOptions,
+      );
       const splitTypeRaw = pickFirstString(expense, ["split_type"], "equal");
       const dateRaw = pickFirstString(expense, ["date", "expense_date", "created_at"], "");
       const dateLabel = dateRaw ? formatDate(dateRaw) : "";
@@ -302,7 +391,7 @@ export async function loadTripTabPanelsData(
         splitTypeRaw,
         dateLabel,
         dateInput,
-        myShare: computeMyShare(expense),
+        myShare: resolveYourShare(expense, expenseId, user.id, computedByUserIdByExpense),
         isPaidByYou: expensePaidByCurrentUser(
           expense,
           user.id,
@@ -330,7 +419,9 @@ export async function loadTripTabPanelsData(
   for (const row of membersDataChat ?? []) {
     const m = row as MemberRow;
     if (m.user_id) {
-      chatMemberLabelByUserId[m.user_id] = chatMemberDisplayLabel(m);
+      const uid = String(m.user_id);
+      chatMemberLabelByUserId[uid] =
+        profileNameByUserId[uid] || chatMemberDisplayLabel(m);
     }
   }
   if (!chatMemberLabelByUserId[user.id]) {
@@ -351,6 +442,15 @@ export async function loadTripTabPanelsData(
     : `Join my trip on Travel OS: ${joinUrl}`;
   const whatsappLink = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
 
+  const memberRowsResolved: GenericRecord[] = (membersRowsData ?? []).map((row) => {
+    const base = row as GenericRecord;
+    const userIdRaw = (row as { user_id?: string | number | null }).user_id;
+    const uid = userIdRaw == null ? "" : String(userIdRaw);
+    const profileName = uid ? profileNameByUserId[uid] : "";
+    if (!profileName) return base;
+    return { ...base, name: profileName };
+  });
+
   const membersPanel: TripMembersPanelProps = {
     tripId,
     tripTitle,
@@ -360,7 +460,7 @@ export async function loadTripTabPanelsData(
     joinUrl,
     whatsappLink,
     hasInviteCode,
-    rows: (membersRowsData ?? []) as GenericRecord[],
+    rows: memberRowsResolved,
     membersError: membersListError,
   };
 

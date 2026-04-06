@@ -33,7 +33,6 @@ export type TripMembersPanelProps = {
 
 export default function TripMembersPanel({
   tripId,
-  tripTitle,
   pageError,
   inviteCode,
   canInvite,
@@ -45,11 +44,6 @@ export default function TripMembersPanel({
 }: TripMembersPanelProps) {
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl bg-slate-900 p-5 text-white shadow-sm">
-        <p className="text-sm text-slate-300">Trip members</p>
-        <h2 className="mt-1 text-2xl font-semibold">{tripTitle}</h2>
-      </section>
-
       {pageError ? (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{pageError}</p>
       ) : null}

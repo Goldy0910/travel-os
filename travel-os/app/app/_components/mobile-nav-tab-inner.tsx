@@ -20,8 +20,11 @@ export default function MobileNavTabInner({
     <>
       <span className="relative flex h-5 w-5 items-center justify-center">
         {pending ? (
-          <span className="absolute inset-0 flex items-center justify-center" aria-hidden>
-            <ButtonSpinner className="h-4 w-4 text-slate-800" />
+          <span
+            className="pointer-events-none absolute -top-5 left-1/2 z-10 flex -translate-x-1/2 items-center justify-center rounded-full bg-white/95 p-1 shadow-sm ring-1 ring-slate-200"
+            aria-hidden
+          >
+            <ButtonSpinner className="h-3.5 w-3.5 text-slate-800" />
           </span>
         ) : null}
         <span className={pending ? "opacity-25" : undefined}>

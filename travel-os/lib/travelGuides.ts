@@ -8,10 +8,32 @@ export type TravelGuideVideo = {
   youtubeId: string;
 };
 
+export type TravelGuideLink = {
+  title: string;
+  url: string;
+};
+
+export type TravelGuideEssentials = {
+  weather: string;
+  language: string;
+  currency: string;
+  fashion: string;
+  tips: string[];
+};
+
+export type TravelGuideMoney = {
+  atm: string;
+  exchange: string;
+  tips: string[];
+};
+
 export type TravelGuidesBundle = {
   places: TravelGuideVideo[];
   food: TravelGuideVideo[];
-  tips: TravelGuideVideo[];
+  essentials: TravelGuideEssentials;
+  transport: string[];
+  money: TravelGuideMoney;
+  links: TravelGuideLink[];
 };
 
 export const travelGuides: Record<string, TravelGuidesBundle> = {
@@ -36,11 +58,34 @@ export const travelGuides: Record<string, TravelGuidesBundle> = {
         youtubeId: "n3D-TlXMD-g",
       },
     ],
-    tips: [
-      {
-        title: "Goa travel tips for first-timers",
-        youtubeId: "jNQXAC9IVRw",
-      },
+    essentials: {
+      weather:
+        "Best months are Nov-Feb. Summers are humid; carry sunscreen and hydrate often.",
+      language: "Konkani, Marathi, and English are commonly used in tourist zones.",
+      currency: "Indian Rupee (INR). UPI is widely accepted in most cafes and shops.",
+      fashion: "Light cottons, sandals, and modest cover-ups for churches/temples.",
+      tips: [
+        "Keep a light rain layer in monsoon months.",
+        "Book beach stays early on long weekends.",
+      ],
+    },
+    transport: [
+      "Scooter rentals are common for short local travel.",
+      "Use app cabs for airport and late-night transfers.",
+      "Pre-book intercity buses during peak season.",
+    ],
+    money: {
+      atm: "ATMs are easy to find in Panaji, Calangute, and Margao.",
+      exchange: "Exchange at airports or city centers; compare rates before converting cash.",
+      tips: [
+        "Carry some cash for beach shacks and small vendors.",
+        "Prefer UPI/card where available for easier spend tracking.",
+      ],
+    },
+    links: [
+      { title: "Goa Tourism", url: "https://www.goa-tourism.com/" },
+      { title: "Indian Railways", url: "https://www.irctc.co.in/" },
+      { title: "Airport Info (GOI)", url: "https://www.aai.aero/en/airports/goa-dabolim" },
     ],
   },
   tokyo: {
@@ -52,8 +97,34 @@ export const travelGuides: Record<string, TravelGuidesBundle> = {
       { title: "TOKYO Food Guide | 40 Places to Eat & Drink (With Prices!)", youtubeId: "RY1CAaGslyc" },
       { title: "10 Foods YOU MUST Try in Japan: Food and Travel Guide", youtubeId: "CcZaE8pn8nc" },
     ],
-    tips: [
-      { title: "TOKYO TRAVEL TIPS FOR FIRST TIMERS | 30+ Must-Knows Before Visiting Tokyo + What NOT to Do!", youtubeId: "zpC-nr5PTGU" },
+    essentials: {
+      weather:
+        "Spring and autumn are pleasant. Summers are hot/humid; winters are dry and cold.",
+      language: "Japanese is primary; major stations include English signage.",
+      currency: "Japanese Yen (JPY). Cards are common, but cash still matters in some places.",
+      fashion: "Smart-casual layers and comfortable walking shoes are ideal.",
+      tips: [
+        "Carry a small bag for daily trash and essentials.",
+        "Stay near a JR/Metro line for easy commuting.",
+      ],
+    },
+    transport: [
+      "Get an IC card (Suica/PASMO) for trains and buses.",
+      "Use station exits carefully; large stations have many gates.",
+      "Airport express trains are often faster than taxis.",
+    ],
+    money: {
+      atm: "Convenience stores (7-Eleven/FamilyMart/Lawson) usually support foreign cards.",
+      exchange: "Airport exchanges are convenient; city counters may offer better rates.",
+      tips: [
+        "Keep coins for vending machines and lockers.",
+        "Some smaller restaurants are cash-only.",
+      ],
+    },
+    links: [
+      { title: "Japan Travel", url: "https://www.japan.travel/en/" },
+      { title: "Tokyo Metro", url: "https://www.tokyometro.jp/en/" },
+      { title: "JR East", url: "https://www.jreast.co.jp/e/" },
     ],
   },
   delhi: {
@@ -64,9 +135,74 @@ export const travelGuides: Record<string, TravelGuidesBundle> = {
     food: [
       { title: "Chandni Chowk food trail", youtubeId: "jSTNtS76U14" },
     ],
-    tips: [
-      { title: "Delhi metro & getting around", youtubeId: "n3D-TlXMD-g" },
-      { title: "Seasonal travel tips", youtubeId: "jNQXAC9IVRw" },
+    essentials: {
+      weather:
+        "Winters can be chilly; summers are very hot. Plan hydration and shade in daytime.",
+      language: "Hindi and English are widely understood in city areas.",
+      currency: "Indian Rupee (INR). Digital payments are common across the city.",
+      fashion: "Light breathable outfits + comfortable shoes for markets/heritage walks.",
+      tips: [
+        "Start outdoor visits early to avoid heat and traffic.",
+        "Prefer bottled water when moving around all day.",
+      ],
+    },
+    transport: [
+      "Delhi Metro is fast and reliable for major routes.",
+      "Use app cabs for point-to-point convenience.",
+      "Plan buffer time for peak-hour road traffic.",
+    ],
+    money: {
+      atm: "ATMs are widely available in metro stations and market areas.",
+      exchange: "Use airport or authorized exchange counters; avoid unverified street exchanges.",
+      tips: [
+        "Keep small notes for local market purchases.",
+        "Track spending in-app for group settlements.",
+      ],
+    },
+    links: [
+      { title: "Delhi Tourism", url: "https://delhitourism.gov.in/" },
+      { title: "Delhi Metro Rail", url: "https://www.delhimetrorail.com/" },
+      { title: "Airport Info (DEL)", url: "https://www.newdelhiairport.in/" },
+    ],
+  },
+  manali: {
+    places: [
+      { title: "Top Places to Visit in Manali", youtubeId: "Q0lN9c5M8Rg" },
+      { title: "Manali 3 Day Travel Plan", youtubeId: "8v2x2wzQwRE" },
+    ],
+    food: [
+      { title: "Best Cafes and Food in Manali", youtubeId: "fJ9rUzIMcZQ" },
+      { title: "Street Food Guide in Old Manali", youtubeId: "dQw4w9WgXcQ" },
+    ],
+    essentials: {
+      weather:
+        "Days can be pleasant but evenings are cold. Carry warm layers year-round.",
+      language: "Hindi and English are commonly understood in tourist areas.",
+      currency: "Indian Rupee (INR). UPI works in many places; keep backup cash.",
+      fashion:
+        "Layered clothing, waterproof jacket, and grippy shoes for mountain terrain.",
+      tips: [
+        "Start day trips early to avoid traffic on mountain roads.",
+        "Keep medicine for motion sickness if driving to high-altitude spots.",
+      ],
+    },
+    transport: [
+      "Volvo buses from Delhi/Chandigarh are common for intercity travel.",
+      "Local taxis are best for Solang, Atal Tunnel, and nearby villages.",
+      "Road conditions can change quickly in monsoon/winter; check before leaving.",
+    ],
+    money: {
+      atm: "ATMs are available in central Manali but may have limited cash in peak season.",
+      exchange: "For foreign currency, exchange in major cities before reaching Manali.",
+      tips: [
+        "Carry small notes for cafes and local shops in remote spots.",
+        "Network can be patchy in some valleys; keep offline payment backup.",
+      ],
+    },
+    links: [
+      { title: "Himachal Tourism", url: "https://himachaltourism.gov.in/" },
+      { title: "Manali Weather Forecast", url: "https://www.accuweather.com/en/in/manali/188511/weather-forecast/188511" },
+      { title: "HRTC Bus Booking", url: "https://online.hrtchp.com/" },
     ],
   },
 };
@@ -115,14 +251,26 @@ export function bundleHasVideos(bundle: TravelGuidesBundle): boolean {
   return (
     bundle.places.length > 0 ||
     bundle.food.length > 0 ||
-    bundle.tips.length > 0
+    bundle.transport.length > 0 ||
+    bundle.links.length > 0 ||
+    bundle.essentials.tips.length > 0 ||
+    bundle.essentials.weather.trim().length > 0 ||
+    bundle.essentials.language.trim().length > 0 ||
+    bundle.essentials.currency.trim().length > 0 ||
+    bundle.essentials.fashion.trim().length > 0 ||
+    bundle.money.atm.trim().length > 0 ||
+    bundle.money.exchange.trim().length > 0 ||
+    bundle.money.tips.length > 0
   );
 }
 
 export const GUIDE_CATEGORIES = [
   { id: "places" as const, label: "Places" },
   { id: "food" as const, label: "Food" },
-  { id: "tips" as const, label: "Tips" },
+  { id: "essentials" as const, label: "Essentials" },
+  { id: "transport" as const, label: "Transport" },
+  { id: "money" as const, label: "Money" },
+  { id: "links" as const, label: "Links" },
 ];
 
 export type GuideCategoryId = (typeof GUIDE_CATEGORIES)[number]["id"];

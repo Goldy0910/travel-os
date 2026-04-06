@@ -12,6 +12,21 @@ import {
   type TripRecord,
 } from "../_lib/trip-formatters";
 
+function normalizePlace(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function destinationCover(location: string): string | null {
+  const key = normalizePlace(location);
+  if (key.includes("manali")) {
+    return "https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?auto=format&fit=crop&w=900&q=80";
+  }
+  if (key.includes("tokyo")) {
+    return "https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?auto=format&fit=crop&w=900&q=80";
+  }
+  return null;
+}
+
 export default async function TripsPage() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -104,6 +119,7 @@ export default async function TripsPage() {
                   : null;
 
               const summary = tripId ? expenseSummary.get(tripId) : undefined;
+              const coverImage = destinationCover(location);
               const initials =
                 title
                   .split(/\s+/)
@@ -129,19 +145,32 @@ export default async function TripsPage() {
                       </p>
                     ) : null}
                   </div>
-                  <div
-                    className="relative flex w-[36%] max-w-[140px] shrink-0 items-center justify-center self-stretch bg-gradient-to-br from-slate-500 to-slate-700"
-                    aria-hidden
-                  >
-                    <span className="text-lg font-bold text-white/90">{initials}</span>
-                  </div>
+                  {coverImage ? (
+                    <div
+                      className="relative w-[36%] max-w-[140px] shrink-0 self-stretch overflow-hidden"
+                      aria-hidden
+                    >
+                      <div
+                        className="h-full w-full bg-cover bg-center"
+                        style={{ backgroundImage: `url("${coverImage}")` }}
+                      />
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+                    </div>
+                  ) : (
+                    <div
+                      className="relative flex w-[36%] max-w-[140px] shrink-0 items-center justify-center self-stretch bg-gradient-to-br from-slate-500 to-slate-700"
+                      aria-hidden
+                    >
+                      <span className="text-lg font-bold text-white/90">{initials}</span>
+                    </div>
+                  )}
                 </div>
               );
 
               return tripId ? (
                 <Link
                   key={tripId}
-                  href={`/app/trip/${tripId}`}
+                  href={`/app/trip/${tripId}?tab=itinerary`}
                   className="relative block"
                 >
                   <span className="pointer-events-none absolute right-3 top-3 z-10 inline-flex rounded-full bg-white/90 p-1 shadow-sm">

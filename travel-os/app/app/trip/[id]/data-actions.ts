@@ -11,6 +11,10 @@ import { actionError, actionSuccess, type FormActionResult } from "@/lib/form-ac
 import { extractYMD, pruneItineraryOutsideTripRange } from "@/lib/itinerary-trip-range";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getMemberRole, isTripMember } from "@/lib/trip-membership";
+import {
+  computeExpenseSplit,
+  type SplitType,
+} from "@/app/app/trip/[id]/expenses/_lib/expense-split";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -343,27 +347,85 @@ export async function saveExpenseAction(
 
   const expenseIdRaw = String(formData.get("expenseId") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
   const amount = Number(String(formData.get("amount") ?? "").trim());
   const paidBy = String(formData.get("paidBy") ?? "").trim();
-  const splitType = String(formData.get("splitType") ?? "").trim();
+  const splitType = String(formData.get("splitType") ?? "").trim() as SplitType;
   const date = String(formData.get("date") ?? "").trim();
+  const includePayerRaw = String(formData.get("includePayer") ?? "").trim();
+  const participantIdsRaw = String(formData.get("participantIdsJson") ?? "[]");
+  const exactAmountsRaw = String(formData.get("exactAmountsJson") ?? "{}");
+  const percentageRaw = String(formData.get("percentagesJson") ?? "{}");
 
-  if (!title || !Number.isFinite(amount) || amount <= 0 || !paidBy || !splitType || !date) {
+  if (!Number.isFinite(amount) || amount <= 0 || !paidBy || !splitType || !date) {
     return actionError("Please fill all fields correctly.");
+  }
+  if (!["equal", "exact", "percentage", "none"].includes(splitType)) {
+    return actionError("Invalid split type.");
   }
 
   const ok = await isTripMember(supabase, tripId, user.id);
   if (!ok) redirect("/app/home");
 
+  let participantIds: string[] = [];
+  let exactAmounts: Record<string, number> = {};
+  let percentages: Record<string, number> = {};
+  try {
+    const parsedIds = JSON.parse(participantIdsRaw);
+    participantIds = Array.isArray(parsedIds) ? parsedIds.map((v) => String(v)) : [];
+  } catch {
+    participantIds = [];
+  }
+  try {
+    const parsedExact = JSON.parse(exactAmountsRaw) as Record<string, unknown>;
+    exactAmounts = Object.fromEntries(
+      Object.entries(parsedExact ?? {}).map(([k, v]) => [k, Number(v ?? 0)]),
+    );
+  } catch {
+    exactAmounts = {};
+  }
+  try {
+    const parsedPct = JSON.parse(percentageRaw) as Record<string, unknown>;
+    percentages = Object.fromEntries(
+      Object.entries(parsedPct ?? {}).map(([k, v]) => [k, Number(v ?? 0)]),
+    );
+  } catch {
+    percentages = {};
+  }
+
+  const split = computeExpenseSplit({
+    amount,
+    splitType,
+    paidByUserId: paidBy,
+    selectedParticipantIds: participantIds,
+    includePayerInEqual: includePayerRaw !== "false",
+    exactAmountsByUserId: exactAmounts,
+    percentagesByUserId: percentages,
+  });
+  if (split.errors.length > 0) {
+    return actionError(split.errors[0] ?? "Invalid split values.");
+  }
+
   const payload = {
-    title,
+    title: title || description || "Expense",
+    description: description || null,
     amount,
     paid_by: paidBy,
+    paid_by_user_id: paidBy,
     split_type: splitType,
     date,
     total_amount: amount,
     payer: paidBy,
+    created_by: user.id,
   };
+
+  const participantRows = split.rows.map((row) => ({
+    user_id: row.userId,
+    split_value: row.splitValue,
+    split_type: row.splitType,
+    computed_amount: row.computedAmount,
+    owes_amount: row.owesAmount,
+  }));
 
   if (expenseIdRaw) {
     const { data: existing } = await supabase
@@ -394,20 +456,47 @@ export async function saveExpenseAction(
     if (error) {
       return actionError(error.message || "Could not update expense.");
     }
+    await supabase.from("expense_participants").delete().eq("expense_id", expenseIdRaw);
+    if (participantRows.length > 0) {
+      const { error: participantsError } = await supabase
+        .from("expense_participants")
+        .insert(
+          participantRows.map((row) => ({
+            expense_id: expenseIdRaw,
+            ...row,
+          })),
+        );
+      if (participantsError) {
+        return actionError(participantsError.message || "Could not update split details.");
+      }
+    }
   } else {
-    const { error: insertError } = await supabase.from("expenses").insert({
+    const { data: insertedExpense, error: insertError } = await supabase.from("expenses").insert({
       ...payload,
       trip_id: tripId,
       user_id: user.id,
-    });
+    }).select("id").single();
 
-    if (insertError) {
-      return actionError(insertError.message || "Could not add expense.");
+    if (insertError || !insertedExpense?.id) {
+      return actionError(insertError?.message || "Could not add expense.");
+    }
+    if (participantRows.length > 0) {
+      const { error: participantsError } = await supabase
+        .from("expense_participants")
+        .insert(
+          participantRows.map((row) => ({
+            expense_id: String(insertedExpense.id),
+            ...row,
+          })),
+        );
+      if (participantsError) {
+        return actionError(participantsError.message || "Could not save split details.");
+      }
     }
     await insertTripActivityLog(supabase, {
       tripId,
       userId: user.id,
-      action: formatExpenseAddedAction(actorDisplayName(user), title),
+      action: formatExpenseAddedAction(actorDisplayName(user), title || description || "Expense"),
     });
   }
 

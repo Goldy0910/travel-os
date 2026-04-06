@@ -254,7 +254,14 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
   const dayCtx = activeTrip ? tripDayContext(activeTrip, todayYmd) : null;
   const memberCount = await countTripMembers(supabase, activeTripId);
 
-  const [{ data: todayItemsData }, { data: tomorrowItemsData }, { data: docsData }, { data: expData }, { data: membersData }] =
+  const [
+    { data: todayItemsData },
+    { data: tomorrowItemsData },
+    { data: docsData },
+    { data: expData },
+    { data: membersData },
+    profileRes,
+  ] =
     await Promise.all([
       supabase
         .from("itinerary_items")
@@ -282,6 +289,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
         .select("id, user_id, name, email, role, created_at")
         .eq("trip_id", activeTripId)
         .order("created_at", { ascending: true }),
+      supabase.from("profiles").select("name").eq("id", user.id).maybeSingle(),
     ]);
 
   const todayItems = sortItemsByTime((todayItemsData ?? []) as ItineraryItem[]);
@@ -289,6 +297,20 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
   const docs = (docsData ?? []) as GenericRecord[];
   const expenses = (expData ?? []) as ExpenseRecord[];
   const members = (membersData ?? []) as GenericRecord[];
+  const profileRow = profileRes.error ? null : profileRes.data;
+  const profileNameFromDb =
+    profileRow &&
+    typeof profileRow.name === "string" &&
+    profileRow.name.trim().length > 0
+      ? profileRow.name.trim()
+      : "";
+  const metaName =
+    typeof user.user_metadata?.full_name === "string" &&
+    user.user_metadata.full_name.trim().length > 0
+      ? user.user_metadata.full_name.trim()
+      : "";
+  const currentUserDisplayName =
+    profileNameFromDb || metaName || user.email?.split("@")[0] || "You";
 
   const currentUserLabel = user.email ?? user.id;
   const totalSpent = expenses.reduce(
@@ -350,7 +372,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center">
                   <p className="text-sm font-medium text-slate-700">No plans yet for today</p>
                   <Link
-                    href={`/app/trip/${activeTripId}`}
+                    href={`/app/trip/${activeTripId}?tab=itinerary`}
                     className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white"
                   >
                     + Add activity
@@ -385,7 +407,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
               )}
               {todayItems.length > 0 ? (
                 <Link
-                  href={`/app/trip/${activeTripId}`}
+                  href={`/app/trip/${activeTripId}?tab=itinerary`}
                   className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 shadow-sm"
                 >
                   + Add activity
@@ -498,7 +520,14 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
                 <li className="text-sm text-slate-600">No member rows yet.</li>
               ) : (
                 members.map((m) => {
-                  const name = pickFirstString(m, ["name"], "");
+                  const memberUserId =
+                    typeof m.user_id === "string" || typeof m.user_id === "number"
+                      ? String(m.user_id)
+                      : "";
+                  const name =
+                    memberUserId === user.id
+                      ? currentUserDisplayName
+                      : pickFirstString(m, ["name"], "");
                   const email = pickFirstString(m, ["email"], "");
                   const label = name || email || "Member";
                   const ini = initialsFromName(name, email);
@@ -568,7 +597,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
               </ul>
             )}
             <Link
-              href={`/app/trip/${activeTripId}`}
+              href={`/app/trip/${activeTripId}?tab=itinerary`}
               className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-indigo-600"
             >
               Full itinerary →

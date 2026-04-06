@@ -14,6 +14,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -47,14 +48,22 @@ export default function TripSwipeTabs({
 
   /** Tab bar + aria follow scroll position immediately; URL updates in the background. */
   const [displayIndex, setDisplayIndex] = useState(urlIndex);
+  const [isScrollerReady, setIsScrollerReady] = useState(false);
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
   const tabBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const panelRefs = useRef<(HTMLElement | null)[]>([]);
   const scrollIdleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRafRef = useRef<number | null>(null);
   const isProgrammaticScroll = useRef(false);
   const previousDisplayIndexRef = useRef(displayIndex);
+  const isInitialUrlAlignmentDoneRef = useRef(false);
+  const initialAlignRafRef = useRef<number | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const touchStartIndexRef = useRef<number>(displayIndex);
+  const [activePanelHeight, setActivePanelHeight] = useState<number | null>(null);
 
   const replaceTab = useCallback(
     (key: TripTabKey) => {
@@ -73,17 +82,55 @@ export default function TripSwipeTabs({
   /** Align scroller + highlight when URL changes (deep link, back/forward, external replace). */
   useLayoutEffect(() => {
     setDisplayIndex(urlIndex);
+    setIsScrollerReady(false);
+    isInitialUrlAlignmentDoneRef.current = false;
     const el = scrollerRef.current;
     if (!el) return;
-    const w = el.clientWidth;
-    if (w <= 0) return;
-    const target = urlIndex * w;
-    if (Math.abs(el.scrollLeft - target) < 2) return;
-    isProgrammaticScroll.current = true;
-    el.scrollLeft = target;
-    requestAnimationFrame(() => {
-      isProgrammaticScroll.current = false;
-    });
+
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 24;
+
+    const alignToUrl = (): boolean => {
+      if (cancelled) return true;
+      const w = el.clientWidth;
+      if (w <= 0) return false;
+
+      const target = urlIndex * w;
+      const delta = Math.abs(el.scrollLeft - target);
+      if (delta >= 2) {
+        isProgrammaticScroll.current = true;
+        el.scrollLeft = target;
+        requestAnimationFrame(() => {
+          isProgrammaticScroll.current = false;
+        });
+        return false;
+      }
+      isInitialUrlAlignmentDoneRef.current = true;
+      setIsScrollerReady(true);
+      return true;
+    };
+
+    const tick = () => {
+      if (alignToUrl()) return;
+      attempts += 1;
+      if (attempts >= maxAttempts) {
+        // Do not block UI forever; use best effort and allow render.
+        isInitialUrlAlignmentDoneRef.current = true;
+        setIsScrollerReady(true);
+        return;
+      }
+      initialAlignRafRef.current = requestAnimationFrame(tick);
+    };
+
+    tick();
+    return () => {
+      cancelled = true;
+      if (initialAlignRafRef.current != null) {
+        cancelAnimationFrame(initialAlignRafRef.current);
+        initialAlignRafRef.current = null;
+      }
+    };
   }, [urlIndex, pathname]);
 
   /** Reset vertical page position immediately when active panel changes. */
@@ -107,6 +154,7 @@ export default function TripSwipeTabs({
     if (!el) return;
 
     const readIndexFromScroll = () => {
+      if (!isInitialUrlAlignmentDoneRef.current) return;
       const w = el.clientWidth;
       if (w <= 0) return;
       const idx = Math.round(el.scrollLeft / w);
@@ -115,6 +163,7 @@ export default function TripSwipeTabs({
     };
 
     const flushScrollToUrl = () => {
+      if (!isInitialUrlAlignmentDoneRef.current) return;
       if (isProgrammaticScroll.current) return;
       const w = el.clientWidth;
       if (w <= 0) return;
@@ -160,21 +209,55 @@ export default function TripSwipeTabs({
     }
   }, [displayIndex]);
 
+  const goToIndex = useCallback(
+    (i: number) => {
+      const clamped = Math.max(0, Math.min(TAB_COUNT - 1, i));
+      const key = TRIP_TAB_KEYS[clamped]!;
+      setDisplayIndex(clamped);
+      replaceTab(key);
+
+      const el = scrollerRef.current;
+      if (el?.clientWidth) {
+        isProgrammaticScroll.current = true;
+        el.scrollTo({ left: clamped * el.clientWidth, behavior: "auto" });
+        requestAnimationFrame(() => {
+          isProgrammaticScroll.current = false;
+        });
+      }
+    },
+    [replaceTab],
+  );
+
   const onTabClick = (i: number) => {
-    const key = TRIP_TAB_KEYS[i]!;
-    setDisplayIndex(i);
-    replaceTab(key);
-    const el = scrollerRef.current;
-    if (el?.clientWidth) {
-      isProgrammaticScroll.current = true;
-      el.scrollTo({ left: i * el.clientWidth, behavior: "auto" });
-      requestAnimationFrame(() => {
-        isProgrammaticScroll.current = false;
-      });
-    }
+    goToIndex(i);
   };
 
   const activeTabKey: TripTabKey = TRIP_TAB_KEYS[displayIndex] ?? "itinerary";
+  const scrollerHeightStyle = useMemo(
+    () => (activePanelHeight != null ? { height: `${activePanelHeight}px` } : undefined),
+    [activePanelHeight],
+  );
+
+  useLayoutEffect(() => {
+    const activePanel = panelRefs.current[displayIndex];
+    if (!activePanel) return;
+
+    const updateHeight = () => {
+      const next = Math.ceil(activePanel.getBoundingClientRect().height);
+      if (next > 0) setActivePanelHeight(next);
+    };
+
+    updateHeight();
+
+    const ro = new ResizeObserver(() => {
+      updateHeight();
+    });
+    ro.observe(activePanel);
+
+    return () => {
+      ro.disconnect();
+    };
+  }, [displayIndex, panels]);
 
   return (
     <TripActiveTabProvider activeTab={activeTabKey}>
@@ -220,20 +303,53 @@ export default function TripSwipeTabs({
           <div className="w-full">
             <div
               ref={scrollerRef}
-              className="flex w-full snap-x snap-mandatory items-start overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              style={{ WebkitOverflowScrolling: "touch" }}
+              className={`flex w-full snap-x snap-mandatory items-start overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+                isScrollerReady ? "opacity-100" : "pointer-events-none opacity-0"
+              }`}
+              style={{ WebkitOverflowScrolling: "touch", ...scrollerHeightStyle }}
               aria-label="Swipe between trip sections"
+              onTouchStart={(e) => {
+                const t = e.changedTouches[0];
+                if (!t) return;
+                touchStartXRef.current = t.clientX;
+                touchStartYRef.current = t.clientY;
+                touchStartIndexRef.current = displayIndex;
+              }}
+              onTouchEnd={(e) => {
+                const sx = touchStartXRef.current;
+                const sy = touchStartYRef.current;
+                const t = e.changedTouches[0];
+                touchStartXRef.current = null;
+                touchStartYRef.current = null;
+                if (sx == null || sy == null || !t) return;
+
+                const dx = t.clientX - sx;
+                const dy = t.clientY - sy;
+                const absX = Math.abs(dx);
+                const absY = Math.abs(dy);
+                const minSwipePx = 26;
+                const horizontalDominance = 1.15;
+
+                if (absX < minSwipePx || absX < absY * horizontalDominance) return;
+
+                const step = dx < 0 ? 1 : -1;
+                const nextIndex = touchStartIndexRef.current + step;
+                goToIndex(nextIndex);
+              }}
             >
               {panels.map((panel, i) => {
                 const key = TRIP_TAB_KEYS[i]!;
                 return (
                   <section
                     key={key}
+                    ref={(el) => {
+                      panelRefs.current[i] = el;
+                    }}
                     id={`trip-panel-${key}`}
                     role="tabpanel"
                     aria-labelledby={`trip-tab-${key}`}
                     aria-hidden={i !== displayIndex}
-                    className="box-border w-full min-w-full max-w-full shrink-0 snap-center snap-always touch-pan-y px-4 py-4 pb-28"
+                    className="box-border w-full min-w-full max-w-full shrink-0 snap-center snap-always touch-manipulation px-4 py-4 pb-28"
                   >
                     {panel}
                   </section>

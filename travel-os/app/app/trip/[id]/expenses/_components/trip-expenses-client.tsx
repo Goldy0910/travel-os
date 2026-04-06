@@ -2,17 +2,20 @@
 
 import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
 import ButtonSpinner from "@/app/app/_components/button-spinner";
-import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
-import Link from "next/link";
 import type { RefObject } from "react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import EntityCommentsBlock, {
   type EntityCommentDTO,
 } from "../../_components/entity-comments-block";
 import { useTripActiveTab } from "../../_lib/trip-active-tab-context";
 import { useTripFabRegistry } from "../../_lib/trip-tab-fab-registry";
 import { deleteExpenseAction, saveExpenseAction } from "../../data-actions";
+import {
+  computeExpenseSplit,
+  previewLineForCurrentUser,
+  type SplitType,
+} from "../_lib/expense-split";
 import { formatInr } from "../_lib/format-inr";
 
 export type ExpenseCardDTO = {
@@ -53,6 +56,18 @@ type TripExpensesClientProps = {
   memberLabelByUserId: Record<string, string>;
   expenseCommentsById: Record<string, EntityCommentDTO[]>;
 };
+
+const LAST_SPLIT_KEY = "travel-os-last-expense-split-type";
+
+function normalizeUiSplitType(raw: string | null | undefined): SplitType {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value === "equal" || value === "exact" || value === "percentage" || value === "none") {
+    return value;
+  }
+  if (value === "custom") return "exact";
+  if (value === "full") return "none";
+  return "equal";
+}
 
 function splitTypeLabel(raw: string) {
   const s = raw.toLowerCase();
@@ -216,12 +231,100 @@ function ExpenseFormSheet({
   const titleDefault = editing?.title ?? "";
   const amountDefault = editing ? String(editing.amount) : "";
   const paidByDefault = resolvePaidBySelectDefault(editing, defaultPaidBy, paidByMemberOptions);
-  const splitDefault = editing?.splitTypeRaw ?? "equal";
+  const [splitType, setSplitType] = useState<SplitType>(
+    normalizeUiSplitType(editing?.splitTypeRaw),
+  );
   const dateDefault = editing?.dateInput?.trim() || isoDateLocal(new Date());
+  const [amountInput, setAmountInput] = useState(amountDefault);
+  const [descriptionInput, setDescriptionInput] = useState(titleDefault);
+  const [paidByUserId, setPaidByUserId] = useState(
+    paidByMemberOptions.find((o) => o.label === paidByDefault)?.userId ??
+      paidByMemberOptions[0]?.userId ??
+      "",
+  );
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>(
+    paidByMemberOptions.map((o) => o.userId),
+  );
+  const [includePayer, setIncludePayer] = useState(true);
+  const [exactAmounts, setExactAmounts] = useState<Record<string, number>>({});
+  const [percentages, setPercentages] = useState<Record<string, number>>({});
 
-  const paidByOptionLabels = new Set(paidByMemberOptions.map((o) => o.label));
-  const showLegacyPaidByOption =
-    paidByDefault.length > 0 && !paidByOptionLabels.has(paidByDefault);
+  useEffect(() => {
+    if (!open) return;
+    const allIds = paidByMemberOptions.map((o) => o.userId);
+    const fallbackUserId =
+      paidByMemberOptions.find((o) => o.label === paidByDefault)?.userId ??
+      paidByMemberOptions[0]?.userId ??
+      "";
+    setAmountInput(amountDefault);
+    setDescriptionInput(titleDefault);
+    setPaidByUserId(fallbackUserId);
+    setSelectedParticipantIds(allIds);
+    setIncludePayer(true);
+    setExactAmounts(
+      Object.fromEntries(
+        allIds.map((id) => [id, id === fallbackUserId ? Number(amountDefault || 0) : 0]),
+      ),
+    );
+    setPercentages(
+      Object.fromEntries(
+        allIds.map((id) => [id, allIds.length > 0 ? Number((100 / allIds.length).toFixed(2)) : 0]),
+      ),
+    );
+    if (editing?.splitTypeRaw) {
+      setSplitType(normalizeUiSplitType(editing.splitTypeRaw));
+      return;
+    }
+    try {
+      const remembered = localStorage.getItem(LAST_SPLIT_KEY);
+      if (remembered === "equal" || remembered === "exact" || remembered === "percentage" || remembered === "none") {
+        setSplitType(remembered);
+      } else {
+        setSplitType("equal");
+      }
+    } catch {
+      setSplitType("equal");
+    }
+  }, [open, editing, amountDefault, titleDefault, paidByMemberOptions, paidByDefault]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAST_SPLIT_KEY, splitType);
+    } catch {
+      /* ignore */
+    }
+  }, [splitType]);
+
+  useEffect(() => {
+    if (splitType !== "equal") return;
+    const targetIds = includePayer
+      ? selectedParticipantIds
+      : selectedParticipantIds.filter((id) => id !== paidByUserId);
+    if (targetIds.length === 0) return;
+    const share = Number(amountInput || 0) / targetIds.length;
+    const nextExact: Record<string, number> = {};
+    for (const id of selectedParticipantIds) {
+      nextExact[id] = targetIds.includes(id) ? Number(share.toFixed(2)) : 0;
+    }
+    setExactAmounts(nextExact);
+  }, [splitType, includePayer, selectedParticipantIds, paidByUserId, amountInput]);
+
+  const amountNumber = Number(amountInput || 0);
+  const computed = useMemo(
+    () =>
+      computeExpenseSplit({
+        amount: amountNumber,
+        splitType,
+        paidByUserId,
+        selectedParticipantIds,
+        includePayerInEqual: includePayer,
+        exactAmountsByUserId: exactAmounts,
+        percentagesByUserId: percentages,
+      }),
+    [amountNumber, splitType, paidByUserId, selectedParticipantIds, includePayer, exactAmounts, percentages],
+  );
+
+  const hasInlineError = computed.errors.length > 0;
 
   return (
     <BottomSheetModal
@@ -234,24 +337,21 @@ function ExpenseFormSheet({
     >
       <form
         key={formKey}
-        onSubmit={(e) => handleForm(e, saveAction, onClose)}
-        className="flex flex-col gap-4 pb-1"
+        onSubmit={(e) => {
+          return handleForm(e, saveAction, onClose);
+        }}
+        className="flex flex-col gap-4 pb-20"
       >
         {editing ? <input type="hidden" name="expenseId" value={editing.id} /> : null}
+        <input type="hidden" name="splitType" value={splitType} />
+        <input type="hidden" name="paidBy" value={paidByUserId} />
+        <input type="hidden" name="participantIdsJson" value={JSON.stringify(selectedParticipantIds)} />
+        <input type="hidden" name="exactAmountsJson" value={JSON.stringify(exactAmounts)} />
+        <input type="hidden" name="percentagesJson" value={JSON.stringify(percentages)} />
+        <input type="hidden" name="includePayer" value={String(includePayer)} />
 
         <label className="block">
-          <span className="text-sm font-medium text-slate-700">Title</span>
-          <input
-            name="title"
-            required
-            defaultValue={titleDefault}
-            placeholder="e.g. Dinner, Taxi"
-            className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">Amount (₹)</span>
+          <span className="text-sm font-medium text-slate-700">Amount (INR)</span>
           <input
             name="amount"
             type="number"
@@ -259,8 +359,20 @@ function ExpenseFormSheet({
             step="0.01"
             min="0"
             required
-            defaultValue={amountDefault}
+            value={amountInput}
+            onChange={(e) => setAmountInput(e.target.value)}
             placeholder="0"
+            className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-sm font-medium text-slate-700">Description (optional)</span>
+          <input
+            name="description"
+            value={descriptionInput}
+            onChange={(e) => setDescriptionInput(e.target.value)}
+            placeholder="e.g. Dinner at cafe"
             className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
           />
         </label>
@@ -268,61 +380,183 @@ function ExpenseFormSheet({
         <label className="block">
           <span className="text-sm font-medium text-slate-700">Paid by</span>
           <select
-            name="paidBy"
             required
-            defaultValue={paidByDefault}
+            value={paidByUserId}
+            onChange={(e) => setPaidByUserId(e.target.value)}
             className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
           >
-            {showLegacyPaidByOption ? (
-              <option value={paidByDefault}>{paidByDefault}</option>
-            ) : null}
             {paidByMemberOptions.map((o) => (
-              <option key={o.userId} value={o.label}>
+              <option key={o.userId} value={o.userId}>
                 {o.label}
               </option>
             ))}
           </select>
         </label>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Split type</span>
-            <select
-              name="splitType"
-              required
-              defaultValue={splitDefault}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
-            >
-              <option value="equal">Equal</option>
-              <option value="custom">Custom</option>
-              <option value="full">Full</option>
-              <option value="none">None</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Date</span>
-            <input
-              name="date"
-              type="date"
-              required
-              defaultValue={dateDefault}
-              className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
-            />
-          </label>
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-slate-700">Participants</p>
+          <div className="grid grid-cols-1 gap-2">
+            {paidByMemberOptions.map((o) => {
+              const checked = selectedParticipantIds.includes(o.userId);
+              return (
+                <label key={o.userId} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      setSelectedParticipantIds((prev) =>
+                        e.target.checked ? [...new Set([...prev, o.userId])] : prev.filter((id) => id !== o.userId),
+                      );
+                    }}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  <span className="text-sm text-slate-800">{o.label}</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="flex gap-3 pt-2">
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-slate-700">Split type</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["equal", "exact", "percentage", "none"] as SplitType[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setSplitType(type)}
+                className={`min-h-11 rounded-xl px-3 text-sm font-semibold ${
+                  splitType === type
+                    ? "bg-slate-900 text-white"
+                    : "border border-slate-200 bg-white text-slate-700"
+                }`}
+              >
+                {type === "none"
+                  ? "Paid by me only"
+                  : type === "percentage"
+                    ? "Percentage"
+                    : type === "exact"
+                      ? "Exact amount"
+                      : "Equal"}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
-            onClick={onClose}
-            disabled={pending}
-            className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white py-3 text-base font-medium text-slate-800 shadow-sm active:bg-slate-50 disabled:opacity-50"
+            onClick={() => {
+              setSplitType("equal");
+              setIncludePayer(true);
+            }}
+            className="inline-flex min-h-9 items-center rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-700"
           >
-            Cancel
+            Split equally (quick action)
           </button>
+        </div>
+
+        {splitType === "equal" ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={includePayer}
+                onChange={(e) => setIncludePayer(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              Include payer in equal split
+            </label>
+          </div>
+        ) : null}
+
+        {splitType === "exact" ? (
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            {selectedParticipantIds.map((id) => {
+              const label = paidByMemberOptions.find((o) => o.userId === id)?.label ?? id;
+              return (
+                <label key={id} className="block">
+                  <span className="text-xs font-medium text-slate-600">{label}</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={String(exactAmounts[id] ?? 0)}
+                    onChange={(e) =>
+                      setExactAmounts((prev) => ({ ...prev, [id]: Number(e.target.value || 0) }))
+                    }
+                    className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                  />
+                </label>
+              );
+            })}
+            <p className="text-xs text-slate-600">Remaining: INR {computed.remainingAmount.toFixed(2)}</p>
+          </div>
+        ) : null}
+
+        {splitType === "percentage" ? (
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            {selectedParticipantIds.map((id) => {
+              const label = paidByMemberOptions.find((o) => o.userId === id)?.label ?? id;
+              return (
+                <label key={id} className="block">
+                  <span className="text-xs font-medium text-slate-600">{label} (%)</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={String(percentages[id] ?? 0)}
+                    onChange={(e) =>
+                      setPercentages((prev) => ({ ...prev, [id]: Number(e.target.value || 0) }))
+                    }
+                    className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                  />
+                </label>
+              );
+            })}
+            <p className="text-xs text-slate-600">Remaining: {computed.remainingPercentage.toFixed(2)}%</p>
+          </div>
+        ) : null}
+
+        <label className="block">
+          <span className="text-sm font-medium text-slate-700">Date</span>
+          <input
+            name="date"
+            type="date"
+            required
+            defaultValue={dateDefault}
+            className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
+          />
+        </label>
+
+        <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Settlement preview</p>
+          <ul className="space-y-1.5">
+            {computed.rows.map((row) => {
+              const label = paidByMemberOptions.find((o) => o.userId === row.userId)?.label ?? row.userId;
+              const amt = Math.abs(row.owesAmount).toFixed(2);
+              return (
+                <li key={row.userId} className="text-sm text-slate-700">
+                  {row.owesAmount > 0
+                    ? `${label} owes INR ${amt}`
+                    : row.owesAmount < 0
+                      ? `${label} gets INR ${amt}`
+                      : `${label} is settled`}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-sm font-semibold text-slate-900">
+            {previewLineForCurrentUser(computed.rows, "")}
+          </p>
+          {hasInlineError ? (
+            <p className="text-xs font-medium text-rose-700">{computed.errors[0]}</p>
+          ) : null}
+        </section>
+
+        <div className="sticky bottom-0 z-10 -mx-1 mt-2 flex gap-3 border-t border-slate-100 bg-white/95 px-1 pt-3 backdrop-blur">
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || hasInlineError}
             className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-base font-medium text-white shadow-md shadow-slate-900/20 disabled:opacity-60"
           >
             {pending ? (
@@ -334,6 +568,14 @@ function ExpenseFormSheet({
               "Save"
             )}
           </button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white py-3 text-base font-medium text-slate-800 shadow-sm active:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
         </div>
       </form>
     </BottomSheetModal>
@@ -342,7 +584,6 @@ function ExpenseFormSheet({
 
 export default function TripExpensesClient({
   tripId,
-  tripTitle,
   defaultPaidBy,
   paidByMemberOptions,
   memberCount,
@@ -393,32 +634,15 @@ export default function TripExpensesClient({
     setEditing(null);
   };
 
-  const membersLabel =
-    memberCount > 0
-      ? `${memberCount} member${memberCount === 1 ? "" : "s"} on this trip`
-      : "Members on this trip";
-
   return (
     <>
-      <section className="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-white shadow-md">
-        <p className="text-sm font-medium text-slate-200">{tripTitle}</p>
-        <p className="mt-2 text-xs text-slate-400">{membersLabel}</p>
-        <Link
-          href={`/app/trip/${tripId}?tab=itinerary`}
-          className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/15"
-        >
-          Itinerary
-          <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-white" />
-        </Link>
-      </section>
-
       {initialError ? (
         <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{initialError}</p>
       ) : null}
 
       <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Summary</h2>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 shadow-sm">
             <p className="flex items-center gap-2 text-sm text-slate-600">
               <span className="text-lg" aria-hidden>
