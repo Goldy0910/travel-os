@@ -87,7 +87,7 @@ function VideoSection({
   if (videos.length === 0) return <EmptyState destinationLabel={destinationLabel} />;
 
   return (
-    <div className="scrollbar-hide -mx-1 flex gap-3 overflow-x-auto overscroll-x-contain px-1 pb-1 pt-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="scrollbar-hide -mx-1 flex gap-3 overflow-x-auto overscroll-x-contain px-1 pb-1 pt-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [touch-action:pan-x] [&::-webkit-scrollbar]:hidden">
       {videos.map((v) => (
         <GuideVideoCard key={`${v.youtubeId}-${v.title}`} {...v} />
       ))}
@@ -158,7 +158,7 @@ export default function TripGuidesPanel({ bundle, destinationLabel }: Props) {
       </header>
 
       <div
-        className="scrollbar-hide -mx-1 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="scrollbar-hide -mx-1 flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [touch-action:pan-x] [&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label="Guide categories"
       >
