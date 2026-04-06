@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useLockScroll } from "@/app/app/_hooks/use-lock-scroll";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 type BottomSheetModalProps = {
   open: boolean;
@@ -28,14 +30,13 @@ export default function BottomSheetModal({
   zClass = "z-[200]",
   showHandle = true,
 }: BottomSheetModalProps) {
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+    queueMicrotask(() => setMounted(true));
+  }, []);
+
+  useLockScroll(open);
 
   useEffect(() => {
     if (!open) return;
@@ -46,23 +47,26 @@ export default function BottomSheetModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  return (
+  if (!mounted) return null;
+
+  const overlay = (
     <div
-      className={`fixed inset-0 flex flex-col justify-end overflow-hidden sm:px-4 ${zClass} ${open ? "pointer-events-auto" : "pointer-events-none"}`}
+      className={`fixed inset-0 flex flex-col justify-end overflow-x-hidden overflow-y-hidden overscroll-none sm:px-4 ${zClass} ${open ? "pointer-events-auto" : "pointer-events-none"}`}
       aria-hidden={!open}
     >
       <button
         type="button"
         tabIndex={open ? 0 : -1}
         aria-label="Close dialog"
-        className={`absolute inset-0 z-0 bg-slate-900/50 transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 z-0 touch-none bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
         onClick={onClose}
       />
-      <div className="relative z-10 mx-auto w-full max-w-md">
+      <div className="relative z-10 mx-auto w-full max-w-md overflow-x-hidden [touch-action:pan-y]">
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby={title ? titleId : undefined}
+          onClick={(e) => e.stopPropagation()}
           className={`flex min-h-0 w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.12)] transition-transform duration-300 ease-out will-change-transform ${panelClassName} ${
             open
               ? "translate-y-0"
@@ -84,11 +88,13 @@ export default function BottomSheetModal({
               {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
             </div>
           ) : null}
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
             {children}
           </div>
         </div>
       </div>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 }

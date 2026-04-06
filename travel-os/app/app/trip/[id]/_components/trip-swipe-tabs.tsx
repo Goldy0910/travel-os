@@ -1,5 +1,6 @@
 "use client";
 
+import PageLoader from "@/components/ui/page-loader";
 import { TripActiveTabProvider } from "@/app/app/trip/[id]/_lib/trip-active-tab-context";
 import { TripFabRegistryProvider } from "@/app/app/trip/[id]/_lib/trip-tab-fab-registry";
 import {
@@ -9,7 +10,7 @@ import {
   type TripTabKey,
 } from "@/app/app/trip/[id]/_lib/trip-tab-keys";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type ReactNode, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useTransition } from "react";
 
 const TAB_COUNT = TRIP_TAB_KEYS.length;
 
@@ -46,8 +47,7 @@ export default function TripSwipeTabs({
   const tabBarRef = useRef<HTMLDivElement>(null);
   const tabBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const previousUrlIndexRef = useRef(urlIndex);
-  const [pendingTabKey, setPendingTabKey] = useState<TripTabKey | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isTabPending, startTabTransition] = useTransition();
 
   const replaceTab = useCallback(
     (key: TripTabKey) => {
@@ -97,8 +97,7 @@ export default function TripSwipeTabs({
       const clamped = Math.max(0, Math.min(TAB_COUNT - 1, i));
       const key = TRIP_TAB_KEYS[clamped]!;
       if (key === tabKey) return;
-      setPendingTabKey(key);
-      startTransition(() => {
+      startTabTransition(() => {
         replaceTab(key);
       });
     },
@@ -118,7 +117,6 @@ export default function TripSwipeTabs({
           >
             {TRIP_TAB_KEYS.map((key, i) => {
               const active = i === urlIndex;
-              const showPending = !active && isPending && pendingTabKey === key;
               return (
                 <button
                   key={key}
@@ -137,15 +135,7 @@ export default function TripSwipeTabs({
                       : "font-medium text-slate-500 hover:text-slate-700"
                   }`}
                 >
-                  <span className="inline-flex items-center gap-1.5">
-                    {showPending ? (
-                      <span
-                        className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700"
-                        aria-hidden
-                      />
-                    ) : null}
-                    {TRIP_TAB_LABELS[key]}
-                  </span>
+                  {TRIP_TAB_LABELS[key]}
                   <span
                     className={`absolute inset-x-1.5 bottom-0 h-[3px] rounded-full bg-slate-900 transition-all duration-200 ease-out ${
                       active ? "opacity-100 scale-x-100" : "opacity-0 scale-x-50"
@@ -157,12 +147,14 @@ export default function TripSwipeTabs({
             })}
           </nav>
 
-          <div className="w-full overflow-x-hidden">
-            {isPending ? (
-              <div className="px-4 pt-3" aria-live="polite">
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-                  <div className="h-full w-1/2 animate-pulse rounded-full bg-slate-500" />
-                </div>
+          <div className="relative w-full overflow-x-hidden">
+            {isTabPending ? (
+              <div
+                className="absolute inset-0 z-20 flex min-h-[min(28rem,72dvh)] flex-col items-stretch justify-center bg-slate-50/90 backdrop-blur-[2px]"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                <PageLoader message="Loading…" className="flex-1 py-16" />
               </div>
             ) : null}
             {panels.map((panel, i) => {

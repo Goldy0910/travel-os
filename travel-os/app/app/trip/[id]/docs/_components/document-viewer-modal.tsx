@@ -1,5 +1,6 @@
 "use client";
 
+import { useLockScroll } from "@/app/app/_hooks/use-lock-scroll";
 import type { DocumentKind } from "../_lib/file-kind";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -25,14 +26,7 @@ export default function DocumentViewerModal({
     queueMicrotask(() => setMounted(true));
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+  useLockScroll(open);
 
   useEffect(() => {
     if (!open) return;
@@ -47,7 +41,7 @@ export default function DocumentViewerModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[400] flex flex-col bg-black"
+      className="fixed inset-0 z-[400] flex flex-col overflow-x-hidden overflow-y-hidden overscroll-none bg-black"
       role="dialog"
       aria-modal="true"
       aria-label={fileName}
