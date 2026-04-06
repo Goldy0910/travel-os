@@ -54,6 +54,7 @@ export default function TripSwipeTabs({
   const scrollIdleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRafRef = useRef<number | null>(null);
   const isProgrammaticScroll = useRef(false);
+  const previousDisplayIndexRef = useRef(displayIndex);
 
   const replaceTab = useCallback(
     (key: TripTabKey) => {
@@ -84,6 +85,22 @@ export default function TripSwipeTabs({
       isProgrammaticScroll.current = false;
     });
   }, [urlIndex, pathname]);
+
+  /** Reset vertical page position immediately when active panel changes. */
+  useEffect(() => {
+    const previous = previousDisplayIndexRef.current;
+    previousDisplayIndexRef.current = displayIndex;
+    if (previous === displayIndex) return;
+
+    const appShellScrollRoot = document.getElementById("app-shell-scroll-root");
+    if (appShellScrollRoot) {
+      appShellScrollRoot.scrollTo({ top: 0, behavior: "auto" });
+      appShellScrollRoot.scrollTop = 0;
+    }
+    window.scrollTo({ top: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [displayIndex]);
 
   useEffect(() => {
     const el = scrollerRef.current;

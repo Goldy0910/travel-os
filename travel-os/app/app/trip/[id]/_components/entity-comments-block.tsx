@@ -169,7 +169,10 @@ export default function EntityCommentsBlock({
         </p>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="flex gap-2">
+      <form
+        onSubmit={handleSubmit}
+        className="sticky bottom-0 z-10 -mx-1 flex gap-2 rounded-xl bg-slate-50/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-slate-50/85"
+      >
         <label htmlFor={`comment-${entityType}-${entityId}`} className="sr-only">
           Add comment
         </label>
@@ -183,12 +186,12 @@ export default function EntityCommentsBlock({
           }}
           placeholder="Add a comment…"
           autoComplete="off"
-          className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
         />
         <button
           type="submit"
           disabled={sending || !draft.trim()}
-          className="flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-slate-800 px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+          className="flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-slate-800 px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
         >
           {sending ? (
             <>

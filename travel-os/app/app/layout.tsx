@@ -11,7 +11,10 @@ export default function AppShellLayout({
     <AppHeaderProvider>
       <div className="flex h-dvh min-h-0 flex-col overflow-hidden">
         <AppHeader />
-        <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain">
+        <div
+          id="app-shell-scroll-root"
+          className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain"
+        >
           {children}
         </div>
       </div>
