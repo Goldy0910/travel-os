@@ -1,7 +1,7 @@
 "use client";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { ChevronLeft, MoreHorizontal, Settings, UserRound } from "lucide-react";
+import { ChevronLeft, LogOut, MoreVertical, Settings, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -146,8 +146,8 @@ export function AppHeader() {
         if (cancelled || !user) return;
         const metaName = user.user_metadata?.full_name;
         const hint =
-          user.email?.trim() ||
           (typeof metaName === "string" ? metaName.trim() : "") ||
+          user.email?.trim() ||
           null;
         setUserHint(hint);
       } catch {
@@ -212,7 +212,7 @@ export function AppHeader() {
   return (
     <>
       <header
-        className="sticky top-0 z-[120] border-b border-slate-200/80 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-md supports-[backdrop-filter]:bg-white/90"
+        className="sticky top-0 z-[120] border-b border-slate-200/70 bg-gradient-to-b from-white/95 to-white/90 shadow-[0_6px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl supports-[backdrop-filter]:bg-white/85"
         style={{ minHeight: HEADER_H }}
       >
         <div
@@ -224,19 +224,21 @@ export function AppHeader() {
               <button
                 type="button"
                 onClick={onBack}
-                className="flex min-h-10 min-w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100 active:scale-95"
+                className="flex min-h-10 min-w-10 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
                 aria-label="Go back"
               >
-                <ChevronLeft className="h-6 w-6 stroke-[2]" />
+                <ChevronLeft className="h-5 w-5 stroke-[2.25]" />
               </button>
             ) : (
               <span className="min-w-10" aria-hidden />
             )}
           </div>
 
-          <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold tracking-tight text-slate-900">
-            {title}
-          </h1>
+          <div className="min-w-0 flex-1 px-1 text-center">
+            <h1 className="truncate text-[1.05rem] font-semibold tracking-tight text-slate-900">
+              {title}
+            </h1>
+          </div>
 
           <div className="flex w-10 shrink-0 justify-end">
             <button
@@ -249,9 +251,15 @@ export function AppHeader() {
                 if (closeTimer.current) clearTimeout(closeTimer.current);
                 setMenuOpen((o) => !o);
               }}
-              className="flex min-h-10 min-w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100 active:scale-95"
+              className="flex min-h-10 min-w-10 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
             >
-              <MoreHorizontal className="h-6 w-6" strokeWidth={2} />
+              {initials ? (
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-slate-800 to-slate-900 text-xs font-semibold text-white ring-1 ring-white">
+                  {initials}
+                </span>
+              ) : (
+                <MoreVertical className="h-5 w-5" strokeWidth={2.25} />
+              )}
             </button>
           </div>
         </div>
@@ -261,7 +269,7 @@ export function AppHeader() {
       {menuOpen ? (
         <div
           id="app-header-menu-dropdown"
-          className="fixed right-4 top-[calc(3.5rem+env(safe-area-inset-top)+0.25rem)] z-[130] hidden min-w-[13rem] rounded-2xl border border-slate-200/90 bg-white py-2 shadow-xl shadow-slate-900/10 md:block"
+          className="fixed right-4 top-[calc(3.5rem+env(safe-area-inset-top)+0.35rem)] z-[130] hidden min-w-[14rem] rounded-2xl border border-slate-200/90 bg-white/95 py-2 shadow-2xl shadow-slate-900/15 backdrop-blur-md md:block"
         >
           <MenuPanelContent
             userHint={userHint}
@@ -288,7 +296,7 @@ export function AppHeader() {
           />
           <div
             id="app-header-menu-sheet"
-            className={`fixed inset-x-0 bottom-0 z-[126] rounded-t-2xl border border-slate-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_32px_rgba(15,23,42,0.12)] transition-transform duration-200 ease-out md:hidden ${
+            className={`fixed inset-x-0 bottom-0 z-[126] rounded-t-3xl border border-slate-200 bg-white/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.16)] backdrop-blur-md transition-transform duration-200 ease-out md:hidden ${
               sheetVisible ? "translate-y-0" : "translate-y-full"
             }`}
             role="dialog"
@@ -324,6 +332,22 @@ function MenuPanelContent({
   largeTouch?: boolean;
 }) {
   const pad = largeTouch ? "min-h-14 px-4 py-3.5 text-base" : "min-h-11 px-4 py-2.5 text-sm";
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const onLogout = useCallback(async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      await supabase.auth.signOut();
+      onNavigate();
+      router.push("/app/login");
+      router.refresh();
+    } finally {
+      setLoggingOut(false);
+    }
+  }, [loggingOut, onNavigate, router]);
 
   return (
     <div className="flex flex-col">
@@ -354,6 +378,15 @@ function MenuPanelContent({
         <Settings className="h-5 w-5 shrink-0 text-slate-500" strokeWidth={2} />
         Settings
       </Link>
+      <button
+        type="button"
+        onClick={onLogout}
+        disabled={loggingOut}
+        className={`flex items-center gap-3 border-t border-slate-100 font-medium text-rose-700 transition hover:bg-rose-50 active:bg-rose-100 disabled:opacity-60 ${pad}`}
+      >
+        <LogOut className="h-5 w-5 shrink-0 text-rose-600" strokeWidth={2} />
+        {loggingOut ? "Logging out..." : "Log out"}
+      </button>
     </div>
   );
 }

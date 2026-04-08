@@ -128,6 +128,8 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   const query = (await searchParams) ?? {};
   const showJoinWelcome =
     query.welcome === "1" || query.welcome === "true";
+  const activeTab = parseTripTabParam(pickFirstQuery(query, "tab"));
+  const quickAction = pickFirstQuery(query, "quickAction").trim().toLowerCase();
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -158,105 +160,6 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   const endRawEarly = pickFirstString(trip, ["end_date", "endDate", "date_to"], "");
   const ymdStart = extractYMD(startRawEarly);
   const ymdEnd = extractYMD(endRawEarly);
-  if (ymdStart && ymdEnd) {
-    try {
-      await pruneItineraryOutsideTripRange(supabase, tripId, ymdStart, ymdEnd);
-    } catch {
-      /* ignore prune errors; display still restricted to trip range */
-    }
-  }
-
-  const memberCount = await countTripMembers(supabase, tripId);
-  const myRole = await getMemberRole(supabase, tripId, user.id);
-  const canDeleteTrip = myRole === "organizer";
-
-  const { data: daysData } = await supabase
-    .from("itinerary_days")
-    .select("id, date")
-    .eq("trip_id", tripId)
-    .order("date", { ascending: true });
-
-  const days = (daysData ?? []) as ItineraryDay[];
-  const { data: itemsData } = await supabase
-    .from("itinerary_items")
-    .select("id, itinerary_day_id, date, activity_name, title, location, time, created_at")
-    .eq("trip_id", tripId)
-    .order("time", { ascending: true });
-
-  const items = (itemsData ?? []) as ItineraryItem[];
-  const [{ data: activityCommentsData }, { data: membersForLabels }] = await Promise.all([
-    supabase
-      .from("comments")
-      .select("id, trip_id, user_id, entity_type, entity_id, content, created_at")
-      .eq("trip_id", tripId)
-      .eq("entity_type", "activity"),
-    supabase.from("members").select("user_id, name, email").eq("trip_id", tripId),
-  ]);
-
-  const activityCommentsByItemId = groupCommentsByEntityId(
-    (activityCommentsData ?? []) as EntityCommentDTO[],
-  );
-
-  const memberLabelByUserId: Record<string, string> = {};
-  for (const row of membersForLabels ?? []) {
-    const m = row as MemberLabelRow;
-    if (m.user_id) {
-      memberLabelByUserId[m.user_id] = memberDisplayLabel(m);
-    }
-  }
-  const metaName = user.user_metadata?.full_name;
-  if (!memberLabelByUserId[user.id]) {
-    memberLabelByUserId[user.id] =
-      (typeof metaName === "string" && metaName.trim()) ||
-      user.email?.split("@")[0] ||
-      "You";
-  }
-
-  const dayById = new Map<string, ItineraryDay>();
-  days.forEach((day) => dayById.set(String(day.id), day));
-
-  const activityKeysFromItems = new Set<string>();
-  days.forEach((day) => {
-    if (day.date) activityKeysFromItems.add(day.date);
-  });
-  items.forEach((item) => {
-    const key =
-      item.date ??
-      (item.itinerary_day_id != null
-        ? dayById.get(String(item.itinerary_day_id))?.date ?? null
-        : null);
-    if (key) activityKeysFromItems.add(key);
-  });
-
-  const rangeDates =
-    ymdStart && ymdEnd ? enumerateDateStrings(ymdStart, ymdEnd) : [];
-
-  /** Only show days inside the trip range when start/end are set (ignore orphan itinerary rows). */
-  const orderedDates =
-    rangeDates.length > 0
-      ? [...rangeDates]
-      : [...activityKeysFromItems].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-
-  const groupedMap = new Map<string, ItineraryItem[]>();
-  orderedDates.forEach((d) => groupedMap.set(d, []));
-
-  items.forEach((item) => {
-    const raw =
-      item.date ??
-      (item.itinerary_day_id != null
-        ? dayById.get(String(item.itinerary_day_id))?.date ?? null
-        : null);
-    if (!raw) return;
-    const key = extractYMD(String(raw)) ?? String(raw).trim().slice(0, 10);
-    if (ymdStart && ymdEnd && (key < ymdStart || key > ymdEnd)) return;
-    if (!groupedMap.has(key)) return;
-    groupedMap.get(key)?.push(item);
-  });
-
-  const grouped: Record<string, ItineraryItemDTO[]> = {};
-  orderedDates.forEach((date) => {
-    grouped[date] = (groupedMap.get(date) ?? []).map(toItemDTO);
-  });
 
   const title = pickFirstString(trip, ["title", "name", "trip_name"], "Trip");
   const location = pickFirstString(trip, ["location", "destination", "city"], "");
@@ -265,7 +168,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     ["place", "location", "destination", "city"],
     "",
   );
-  const guidesBundle = getTravelGuidesForPlace(tripPlace);
+  const guidesBundle = activeTab === "guides" ? getTravelGuidesForPlace(tripPlace) : null;
   const tripEditDefaults = {
     title,
     location: location || title,
@@ -283,14 +186,153 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
 
   const today = new Date();
   const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  const defaultDateForAdd = orderedDates[0] ?? todayYmd;
+  const itineraryDefaults = {
+    memberCount: 0,
+    canDeleteTrip: false,
+    orderedDates: [] as string[],
+    grouped: {} as Record<string, ItineraryItemDTO[]>,
+    activityCommentsByItemId: {} as Record<string, EntityCommentDTO[]>,
+    memberLabelByUserId: {} as Record<string, string>,
+    defaultDateForAdd: todayYmd,
+  };
 
-  const tabKeyForErrors = parseTripTabParam(pickFirstQuery(query, "tab"));
+  const itineraryData =
+    activeTab === "itinerary"
+      ? await (async () => {
+          if (ymdStart && ymdEnd) {
+            try {
+              await pruneItineraryOutsideTripRange(supabase, tripId, ymdStart, ymdEnd);
+            } catch {
+              /* ignore prune errors; display still restricted to trip range */
+            }
+          }
+
+          const [memberCount, myRole, { data: daysData }, { data: itemsData }, { data: activityCommentsData }, { data: membersForLabels }] =
+            await Promise.all([
+              countTripMembers(supabase, tripId),
+              getMemberRole(supabase, tripId, user.id),
+              supabase
+                .from("itinerary_days")
+                .select("id, date")
+                .eq("trip_id", tripId)
+                .order("date", { ascending: true }),
+              supabase
+                .from("itinerary_items")
+                .select("id, itinerary_day_id, date, activity_name, title, location, time, created_at")
+                .eq("trip_id", tripId)
+                .order("time", { ascending: true }),
+              supabase
+                .from("comments")
+                .select("id, trip_id, user_id, entity_type, entity_id, content, created_at")
+                .eq("trip_id", tripId)
+                .eq("entity_type", "activity"),
+              supabase.from("members").select("user_id, name, email").eq("trip_id", tripId),
+            ]);
+
+          const days = (daysData ?? []) as ItineraryDay[];
+          const items = (itemsData ?? []) as ItineraryItem[];
+          const dayById = new Map<string, ItineraryDay>();
+          days.forEach((day) => dayById.set(String(day.id), day));
+
+          const activityKeysFromItems = new Set<string>();
+          days.forEach((day) => {
+            if (day.date) activityKeysFromItems.add(day.date);
+          });
+          items.forEach((item) => {
+            const key =
+              item.date ??
+              (item.itinerary_day_id != null
+                ? dayById.get(String(item.itinerary_day_id))?.date ?? null
+                : null);
+            if (key) activityKeysFromItems.add(key);
+          });
+
+          const rangeDates =
+            ymdStart && ymdEnd ? enumerateDateStrings(ymdStart, ymdEnd) : [];
+          const orderedDates =
+            rangeDates.length > 0
+              ? [...rangeDates]
+              : [...activityKeysFromItems].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+          const groupedMap = new Map<string, ItineraryItem[]>();
+          orderedDates.forEach((d) => groupedMap.set(d, []));
+          items.forEach((item) => {
+            const raw =
+              item.date ??
+              (item.itinerary_day_id != null
+                ? dayById.get(String(item.itinerary_day_id))?.date ?? null
+                : null);
+            if (!raw) return;
+            const key = extractYMD(String(raw)) ?? String(raw).trim().slice(0, 10);
+            if (ymdStart && ymdEnd && (key < ymdStart || key > ymdEnd)) return;
+            if (!groupedMap.has(key)) return;
+            groupedMap.get(key)?.push(item);
+          });
+
+          const grouped: Record<string, ItineraryItemDTO[]> = {};
+          orderedDates.forEach((date) => {
+            grouped[date] = (groupedMap.get(date) ?? []).map(toItemDTO);
+          });
+
+          const activityCommentsByItemId = groupCommentsByEntityId(
+            (activityCommentsData ?? []) as EntityCommentDTO[],
+          );
+          const memberUserIds = Array.from(
+            new Set(
+              (membersForLabels ?? [])
+                .map((row) => {
+                  const uid = (row as MemberLabelRow).user_id;
+                  return typeof uid === "string" && uid.trim().length > 0 ? uid : "";
+                })
+                .filter((v) => v.length > 0),
+            ),
+          );
+          const { data: profileRows } =
+            memberUserIds.length > 0
+              ? await supabase.from("profiles").select("id, name").in("id", memberUserIds)
+              : { data: [] as Array<{ id: string; name: string | null }> };
+          const profileNameByUserId: Record<string, string> = {};
+          for (const row of profileRows ?? []) {
+            const id = typeof row.id === "string" ? row.id : String(row.id ?? "");
+            const profileName =
+              typeof row.name === "string" && row.name.trim().length > 0 ? row.name.trim() : "";
+            if (id && profileName) profileNameByUserId[id] = profileName;
+          }
+          const memberLabelByUserId: Record<string, string> = {};
+          for (const row of membersForLabels ?? []) {
+            const m = row as MemberLabelRow;
+            if (m.user_id) {
+              memberLabelByUserId[m.user_id] =
+                profileNameByUserId[m.user_id] || memberDisplayLabel(m);
+            }
+          }
+          const metaName = user.user_metadata?.full_name;
+          if (!memberLabelByUserId[user.id]) {
+            memberLabelByUserId[user.id] =
+              (typeof metaName === "string" && metaName.trim()) ||
+              user.email?.split("@")[0] ||
+              "You";
+          }
+
+          return {
+            memberCount,
+            canDeleteTrip: myRole === "organizer",
+            orderedDates,
+            grouped,
+            activityCommentsByItemId,
+            memberLabelByUserId,
+            defaultDateForAdd: orderedDates[0] ?? todayYmd,
+          };
+        })()
+      : itineraryDefaults;
+
+  const tabKeyForErrors = activeTab;
   const rawError = decodeOptionalQueryParam(pickFirstQuery(query, "error"));
   const itineraryError = tabKeyForErrors === "itinerary" ? rawError : "";
   const docsSuccess = decodeOptionalQueryParam(pickFirstQuery(query, "success"));
 
   const panels = await loadTripTabPanelsData(supabase, tripId, user, trip, title, {
+    activeTab,
     expensesError: tabKeyForErrors === "expenses" ? rawError : "",
     docsSuccess,
     docsError: tabKeyForErrors === "docs" ? rawError : "",
@@ -305,42 +347,65 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
           <Suspense fallback={<TripTabsFallback />}>
             <TripSwipeTabs
               itinerary={
-                <div className="space-y-5">
-                  {showJoinWelcome ? (
-                    <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
-                  ) : null}
-                  <TripItineraryShell
+                activeTab === "itinerary" ? (
+                  <div className="space-y-5">
+                    {showJoinWelcome ? (
+                      <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
+                    ) : null}
+                    <TripItineraryShell
+                      tripId={tripId}
+                      tripTitle={title}
+                      dateRangeLabel={dateRangeLabel}
+                      memberCount={itineraryData.memberCount}
+                      canDeleteTrip={itineraryData.canDeleteTrip}
+                      tripEditDefaults={tripEditDefaults}
+                      orderedDates={itineraryData.orderedDates}
+                      grouped={itineraryData.grouped}
+                      initialError={itineraryError}
+                      defaultDateForAdd={itineraryData.defaultDateForAdd}
+                      activityCommentsByItemId={itineraryData.activityCommentsByItemId}
+                      currentUserId={user.id}
+                      memberLabelByUserId={itineraryData.memberLabelByUserId}
+                      autoOpenAddActivity={quickAction === "activity"}
+                    />
+                    <TripActivityFeed tripId={tripId} />
+                  </div>
+                ) : null
+              }
+              expenses={
+                activeTab === "expenses" ? (
+                  <TripExpensesClient
                     tripId={tripId}
-                    tripTitle={title}
-                    dateRangeLabel={dateRangeLabel}
-                    memberCount={memberCount}
-                    canDeleteTrip={canDeleteTrip}
-                    tripEditDefaults={tripEditDefaults}
-                    orderedDates={orderedDates}
-                    grouped={grouped}
-                    initialError={itineraryError}
-                    defaultDateForAdd={defaultDateForAdd}
-                    activityCommentsByItemId={activityCommentsByItemId}
-                    currentUserId={user.id}
-                    memberLabelByUserId={memberLabelByUserId}
+                    {...panels.expenses}
+                    autoOpenAddExpense={quickAction === "expense"}
                   />
-                  <TripActivityFeed tripId={tripId} />
-                </div>
+                ) : null
               }
-              expenses={<TripExpensesClient tripId={tripId} {...panels.expenses} />}
               chat={
-                <TripChatClient
-                  tripId={tripId}
-                  currentUserId={user.id}
-                  initialMessages={panels.chat.initialMessages}
-                  memberLabelByUserId={panels.chat.memberLabelByUserId}
-                />
+                activeTab === "chat" ? (
+                  <TripChatClient
+                    tripId={tripId}
+                    currentUserId={user.id}
+                    initialMessages={panels.chat.initialMessages}
+                    memberLabelByUserId={panels.chat.memberLabelByUserId}
+                  />
+                ) : null
               }
-              docs={<TripDocsClient tripId={tripId} {...panels.docs} />}
+              docs={
+                activeTab === "docs" ? (
+                  <TripDocsClient
+                    tripId={tripId}
+                    {...panels.docs}
+                    autoOpenUpload={quickAction === "doc"}
+                  />
+                ) : null
+              }
               guides={
-                <TripGuidesPanel bundle={guidesBundle} destinationLabel={tripPlace || location} />
+                activeTab === "guides" && guidesBundle ? (
+                  <TripGuidesPanel bundle={guidesBundle} destinationLabel={tripPlace || location} />
+                ) : null
               }
-              members={<TripMembersPanel {...panels.members} />}
+              members={activeTab === "members" ? <TripMembersPanel {...panels.members} /> : null}
             />
           </Suspense>
         </div>

@@ -18,6 +18,15 @@ function pickFirstString(
   return fallback;
 }
 
+function initialsFrom(name: string, email: string) {
+  const source = name.trim() || email.trim() || "G";
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
+  }
+  return source.slice(0, 2).toUpperCase();
+}
+
 export type TripMembersPanelProps = {
   tripId: string;
   tripTitle: string;
@@ -81,7 +90,7 @@ export default function TripMembersPanel({
             No members yet. Share the invite link above.
           </p>
         ) : (
-          <ul className="mt-4 divide-y divide-slate-100">
+          <ul className="mt-4 space-y-2.5">
             {rows.map((m) => {
               const rowId = m.id != null && m.id !== "" ? String(m.id) : "";
               const rawName = pickFirstString(m, ["name"], "");
@@ -96,48 +105,55 @@ export default function TripMembersPanel({
               const displayEmail = email || "—";
               const roleRaw = pickFirstString(m, ["role"], "member").toLowerCase();
               const isOrganizer = roleRaw === "organizer";
+              const initials = initialsFrom(displayName, displayEmail);
 
               return (
-                <li key={rowId || `${displayName}-${displayEmail}`} className="py-4 first:pt-1">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400">
-                        Name
-                      </p>
-                      <p className="truncate text-base font-semibold text-slate-900">
-                        {displayName}
-                      </p>
-                      <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400">
-                        Email
-                      </p>
-                      <p className="break-all text-sm text-slate-600">{displayEmail}</p>
-                      {pending ? (
-                        <p className="text-xs text-slate-500">
-                          Not in the app yet — send them the invite link.
-                        </p>
-                      ) : null}
+                <li key={rowId || `${displayName}-${displayEmail}`}>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/40 p-3.5">
+                    <div className="flex items-start gap-3">
+                      <span
+                        className={`mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                          isOrganizer
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-slate-200 text-slate-700"
+                        }`}
+                      >
+                        {initials}
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-slate-900">{displayName}</p>
+                          {isOrganizer ? (
+                            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                              Organizer
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                              Member
+                            </span>
+                          )}
+                          {pending ? (
+                            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                              Invite pending
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 break-all text-xs text-slate-500">{displayEmail}</p>
+                        {pending ? (
+                          <p className="mt-1 text-xs text-slate-500">
+                            Not in the app yet - send them the invite link.
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
 
-                    <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-                      <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400 sm:text-right">
-                        Role
-                      </p>
-                      {isOrganizer ? (
-                        <span className="inline-flex w-fit items-center rounded-xl border-2 border-emerald-500/80 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900 shadow-sm shadow-emerald-900/5">
-                          Organizer
-                        </span>
-                      ) : (
-                        <span className="inline-flex w-fit items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
-                          Member
-                        </span>
-                      )}
+                    <div className="mt-3 flex items-center justify-end">
                       {canInvite && rowId ? (
-                        <div className="pt-1 sm:flex sm:justify-end">
-                          <DeleteForm
-                            action={deleteMemberAction.bind(null, tripId, rowId)}
-                            noun="member"
-                          />
-                        </div>
+                        <DeleteForm
+                          action={deleteMemberAction.bind(null, tripId, rowId)}
+                          noun="member"
+                        />
                       ) : null}
                     </div>
                   </div>

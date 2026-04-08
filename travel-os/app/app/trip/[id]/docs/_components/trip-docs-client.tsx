@@ -17,6 +17,7 @@ import { detectDocumentKind } from "../_lib/file-kind";
 import DocumentViewerModal from "./document-viewer-modal";
 
 const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCS_BUCKET || "trip-docs";
+const QUICK_ACTION_EVENT = "travel-os-open-quick-action";
 
 export type DocumentDTO = {
   id: string;
@@ -30,6 +31,7 @@ type TripDocsClientProps = {
   documents: DocumentDTO[];
   initialSuccess: string;
   initialError: string;
+  autoOpenUpload?: boolean;
 };
 
 function formatUploadedAt(iso: string | null) {
@@ -518,6 +520,7 @@ export default function TripDocsClient({
   documents,
   initialSuccess,
   initialError,
+  autoOpenUpload = false,
 }: TripDocsClientProps) {
   const router = useRouter();
   const activeTripTab = useTripActiveTab();
@@ -545,6 +548,21 @@ export default function TripDocsClient({
   }, [setOpenUpload, openUploadSheet]);
 
   useEffect(() => {
+    if (activeTripTab !== "docs" || !autoOpenUpload) return;
+    setUploadOpen(true);
+  }, [activeTripTab, autoOpenUpload]);
+
+  useEffect(() => {
+    const onQuickAction = (event: Event) => {
+      if (activeTripTab !== "docs") return;
+      const detail = (event as CustomEvent<{ action?: string }>).detail;
+      if (detail?.action === "doc") setUploadOpen(true);
+    };
+    window.addEventListener(QUICK_ACTION_EVENT, onQuickAction as EventListener);
+    return () => window.removeEventListener(QUICK_ACTION_EVENT, onQuickAction as EventListener);
+  }, [activeTripTab]);
+
+  useEffect(() => {
     if (activeTripTab !== "docs") {
       setUploadOpen(false);
     }
@@ -567,7 +585,7 @@ export default function TripDocsClient({
 
   return (
     <>
-      <header className="space-y-1">
+      <header className="space-y-1 pb-2">
         <p className="text-sm text-slate-600">
           Tickets, PDFs, and travel paperwork for this trip.
         </p>

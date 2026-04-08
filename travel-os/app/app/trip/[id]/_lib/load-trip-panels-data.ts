@@ -14,6 +14,7 @@ import {
 import { getResolvedPublicSiteUrl } from "@/lib/public-site-url";
 import { countTripMembers, getMemberRole } from "@/lib/trip-membership";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { TripTabKey } from "@/app/app/trip/[id]/_lib/trip-tab-keys";
 
 type TripRecord = Record<string, string | number | null>;
 type ExpenseRecord = Record<string, string | number | null>;
@@ -178,50 +179,65 @@ export async function loadTripTabPanelsData(
   tripRow: TripRecord,
   tripTitle: string,
   query: {
+    activeTab: TripTabKey;
     expensesError: string;
     docsSuccess: string;
     docsError: string;
     membersError: string;
   },
 ): Promise<TripTabPanelsData> {
-  const memberRole = await getMemberRole(supabase, tripId, user.id);
+  const wantsExpenses = query.activeTab === "expenses";
+  const wantsDocs = query.activeTab === "docs";
+  const wantsChat = query.activeTab === "chat";
+  const wantsMembers = query.activeTab === "members";
+  const needsRole = wantsExpenses || wantsMembers;
+
+  const memberRole = needsRole ? await getMemberRole(supabase, tripId, user.id) : null;
   const isOrganizer = memberRole === "organizer";
 
-  const [
-    { data: expensesData },
-    { data: expenseCommentsData },
-    { data: membersForExpenseLabels },
-    profileRes,
-    { data: documentsData },
-    { data: messagesData },
-    { data: membersDataChat },
-    { data: membersRowsData, error: membersListError },
-  ] = await Promise.all([
-    supabase
-      .from("expenses")
-      .select("*")
-      .eq("trip_id", tripId)
-      .order("date", { ascending: false }),
-    supabase
-      .from("comments")
-      .select("id, trip_id, user_id, entity_type, entity_id, content, created_at")
-      .eq("trip_id", tripId)
-      .eq("entity_type", "expense"),
-    supabase.from("members").select("user_id, name, email").eq("trip_id", tripId),
-    supabase.from("profiles").select("name").eq("id", user.id).maybeSingle(),
-    supabase
-      .from("documents")
-      .select("id, file_name, file_url, created_at")
-      .eq("trip_id", tripId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("messages")
-      .select("id, trip_id, user_id, content, created_at")
-      .eq("trip_id", tripId)
-      .order("created_at", { ascending: true }),
-    supabase.from("members").select("user_id, name, email").eq("trip_id", tripId),
-    supabase.from("members").select("*").eq("trip_id", tripId).order("created_at", { ascending: true }),
-  ]);
+  const [{ data: expensesData }, { data: expenseCommentsData }, { data: membersForExpenseLabels }] =
+    wantsExpenses
+      ? await Promise.all([
+          supabase
+            .from("expenses")
+            .select("*")
+            .eq("trip_id", tripId)
+            .order("date", { ascending: false }),
+          supabase
+            .from("comments")
+            .select("id, trip_id, user_id, entity_type, entity_id, content, created_at")
+            .eq("trip_id", tripId)
+            .eq("entity_type", "expense"),
+          supabase.from("members").select("user_id, name, email").eq("trip_id", tripId),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }];
+
+  const { data: documentsData } = wantsDocs
+    ? await supabase
+        .from("documents")
+        .select("id, file_name, file_url, created_at")
+        .eq("trip_id", tripId)
+        .order("created_at", { ascending: false })
+    : { data: [] };
+
+  const [{ data: messagesData }, { data: membersDataChat }] = wantsChat
+    ? await Promise.all([
+        supabase
+          .from("messages")
+          .select("id, trip_id, user_id, content, created_at")
+          .eq("trip_id", tripId)
+          .order("created_at", { ascending: true }),
+        supabase.from("members").select("user_id, name, email").eq("trip_id", tripId),
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const { data: membersRowsData, error: membersListError } = wantsMembers
+    ? await supabase.from("members").select("*").eq("trip_id", tripId).order("created_at", { ascending: true })
+    : { data: [], error: null };
+
+  const profileRes = wantsExpenses || wantsMembers
+    ? await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle()
+    : { data: null, error: null };
 
   const expenses = (expensesData ?? []) as ExpenseRecord[];
   const expenseIds = expenses
@@ -326,7 +342,7 @@ export async function loadTripTabPanelsData(
   );
 
   const defaultPaidBy = currentUserDisplayLabel;
-  const memberCount = await countTripMembers(supabase, tripId);
+  const memberCount = wantsExpenses ? await countTripMembers(supabase, tripId) : 0;
 
   const totalSpent = expenses.reduce(
     (sum, expense) => sum + pickFirstNumber(expense, ["amount", "total_amount"]),
@@ -431,8 +447,8 @@ export async function loadTripTabPanelsData(
       "You";
   }
 
-  const inviteCode = pickFirstString(tripRow, ["invite_code"], "").trim();
-  const baseUrl = await getResolvedPublicSiteUrl();
+  const inviteCode = wantsMembers ? pickFirstString(tripRow, ["invite_code"], "").trim() : "";
+  const baseUrl = wantsMembers ? await getResolvedPublicSiteUrl() : "";
   const hasInviteCode = inviteCode.length > 0;
   const joinUrl = hasInviteCode
     ? `${baseUrl}/join?code=${encodeURIComponent(inviteCode)}`
@@ -446,9 +462,16 @@ export async function loadTripTabPanelsData(
     const base = row as GenericRecord;
     const userIdRaw = (row as { user_id?: string | number | null }).user_id;
     const uid = userIdRaw == null ? "" : String(userIdRaw);
-    const profileName = uid ? profileNameByUserId[uid] : "";
-    if (!profileName) return base;
-    return { ...base, name: profileName };
+    if (!uid) return base;
+    const profileName = profileNameByUserId[uid];
+    const currentUserFallbackName =
+      uid === user.id
+        ? profileNameFromDb ||
+          (typeof metaName === "string" && metaName.trim().length > 0 ? metaName.trim() : "")
+        : "";
+    const resolvedName = profileName || currentUserFallbackName;
+    if (!resolvedName) return base;
+    return { ...base, name: resolvedName };
   });
 
   const membersPanel: TripMembersPanelProps = {

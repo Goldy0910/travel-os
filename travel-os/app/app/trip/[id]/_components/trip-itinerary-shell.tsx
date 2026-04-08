@@ -25,6 +25,7 @@ const FALLBACK_TRIP_EDIT_DEFAULTS: TripEditDefaults = {
   startDate: "",
   endDate: "",
 };
+const QUICK_ACTION_EVENT = "travel-os-open-quick-action";
 
 export type ItineraryItemDTO = {
   id: string;
@@ -49,6 +50,7 @@ type TripItineraryShellProps = {
   activityCommentsByItemId: Record<string, EntityCommentDTO[]>;
   currentUserId: string;
   memberLabelByUserId: Record<string, string>;
+  autoOpenAddActivity?: boolean;
 };
 
 function formatDateLabel(input: string) {
@@ -257,6 +259,7 @@ export default function TripItineraryShell({
   activityCommentsByItemId,
   currentUserId,
   memberLabelByUserId,
+  autoOpenAddActivity = false,
 }: TripItineraryShellProps) {
   const activeTripTab = useTripActiveTab();
   const itineraryTabActive = activeTripTab === "itinerary";
@@ -304,6 +307,21 @@ export default function TripItineraryShell({
     setOpenActivity(openAdd);
     return () => setOpenActivity(null);
   }, [setOpenActivity, openAdd]);
+
+  useEffect(() => {
+    if (!itineraryTabActive || !autoOpenAddActivity) return;
+    openAdd();
+  }, [autoOpenAddActivity, itineraryTabActive, openAdd]);
+
+  useEffect(() => {
+    const onQuickAction = (event: Event) => {
+      if (!itineraryTabActive) return;
+      const detail = (event as CustomEvent<{ action?: string }>).detail;
+      if (detail?.action === "activity") openAdd();
+    };
+    window.addEventListener(QUICK_ACTION_EVENT, onQuickAction as EventListener);
+    return () => window.removeEventListener(QUICK_ACTION_EVENT, onQuickAction as EventListener);
+  }, [itineraryTabActive, openAdd]);
 
   const openAddForDate = (date: string) => {
     formKeySeq.current += 1;

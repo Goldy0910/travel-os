@@ -22,10 +22,12 @@ export function useFormActionFeedback() {
         if (r.ok) {
           toast.success(r.message);
           onSuccess?.();
-          router.refresh();
           if (r.redirectTo) {
             router.push(r.redirectTo);
+            router.refresh();
+            return;
           }
+          router.refresh();
         } else {
           toast.error(r.error);
         }
@@ -41,10 +43,12 @@ export function useFormActionFeedback() {
         if (r.ok) {
           toast.success(r.message);
           onSuccess?.();
-          router.refresh();
           if (r.redirectTo) {
             router.push(r.redirectTo);
+            router.refresh();
+            return;
           }
+          router.refresh();
         } else {
           toast.error(r.error);
         }

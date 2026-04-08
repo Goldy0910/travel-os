@@ -10,7 +10,7 @@ import {
   type TripTabKey,
 } from "@/app/app/trip/[id]/_lib/trip-tab-keys";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type ReactNode, useCallback, useEffect, useRef, useTransition } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 const TAB_COUNT = TRIP_TAB_KEYS.length;
 
@@ -43,11 +43,35 @@ export default function TripSwipeTabs({
 
   const tabKey = parseTripTabParam(searchParams.get("tab"));
   const urlIndex = TRIP_TAB_KEYS.indexOf(tabKey);
+  const [uiTabKey, setUiTabKey] = useState<TripTabKey>(tabKey);
 
   const tabBarRef = useRef<HTMLDivElement>(null);
   const tabBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const previousUrlIndexRef = useRef(urlIndex);
+  const prefetchedRef = useRef<Set<string>>(new Set());
+  const panelCacheRef = useRef<Partial<Record<TripTabKey, ReactNode>>>({});
   const [isTabPending, startTabTransition] = useTransition();
+  const uiIndex = Math.max(0, TRIP_TAB_KEYS.indexOf(uiTabKey));
+
+  const tabHrefByKey = useMemo(() => {
+    const base = new URLSearchParams(searchParams.toString());
+    const out: Record<TripTabKey, string> = {
+      itinerary: pathname,
+      expenses: pathname,
+      chat: pathname,
+      docs: pathname,
+      guides: pathname,
+      members: pathname,
+    };
+    for (const key of TRIP_TAB_KEYS) {
+      const sp = new URLSearchParams(base.toString());
+      if (key === "itinerary") sp.delete("tab");
+      else sp.set("tab", key);
+      const qs = sp.toString();
+      out[key] = qs ? `${pathname}?${qs}` : pathname;
+    }
+    return out;
+  }, [pathname, searchParams]);
 
   const replaceTab = useCallback(
     (key: TripTabKey) => {
@@ -61,6 +85,16 @@ export default function TripSwipeTabs({
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
     [pathname, router, searchParams],
+  );
+
+  const prefetchTab = useCallback(
+    (key: TripTabKey) => {
+      const href = tabHrefByKey[key];
+      if (!href || prefetchedRef.current.has(href)) return;
+      prefetchedRef.current.add(href);
+      router.prefetch(href);
+    },
+    [router, tabHrefByKey],
   );
 
   /** Reset vertical scroll when the active tab changes (URL-driven). */
@@ -80,7 +114,11 @@ export default function TripSwipeTabs({
   }, [urlIndex]);
 
   useEffect(() => {
-    const btn = tabBtnRefs.current[urlIndex];
+    setUiTabKey(tabKey);
+  }, [tabKey]);
+
+  useEffect(() => {
+    const btn = tabBtnRefs.current[uiIndex];
     const bar = tabBarRef.current;
     if (!btn || !bar) return;
     const gr = bar.getBoundingClientRect();
@@ -90,21 +128,64 @@ export default function TripSwipeTabs({
     } else if (br.right > gr.right - 8) {
       bar.scrollTo({ left: bar.scrollLeft + (br.right - gr.right) + 16, behavior: "smooth" });
     }
-  }, [urlIndex]);
+  }, [uiIndex]);
+
+  useEffect(() => {
+    // Warm likely next taps first.
+    const active = uiIndex;
+    const likely = [active - 1, active + 1]
+      .filter((i) => i >= 0 && i < TAB_COUNT)
+      .map((i) => TRIP_TAB_KEYS[i]!);
+    likely.forEach(prefetchTab);
+
+    // Then prefetch remaining tabs in the background.
+    const rest = TRIP_TAB_KEYS.filter((k) => k !== tabKey && !likely.includes(k));
+    let cancelled = false;
+    const schedule =
+      typeof window !== "undefined" && "requestIdleCallback" in window
+        ? (cb: () => void) => (window as Window & { requestIdleCallback: (fn: () => void) => number }).requestIdleCallback(cb)
+        : (cb: () => void) => window.setTimeout(cb, 250);
+    schedule(() => {
+      if (cancelled) return;
+      rest.forEach(prefetchTab);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [prefetchTab, tabKey, uiIndex]);
 
   const goToIndex = useCallback(
     (i: number) => {
       const clamped = Math.max(0, Math.min(TAB_COUNT - 1, i));
       const key = TRIP_TAB_KEYS[clamped]!;
-      if (key === tabKey) return;
+      if (key === uiTabKey) return;
+
+      const cachedPanel = panelCacheRef.current[key];
+      if (cachedPanel != null) {
+        setUiTabKey(key);
+        const next = new URLSearchParams(searchParams.toString());
+        if (key === "itinerary") next.delete("tab");
+        else next.set("tab", key);
+        const qs = next.toString();
+        window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
+        return;
+      }
       startTabTransition(() => {
         replaceTab(key);
       });
     },
-    [replaceTab, tabKey],
+    [pathname, replaceTab, searchParams, uiTabKey],
   );
 
-  const activeTabKey: TripTabKey = TRIP_TAB_KEYS[urlIndex] ?? "itinerary";
+  const activeTabKey: TripTabKey = TRIP_TAB_KEYS[uiIndex] ?? "itinerary";
+
+  for (let i = 0; i < panels.length; i += 1) {
+    const key = TRIP_TAB_KEYS[i]!;
+    const panel = panels[i];
+    if (panel != null) {
+      panelCacheRef.current[key] = panel;
+    }
+  }
 
   return (
     <TripActiveTabProvider activeTab={activeTabKey}>
@@ -116,7 +197,7 @@ export default function TripSwipeTabs({
             aria-label="Trip sections"
           >
             {TRIP_TAB_KEYS.map((key, i) => {
-              const active = i === urlIndex;
+              const active = i === uiIndex;
               return (
                 <button
                   key={key}
@@ -128,6 +209,8 @@ export default function TripSwipeTabs({
                   aria-selected={active}
                   aria-controls={`trip-panel-${key}`}
                   id={`trip-tab-${key}`}
+                  onPointerEnter={() => prefetchTab(key)}
+                  onTouchStart={() => prefetchTab(key)}
                   onClick={() => goToIndex(i)}
                   className={`relative min-h-11 shrink-0 touch-manipulation rounded-t-lg px-3.5 py-3 text-sm transition-colors sm:px-4 ${
                     active
@@ -159,7 +242,8 @@ export default function TripSwipeTabs({
             ) : null}
             {panels.map((panel, i) => {
               const key = TRIP_TAB_KEYS[i]!;
-              const visible = i === urlIndex;
+              const visible = i === uiIndex;
+              const content = panel ?? panelCacheRef.current[key] ?? null;
               return (
                 <section
                   key={key}
@@ -170,7 +254,7 @@ export default function TripSwipeTabs({
                   hidden={!visible}
                   className="box-border w-full px-4 py-4 pb-28"
                 >
-                  {panel}
+                  {content}
                 </section>
               );
             })}

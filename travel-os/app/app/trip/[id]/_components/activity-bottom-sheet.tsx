@@ -4,6 +4,7 @@ import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
 import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import type { FormActionResult } from "@/lib/form-action-result";
+import { useEffect, useMemo, useState } from "react";
 
 export type ActivitySheetInitial = {
   itemId?: string;
@@ -37,6 +38,25 @@ function mergeTimeForInput(raw: string): string {
   return "";
 }
 
+function to12hLabel(time24: string): string {
+  if (!/^\d{2}:\d{2}$/.test(time24)) return "No time selected";
+  const [hhRaw, mm] = time24.split(":");
+  const hh = Number(hhRaw);
+  if (!Number.isFinite(hh)) return "No time selected";
+  const suffix = hh >= 12 ? "PM" : "AM";
+  const h12 = hh % 12 || 12;
+  return `${h12}:${mm} ${suffix}`;
+}
+
+const QUICK_TIMES: Array<{ label: string; value: string }> = [
+  { label: "8:00 AM", value: "08:00" },
+  { label: "10:00 AM", value: "10:00" },
+  { label: "1:00 PM", value: "13:00" },
+  { label: "4:00 PM", value: "16:00" },
+  { label: "7:00 PM", value: "19:00" },
+  { label: "9:00 PM", value: "21:00" },
+];
+
 export default function ActivityBottomSheet({
   open,
   onClose,
@@ -46,6 +66,13 @@ export default function ActivityBottomSheet({
 }: ActivityBottomSheetProps) {
   const timeDefault = mergeTimeForInput(initial.time);
   const { pending, handleForm } = useFormActionFeedback();
+  const [timeValue, setTimeValue] = useState(timeDefault);
+
+  useEffect(() => {
+    setTimeValue(timeDefault);
+  }, [timeDefault, formKey, open]);
+
+  const timeReadable = useMemo(() => to12hLabel(timeValue), [timeValue]);
 
   return (
     <BottomSheetModal
@@ -94,12 +121,40 @@ export default function ActivityBottomSheet({
                 Time{" "}
                 <span className="font-normal text-slate-400">(optional)</span>
               </span>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {QUICK_TIMES.map((option) => {
+                  const active = timeValue === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setTimeValue(option.value)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                        active
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-700"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setTimeValue("")}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition"
+                >
+                  Clear
+                </button>
+              </div>
               <input
                 type="time"
                 name="time"
-                defaultValue={timeDefault}
+                value={timeValue}
+                onChange={(e) => setTimeValue(e.target.value)}
                 className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
               />
+              <p className="mt-1 text-xs text-slate-500">{timeReadable}</p>
             </label>
             <label className="block">
               <span className="text-sm font-medium text-slate-700">Date</span>

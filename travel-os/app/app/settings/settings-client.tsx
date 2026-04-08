@@ -4,7 +4,7 @@ import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { upsertProfileOrUserMetadata } from "@/lib/profiles-fallback";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const PROFILE_BUCKET = "profile-images";
@@ -48,6 +48,20 @@ export default function SettingsClient({
     const supabase = createSupabaseBrowserClient();
     await upsertProfileOrUserMetadata(supabase, userId, row);
   };
+
+  const syncDisplayNameEverywhere = useCallback(
+    async (nextName: string) => {
+      const supabase = createSupabaseBrowserClient();
+      const trimmed = nextName.trim();
+      await Promise.allSettled([
+        supabase.auth.updateUser({
+          data: { full_name: trimmed },
+        }),
+        supabase.from("members").update({ name: trimmed || null }).eq("user_id", userId),
+      ]);
+    },
+    [userId],
+  );
 
   const onPickAvatar = () => fileRef.current?.click();
 
@@ -115,6 +129,7 @@ export default function SettingsClient({
         name: name.trim() || null,
         avatar_url: stableUrl,
       });
+      await syncDisplayNameEverywhere(name);
       toast.success("Profile updated.");
       router.refresh();
     } catch (err) {

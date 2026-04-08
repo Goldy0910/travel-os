@@ -312,6 +312,29 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
   const currentUserDisplayName =
     profileNameFromDb || metaName || user.email?.split("@")[0] || "You";
 
+  const memberUserIds = Array.from(
+    new Set(
+      members
+        .map((m) =>
+          typeof m.user_id === "string" || typeof m.user_id === "number"
+            ? String(m.user_id)
+            : "",
+        )
+        .filter((id) => id.length > 0),
+    ),
+  );
+  const { data: memberProfilesData } =
+    memberUserIds.length > 0
+      ? await supabase.from("profiles").select("id, name").in("id", memberUserIds)
+      : { data: [] as Array<{ id: string; name: string | null }> };
+  const profileNameByMemberUserId: Record<string, string> = {};
+  for (const row of memberProfilesData ?? []) {
+    const id = typeof row.id === "string" ? row.id : String(row.id ?? "");
+    const name =
+      typeof row.name === "string" && row.name.trim().length > 0 ? row.name.trim() : "";
+    if (id && name) profileNameByMemberUserId[id] = name;
+  }
+
   const currentUserLabel = user.email ?? user.id;
   const totalSpent = expenses.reduce(
     (s, e) => s + pickFirstNumber(e, ["amount", "total_amount"]),
@@ -527,7 +550,8 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
                   const name =
                     memberUserId === user.id
                       ? currentUserDisplayName
-                      : pickFirstString(m, ["name"], "");
+                      : profileNameByMemberUserId[memberUserId] ||
+                        pickFirstString(m, ["name"], "");
                   const email = pickFirstString(m, ["email"], "");
                   const label = name || email || "Member";
                   const ini = initialsFromName(name, email);

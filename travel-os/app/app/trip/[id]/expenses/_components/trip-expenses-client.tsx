@@ -55,7 +55,9 @@ type TripExpensesClientProps = {
   currentUserId: string;
   memberLabelByUserId: Record<string, string>;
   expenseCommentsById: Record<string, EntityCommentDTO[]>;
+  autoOpenAddExpense?: boolean;
 };
+const QUICK_ACTION_EVENT = "travel-os-open-quick-action";
 
 const LAST_SPLIT_KEY = "travel-os-last-expense-split-type";
 
@@ -595,6 +597,7 @@ export default function TripExpensesClient({
   currentUserId,
   memberLabelByUserId,
   expenseCommentsById,
+  autoOpenAddExpense = false,
 }: TripExpensesClientProps) {
   const activeTripTab = useTripActiveTab();
   const { setOpenExpense } = useTripFabRegistry();
@@ -614,6 +617,21 @@ export default function TripExpensesClient({
     setOpenExpense(openAdd);
     return () => setOpenExpense(null);
   }, [setOpenExpense, openAdd]);
+
+  useEffect(() => {
+    if (activeTripTab !== "expenses" || !autoOpenAddExpense) return;
+    openAdd();
+  }, [activeTripTab, autoOpenAddExpense, openAdd]);
+
+  useEffect(() => {
+    const onQuickAction = (event: Event) => {
+      if (activeTripTab !== "expenses") return;
+      const detail = (event as CustomEvent<{ action?: string }>).detail;
+      if (detail?.action === "expense") openAdd();
+    };
+    window.addEventListener(QUICK_ACTION_EVENT, onQuickAction as EventListener);
+    return () => window.removeEventListener(QUICK_ACTION_EVENT, onQuickAction as EventListener);
+  }, [activeTripTab, openAdd]);
 
   useEffect(() => {
     if (activeTripTab !== "expenses") {
