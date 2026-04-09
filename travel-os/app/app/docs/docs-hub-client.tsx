@@ -38,7 +38,7 @@ export default function DocsHubClient({ items, trips }: DocsHubClientProps) {
   }, [items, search, tripFilter]);
 
   return (
-    <section className="space-y-3">
+    <section className="min-w-0 space-y-3">
       <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <input
           value={search}
@@ -65,7 +65,7 @@ export default function DocsHubClient({ items, trips }: DocsHubClientProps) {
           No matching documents.
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="min-w-0 space-y-2">
           {filtered.map((item) => (
             <li key={item.id}>
               <HubDocItem

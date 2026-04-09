@@ -7,7 +7,15 @@ import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 
-const PROFILE_BUCKET = "profile-images";
+const PROFILE_BUCKET =
+  process.env.NEXT_PUBLIC_SUPABASE_PROFILE_BUCKET || "profile-images";
+
+function isBucketMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const maybe = err as { message?: string };
+  const msg = (maybe.message ?? "").toLowerCase();
+  return msg.includes("bucket") && msg.includes("not found");
+}
 
 function initialsFromName(name: string, email: string) {
   const base = name.trim() || email.trim() || "?";
@@ -111,7 +119,11 @@ export default function SettingsClient({
       router.refresh();
     } catch (err) {
       console.error(err);
-      const msg = err instanceof Error ? err.message : "Could not upload image.";
+      const msg = isBucketMissingError(err)
+        ? `Profile photo storage is not configured. Missing bucket: "${PROFILE_BUCKET}". Please run the profile storage migration or create this bucket in Supabase.`
+        : err instanceof Error
+          ? err.message
+          : "Could not upload image.";
       setError(msg);
       toast.error(msg);
     } finally {

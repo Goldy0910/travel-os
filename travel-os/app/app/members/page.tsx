@@ -1,6 +1,8 @@
 import HubMemberItem from "@/app/app/_components/hub-member-item";
+import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchTripsViaMembership } from "@/lib/trip-membership";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 type TripRow = { id: string; title: string | null; location: string | null };
@@ -83,7 +85,23 @@ export default async function MembersHubPage() {
           <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error.message}</p>
         ) : members.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
-            No members found yet.
+            <p>No members found yet.</p>
+            <div className="mt-3 flex gap-3">
+              <Link
+                href="/app/create-trip"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white"
+              >
+                Create trip
+                <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-white" />
+              </Link>
+              <Link
+                href="/app/home"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700"
+              >
+                Go home
+                <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-600" />
+              </Link>
+            </div>
           </div>
         ) : (
           <ul className="space-y-2">

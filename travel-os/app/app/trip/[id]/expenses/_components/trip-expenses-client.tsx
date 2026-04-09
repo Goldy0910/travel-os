@@ -700,7 +700,7 @@ export default function TripExpensesClient({
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="mt-4 space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">All expenses</h2>
 
         {expenses.length === 0 ? (

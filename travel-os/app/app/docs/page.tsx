@@ -1,5 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchTripsViaMembership } from "@/lib/trip-membership";
+import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import DocsHubClient, { type DocsHubItem } from "./docs-hub-client";
 
@@ -49,8 +51,17 @@ function extractStoragePath(rawUrl: string, bucket: string): string | null {
 export default async function DocsHubPage() {
   const supabase = await createSupabaseServerClient();
   const {
-    data: { user },
+    data: { user: authUser },
   } = await supabase.auth.getUser();
+  let user = authUser;
+  // Sometimes server `getUser()` can briefly return null during token-refresh races
+  // on client navigation; fall back to session user to avoid false sign-out redirects.
+  if (!user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    user = session?.user ?? null;
+  }
 
   if (!user) {
     redirect("/app/login");
@@ -131,8 +142,8 @@ export default async function DocsHubPage() {
   }));
 
   return (
-    <main className="bg-slate-50 px-4 py-6 pb-[calc(var(--travel-os-bottom-nav-h)+6rem)]">
-      <div className="mx-auto w-full max-w-md space-y-4">
+    <main className="w-full overflow-x-hidden bg-slate-50 px-4 py-6 pb-[calc(var(--travel-os-bottom-nav-h)+6rem)]">
+      <div className="mx-auto w-full min-w-0 max-w-md space-y-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Documents</h1>
           <p className="mt-1 text-sm text-slate-600">
@@ -146,7 +157,23 @@ export default async function DocsHubPage() {
           </p>
         ) : tripIds.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
-            No trips yet. Create a trip to start uploading docs.
+            <p>No trips yet. Create a trip to start uploading docs.</p>
+            <div className="mt-3 flex gap-3">
+              <Link
+                href="/app/create-trip"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white"
+              >
+                Create trip
+                <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-white" />
+              </Link>
+              <Link
+                href="/app/home"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700"
+              >
+                Go home
+                <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-600" />
+              </Link>
+            </div>
           </div>
         ) : (
           <DocsHubClient

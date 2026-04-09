@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function JoinWelcomeBanner({
   tripId,
@@ -10,6 +11,9 @@ export default function JoinWelcomeBanner({
   tripTitle: string;
 }) {
   const router = useRouter();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
 
   return (
     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 shadow-sm">
@@ -24,7 +28,9 @@ export default function JoinWelcomeBanner({
         <button
           type="button"
           onClick={() => {
+            setDismissed(true);
             router.replace(`/app/trip/${tripId}`);
+            router.refresh();
           }}
           className="shrink-0 rounded-lg bg-emerald-800 px-3 py-1.5 text-xs font-semibold text-white"
         >

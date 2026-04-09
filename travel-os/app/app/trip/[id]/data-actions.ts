@@ -580,7 +580,7 @@ export async function deleteMemberAction(
 
   const { data: row } = await supabase
     .from("members")
-    .select("user_id, role")
+    .select("user_id, email, role")
     .eq("id", memberRowId)
     .eq("trip_id", tripId)
     .maybeSingle();
@@ -603,17 +603,33 @@ export async function deleteMemberAction(
     }
   }
 
-  const { error } = await supabase
-    .from("members")
-    .delete()
-    .eq("id", memberRowId)
-    .eq("trip_id", tripId);
+  const baseDelete = supabase.from("members").delete().eq("trip_id", tripId);
+  let deleteError: { message: string } | null = null;
+  if (row.user_id != null) {
+    const { error } = await baseDelete.eq("user_id", row.user_id);
+    deleteError = error;
+  } else if (typeof row.email === "string" && row.email.trim().length > 0) {
+    const { error } = await baseDelete.eq("email", row.email.trim());
+    deleteError = error;
+  } else {
+    const { error } = await supabase
+      .from("members")
+      .delete()
+      .eq("id", memberRowId)
+      .eq("trip_id", tripId);
+    deleteError = error;
+  }
 
-  if (error) {
-    return actionError(error.message || "Could not remove member.");
+  if (deleteError) {
+    return actionError(deleteError.message || "Could not remove member.");
   }
 
   revalidatePath(`/app/trip/${tripId}/members`);
   revalidatePath(`/app/trip/${tripId}`);
+  revalidatePath("/app/trips");
+  revalidatePath("/app/home");
+  revalidatePath("/app/docs");
+  revalidatePath("/app/expenses");
+  revalidatePath("/app/members");
   return actionSuccess("Member removed.");
 }

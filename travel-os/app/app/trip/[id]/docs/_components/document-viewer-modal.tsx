@@ -48,14 +48,26 @@ export default function DocumentViewerModal({
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/90 px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-sm">
         <p className="min-w-0 flex-1 truncate text-sm font-medium text-white">{fileName}</p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-lg text-white transition hover:bg-white/10"
-          aria-label="Close preview"
-        >
-          ×
-        </button>
+        <div className="flex items-center gap-1">
+          <a
+            href={url}
+            download={fileName}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-3 text-xs font-semibold text-white transition hover:bg-white/10"
+            aria-label="Download file"
+          >
+            Download
+          </a>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-lg text-white transition hover:bg-white/10"
+            aria-label="Close preview"
+          >
+            ×
+          </button>
+        </div>
       </header>
       {kind === "pdf" ? (
         <div className="shrink-0 border-b border-white/10 bg-black/80 px-4 py-2 text-center">

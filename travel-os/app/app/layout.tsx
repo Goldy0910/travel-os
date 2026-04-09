@@ -1,6 +1,7 @@
 import { AppHeader, AppHeaderProvider } from "@/components/AppHeader";
 import { Suspense } from "react";
 import MobileBottomNav from "./_components/mobile-bottom-nav";
+import NoInternetModal from "./_components/no-internet-modal";
 
 export default function AppShellLayout({
   children,
@@ -21,6 +22,7 @@ export default function AppShellLayout({
       <Suspense fallback={null}>
         <MobileBottomNav />
       </Suspense>
+      <NoInternetModal />
     </AppHeaderProvider>
   );
 }

@@ -3,6 +3,7 @@
 import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
 import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
+import { showNoInternetModal } from "@/app/app/_components/no-internet-modal";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useTripActiveTab } from "../../_lib/trip-active-tab-context";
 import { useTripFabRegistry } from "../../_lib/trip-tab-fab-registry";
@@ -18,6 +19,8 @@ import DocumentViewerModal from "./document-viewer-modal";
 
 const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCS_BUCKET || "trip-docs";
 const QUICK_ACTION_EVENT = "travel-os-open-quick-action";
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_FILE_TYPES = /\.(pdf|jpe?g|png|gif|webp|heic|bmp|svg|txt|csv|doc|docx|xls|xlsx|ppt|pptx)$/i;
 
 export type DocumentDTO = {
   id: string;
@@ -48,8 +51,21 @@ function formatUploadedAt(iso: string | null) {
 function isAllowedFile(file: File) {
   if (file.type.startsWith("image/")) return true;
   if (file.type === "application/pdf") return true;
+  if (
+    file.type === "text/plain" ||
+    file.type === "text/csv" ||
+    file.type.includes("wordprocessingml") ||
+    file.type.includes("spreadsheetml") ||
+    file.type.includes("presentationml")
+  ) {
+    return true;
+  }
   const lower = file.name.toLowerCase();
-  return /\.(jpe?g|png|gif|webp|heic|pdf)$/i.test(lower);
+  return ALLOWED_FILE_TYPES.test(lower);
+}
+
+function formatMb(bytes: number) {
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 function useDismissOnOutsideClick(
@@ -256,13 +272,25 @@ function DocsUploadSheet({
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      showNoInternetModal();
+      return;
+    }
     const file = inputRef.current?.files?.[0];
     if (!file || file.size === 0) {
       setError("Choose a file first.");
       return;
     }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError(
+        `File is too large (${formatMb(file.size)}). Maximum allowed size is 5.00 MB.`,
+      );
+      return;
+    }
     if (!isAllowedFile(file)) {
-      setError("Only images or PDFs are allowed.");
+      setError(
+        "Unsupported file type. Allowed: PDF, JPG/JPEG, PNG, GIF, WEBP, HEIC, BMP, SVG, TXT, CSV, DOC/DOCX, XLS/XLSX, PPT/PPTX.",
+      );
       return;
     }
 
@@ -281,6 +309,11 @@ function DocsUploadSheet({
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          showNoInternetModal();
+          setUploading(false);
+          return;
+        }
         setError("You must be signed in to upload.");
         setUploading(false);
         return;
@@ -297,6 +330,14 @@ function DocsUploadSheet({
         });
 
       if (uploadError) {
+        const lowerMsg = (uploadError.message || "").toLowerCase();
+        if (lowerMsg.includes("too large") || lowerMsg.includes("payload") || lowerMsg.includes("size")) {
+          setError(
+            `Upload failed because file is too large (${formatMb(file.size)}). Please use a file up to 5.00 MB.`,
+          );
+          setUploading(false);
+          return;
+        }
         setError(
           uploadError.message ||
             "Upload failed. Check that the Storage bucket exists and policies allow uploads.",
@@ -324,6 +365,11 @@ function DocsUploadSheet({
       onClose();
       onUploaded();
     } catch (err) {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        showNoInternetModal();
+        setUploading(false);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setUploading(false);
@@ -351,7 +397,7 @@ function DocsUploadSheet({
               <input
                 ref={inputRef}
                 type="file"
-                accept="image/*,application/pdf"
+                accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.bmp,.svg,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,application/pdf,image/*,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 className="sr-only"
                 disabled={uploading}
                 onChange={() => {
@@ -368,6 +414,9 @@ function DocsUploadSheet({
             </label>
           </div>
         </div>
+        <p className="text-xs text-slate-500">
+          Max file size: 5 MB. Common formats supported (PDF, images, Office docs, text/csv).
+        </p>
 
         <label className="block">
           <span className="text-sm font-medium text-slate-700">Display name</span>

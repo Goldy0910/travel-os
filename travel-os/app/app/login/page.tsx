@@ -146,8 +146,8 @@ export default function LoginPage() {
   return (
     <>
       <SetAppHeader title="Log in" showBack />
-      <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-10">
-      <div className="mb-6 w-full max-w-md self-start sm:self-center">
+      <main className="flex min-h-screen flex-col items-center justify-start bg-slate-50 px-4 py-4 sm:py-8 md:justify-center md:py-10">
+      <div className="mb-4 w-full max-w-md self-start sm:self-center">
         <BackLink href="/">Back to website</BackLink>
       </div>
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">

@@ -143,6 +143,10 @@ export default function MobileBottomNav() {
     ? pathForUi.slice(4)
     : pathForUi;
 
+  if (normalizedPath === "/login") {
+    return null;
+  }
+
   const tripFromHome =
     normalizedPath === "/home" ? (searchParams.get("trip")?.trim() || null) : null;
 

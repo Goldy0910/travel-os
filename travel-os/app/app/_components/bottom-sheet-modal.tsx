@@ -1,7 +1,7 @@
 "use client";
 
 import { useLockScroll } from "@/app/app/_hooks/use-lock-scroll";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type BottomSheetModalProps = {
@@ -31,6 +31,7 @@ export default function BottomSheetModal({
   showHandle = true,
 }: BottomSheetModalProps) {
   const [mounted, setMounted] = useState(false);
+  const scrollBodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     queueMicrotask(() => setMounted(true));
@@ -46,6 +47,18 @@ export default function BottomSheetModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const resetScroll = () => {
+      if (scrollBodyRef.current) {
+        scrollBodyRef.current.scrollTop = 0;
+      }
+    };
+    resetScroll();
+    const raf = window.requestAnimationFrame(resetScroll);
+    return () => window.cancelAnimationFrame(raf);
+  }, [open]);
 
   if (!mounted) return null;
 
@@ -88,7 +101,10 @@ export default function BottomSheetModal({
               {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
             </div>
           ) : null}
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
+          <div
+            ref={scrollBodyRef}
+            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch] [touch-action:pan-y]"
+          >
             {children}
           </div>
         </div>

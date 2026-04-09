@@ -401,7 +401,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                 ) : null
               }
               guides={
-                activeTab === "guides" && guidesBundle ? (
+                activeTab === "guides" ? (
                   <TripGuidesPanel bundle={guidesBundle} destinationLabel={tripPlace || location} />
                 ) : null
               }
