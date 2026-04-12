@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MapPin } from "lucide-react";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
@@ -62,6 +62,62 @@ function formatDateLabel(input: string) {
     month: "short",
     day: "numeric",
   }).format(d);
+}
+
+function formatDateLabelUpper(input: string) {
+  return formatDateLabel(input).toUpperCase();
+}
+
+type ActivityVisual = {
+  emoji: string;
+  tags: string[];
+  tileClass: string;
+  tagClass: string;
+};
+
+/** Display-only “type” from title/location — no DB field; avoids migrations. */
+function inferActivityVisual(activityName: string | null, title: string | null, location: string | null): ActivityVisual {
+  const raw = `${activityName ?? ""} ${title ?? ""} ${location ?? ""}`.toLowerCase();
+  const food = /\b(dinner|lunch|breakfast|cafe|restaurant|food|eat|ivy|dining)\b/.test(raw);
+  const sight = /\b(nature|view|sight|museum|hill|walk|explore|temple|park)\b/.test(raw);
+  const adv = /\b(outdoor|outside|trek|bike|rental|adventure|zip|ski)\b/.test(raw);
+
+  if (food) {
+    const tags = ["Food"];
+    if (/\b(group|family|friends|together)\b/.test(raw)) tags.push("Group");
+    return {
+      emoji: "🍽",
+      tags: tags.slice(0, 3),
+      tileClass: "bg-[#FAEEDA] text-[#633806]",
+      tagClass: "bg-[#FAEEDA] text-[#633806]",
+    };
+  }
+  if (sight) {
+    const tags = ["Sightseeing"];
+    if (/\b(nature|park|hill|view|trail)\b/.test(raw)) tags.push("Nature");
+    return {
+      emoji: "🧭",
+      tags: tags.slice(0, 3),
+      tileClass: "bg-[#EAF3DE] text-[#27500A]",
+      tagClass: "bg-[#EAF3DE] text-[#27500A]",
+    };
+  }
+  if (adv) {
+    const tags = ["Adventure"];
+    if (/\b(outdoor|outside|trek|trail)\b/.test(raw)) tags.push("Outdoor");
+    return {
+      emoji: "🚴",
+      tags: tags.slice(0, 3),
+      tileClass: "bg-[#E6F1FB] text-[#0C447C]",
+      tagClass: "bg-[#E6F1FB] text-[#0C447C]",
+    };
+  }
+  return {
+    emoji: "📍",
+    tags: ["Plan"],
+    tileClass: "bg-slate-100 text-slate-700",
+    tagClass: "bg-slate-200/80 text-slate-700",
+  };
 }
 
 function IconDotsVertical({ className = "h-5 w-5" }: { className?: string }) {
@@ -129,10 +185,10 @@ function TripManageMenu({
         aria-haspopup="true"
         aria-controls={menuId}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15"
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-white/35 bg-transparent px-3 py-2 text-sm font-medium text-white/95 transition hover:bg-white/10"
       >
         Manage trip
-        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-4 w-4 shrink-0 opacity-90 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
       {open ? (
         <div
@@ -220,7 +276,7 @@ function ActivityRowMenu({
               onEdit();
             }}
           >
-            Update
+            Edit
           </button>
           <button
             type="button"
@@ -364,15 +420,22 @@ export default function TripItineraryShell({
       </p>
     ) : null;
 
+  const totalActivities = orderedDates.reduce((n, d) => n + (grouped[d]?.length ?? 0), 0);
+  const totalComments = Object.values(activityCommentsByItemId).reduce(
+    (n, arr) => n + (arr?.length ?? 0),
+    0,
+  );
+  const dayCount = orderedDates.length;
+
   return (
     <>
-      <section className="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-white shadow-md">
+      <section className="rounded-xl bg-[#1a2340] p-5 text-white shadow-md">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-semibold leading-tight">{tripTitle}</h1>
-            <p className="mt-2 text-sm text-slate-300">{dateRangeLabel}</p>
-            <p className="mt-2 text-sm text-slate-400">
-              Shared with {memberCount} {memberCount === 1 ? "member" : "members"}
+            <h1 className="text-xl font-bold leading-tight text-white">{tripTitle}</h1>
+            <p className="mt-2 text-sm text-white/70">{dateRangeLabel}</p>
+            <p className="mt-1 text-sm text-white/55">
+              {memberCount} member{memberCount === 1 ? "" : "s"}
             </p>
           </div>
           <TripManageMenu
@@ -387,8 +450,22 @@ export default function TripItineraryShell({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900">Itinerary</h2>
+      {orderedDates.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className="inline-flex items-center rounded-full border border-black/[0.12] bg-white px-3 py-1 text-xs font-medium text-slate-700">
+            {totalActivities} activit{totalActivities === 1 ? "y" : "ies"}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-black/[0.12] bg-white px-3 py-1 text-xs font-medium text-slate-700">
+            {dayCount} day{dayCount === 1 ? "" : "s"}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-black/[0.12] bg-white px-3 py-1 text-xs font-medium text-slate-700">
+            {totalComments} comment{totalComments === 1 ? "" : "s"}
+          </span>
+        </div>
+      ) : null}
+
+      <section className="mt-4 rounded-xl border border-black/[0.08] bg-white p-4 shadow-sm">
+        <h2 className="text-base font-semibold text-[#1a2340]">Itinerary</h2>
 
         {initialError ? (
           <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{initialError}</p>
@@ -397,59 +474,104 @@ export default function TripItineraryShell({
         {emptyState}
 
         {orderedDates.length > 0 ? (
-          <div className="mt-4 space-y-6">
+          <div className="mt-5 space-y-8">
             {orderedDates.map((date) => {
               const dateItems = grouped[date] ?? [];
               return (
-                <div key={date} className="relative pl-6">
-                  <div className="absolute bottom-0 left-2 top-1 w-px bg-slate-200" aria-hidden />
-                  <div className="absolute left-0 top-1 h-4 w-4 rounded-full border-2 border-slate-900 bg-white" />
-                  <p className="text-sm font-semibold text-slate-900">{formatDateLabel(date)}</p>
-                  <div className="mt-3 space-y-2">
+                <div key={date}>
+                  <div className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#1a2340]" aria-hidden />
+                    <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {formatDateLabelUpper(date)}
+                    </span>
+                    <span className="h-px min-w-0 flex-1 bg-slate-200" aria-hidden />
+                  </div>
+                  <div className="mt-4 space-y-3">
                     {dateItems.length === 0 ? (
-                      <div className="flex items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 py-2 pl-3 pr-1.5">
-                        <p className="min-w-0 flex-1 text-sm text-slate-500">
-                          No activities planned for this day
-                        </p>
+                      <button
+                        type="button"
+                        onClick={() => openAddForDate(date)}
+                        className="flex w-full min-h-12 touch-manipulation items-center justify-center gap-2 rounded-xl border border-dashed border-black/[0.15] bg-white py-3 text-sm text-slate-500 transition active:bg-slate-50"
+                      >
+                        <IconPlusSmall className="h-4 w-4" aria-hidden />
+                        Add activity
+                      </button>
+                    ) : (
+                      <>
+                        {dateItems.map((item) => {
+                          const vis = inferActivityVisual(
+                            item.activity_name,
+                            item.title,
+                            item.location,
+                          );
+                          const titleText = item.activity_name || item.title || "Activity";
+                          return (
+                            <article
+                              key={item.id}
+                              className="rounded-xl border border-black/[0.08] bg-white p-3 shadow-sm"
+                            >
+                              <div className="flex gap-3">
+                                <div
+                                  className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg text-lg leading-none ${vis.tileClass}`}
+                                  aria-hidden
+                                >
+                                  {vis.emoji}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[15px] font-medium leading-snug text-slate-900">
+                                    {titleText}
+                                  </p>
+                                  <p className="mt-1 flex items-start gap-1 text-xs text-slate-500">
+                                    <MapPin className="mt-0.5 h-3 w-3 shrink-0 opacity-70" aria-hidden />
+                                    <span>{item.location?.trim() ? item.location : "No location"}</span>
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0 items-start gap-1">
+                                  {item.time ? (
+                                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                      {item.time}
+                                    </span>
+                                  ) : (
+                                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
+                                      Time TBD
+                                    </span>
+                                  )}
+                                  <ActivityRowMenu tripId={tripId} item={item} onEdit={() => openEdit(item)} />
+                                </div>
+                              </div>
+                              {vis.tags.length > 0 ? (
+                                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                  {vis.tags.map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${vis.tagClass}`}
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                              <EntityCommentsBlock
+                                tripId={tripId}
+                                entityType="activity"
+                                entityId={item.id}
+                                currentUserId={currentUserId}
+                                initialComments={activityCommentsByItemId[item.id] ?? []}
+                                memberLabelByUserId={memberLabelByUserId}
+                                collapsible
+                              />
+                            </article>
+                          );
+                        })}
                         <button
                           type="button"
                           onClick={() => openAddForDate(date)}
-                          aria-label={`Add activity on ${formatDateLabel(date)}`}
-                          className="flex h-8 w-8 shrink-0 touch-manipulation items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200/90 hover:text-slate-800 active:scale-95"
+                          className="flex w-full min-h-12 touch-manipulation items-center justify-center gap-2 rounded-xl border border-dashed border-black/[0.15] bg-white py-3 text-sm text-slate-500 transition active:bg-slate-50"
                         >
-                          <IconPlusSmall className="h-4 w-4" />
+                          <IconPlusSmall className="h-4 w-4" aria-hidden />
+                          Add activity
                         </button>
-                      </div>
-                    ) : (
-                      dateItems.map((item) => (
-                        <article
-                          key={item.id}
-                          className="rounded-2xl border border-slate-100 bg-slate-50/50 p-3 shadow-sm"
-                        >
-                          <div className="flex gap-1">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-slate-900">
-                                {item.activity_name || item.title || "Activity"}
-                              </p>
-                              <p className="mt-1 text-sm text-slate-600">{item.location || "—"}</p>
-                              {item.time ? (
-                                <p className="mt-1 text-xs font-medium text-slate-500">{item.time}</p>
-                              ) : null}
-                            </div>
-                            <ActivityRowMenu tripId={tripId} item={item} onEdit={() => openEdit(item)} />
-                          </div>
-                          <div className="mt-3 border-t border-slate-200/80 pt-3">
-                            <EntityCommentsBlock
-                              tripId={tripId}
-                              entityType="activity"
-                              entityId={item.id}
-                              currentUserId={currentUserId}
-                              initialComments={activityCommentsByItemId[item.id] ?? []}
-                              memberLabelByUserId={memberLabelByUserId}
-                            />
-                          </div>
-                        </article>
-                      ))
+                      </>
                     )}
                   </div>
                 </div>

@@ -172,6 +172,22 @@ export default function MobileBottomNav() {
       normalizedPath.includes("/chat") ||
       isTripTabTool);
 
+  const tripTabLower = (tripTabParam ?? "").toLowerCase();
+  const hideFabOnTripTab =
+    !!pathTripId &&
+    (tripTabLower === "guides" ||
+      tripTabLower === "members" ||
+      tripTabLower === "chat");
+  const hideFabOnGlobalMembers = normalizedPath === "/members";
+  const showFab = !hideFabOnTripTab && !hideFabOnGlobalMembers;
+
+  const fabAriaLabel =
+    normalizedPath === "/home" || normalizedPath === "/trips"
+      ? "Create new trip"
+      : pathTripId
+        ? "Quick add for this trip"
+        : "Open quick actions";
+
   const tabs = [
     {
       label: "Homepage",
@@ -222,9 +238,10 @@ export default function MobileBottomNav() {
   };
 
   const onFabClick = () => {
-    // Home page always opens quick-actions sheet.
-    if (normalizedPath === "/home") {
-      setActionsOpen(true);
+    // Home and trips list are itinerary-style hubs; + starts a new trip (not expense/doc/activity shortcuts).
+    if (normalizedPath === "/home" || normalizedPath === "/trips") {
+      setFabLoading(true);
+      router.push("/app/create-trip");
       return;
     }
 
@@ -301,26 +318,28 @@ export default function MobileBottomNav() {
         </div>
       ) : null}
 
-      <button
-        type="button"
-        onClick={onFabClick}
-        disabled={fabLoading}
-        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[122] inline-flex h-12 w-12 min-h-12 min-w-12 max-h-12 max-w-12 [aspect-ratio:1/1] items-center justify-center overflow-hidden rounded-full bg-slate-900 p-0 leading-none text-white shadow-lg shadow-slate-900/25 outline-none focus:outline-none disabled:opacity-85"
-        aria-label="Open quick actions"
-        aria-expanded={actionsOpen}
-      >
-        <span className="pointer-events-none inline-flex h-5 w-5 items-center justify-center">
-          {fabLoading ? (
-            <span className="inline-flex items-center gap-1" aria-hidden>
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:0ms]" />
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:140ms]" />
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
-            </span>
-          ) : (
-            <Plus className="block h-5 w-5" strokeWidth={2.5} aria-hidden />
-          )}
-        </span>
-      </button>
+      {showFab ? (
+        <button
+          type="button"
+          onClick={onFabClick}
+          disabled={fabLoading}
+          className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[122] grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-slate-900 p-0 text-white shadow-lg shadow-slate-900/25 ring-0 outline-none [appearance:none] [backface-visibility:hidden] [box-sizing:border-box] [transform:translateZ(0)] [webkit-tap-highlight-color:transparent] focus:outline-none focus-visible:outline-none focus-visible:ring-0 disabled:opacity-85"
+          aria-label={fabAriaLabel}
+          aria-expanded={actionsOpen}
+        >
+          <span className="pointer-events-none grid place-items-center">
+            {fabLoading ? (
+              <span className="grid h-5 w-5 grid-cols-3 place-items-center gap-1" aria-hidden>
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:0ms]" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:140ms]" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
+              </span>
+            ) : (
+              <Plus className="block h-[18px] w-[18px]" strokeWidth={2.75} aria-hidden />
+            )}
+          </span>
+        </button>
+      ) : null}
 
       <nav
         className="pointer-events-auto fixed inset-x-0 bottom-0 z-[100] border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"

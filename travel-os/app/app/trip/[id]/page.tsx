@@ -342,8 +342,8 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   return (
     <>
       <SetAppHeader title={title} showBack />
-      <main className="flex w-full flex-col bg-slate-50 pb-28">
-        <div className="mx-auto flex w-full max-w-md flex-col">
+      <main className="flex w-full flex-col bg-[#f4f4f0] pb-28">
+        <div className="mx-auto flex w-full max-w-[390px] flex-col">
           <Suspense fallback={<TripTabsFallback />}>
             <TripSwipeTabs
               itinerary={

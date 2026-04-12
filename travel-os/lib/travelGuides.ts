@@ -167,12 +167,13 @@ export const travelGuides: Record<string, TravelGuidesBundle> = {
   },
   manali: {
     places: [
-      { title: "Top Places to Visit in Manali", youtubeId: "Q0lN9c5M8Rg" },
-      { title: "Manali 3 Day Travel Plan", youtubeId: "8v2x2wzQwRE" },
+      { title: "Top 10 Best Tourist Places to Visit in Manali", youtubeId: "pRRRcmXKUiE" },
+      { title: "Manali full tour in telugu", youtubeId: "SPNA6tQM7go" },
+      { title: "Manali Budget Tour Plan In Telugu", youtubeId: "McqrQtt6_V8" },
     ],
     food: [
-      { title: "Best Cafes and Food in Manali", youtubeId: "fJ9rUzIMcZQ" },
-      { title: "Street Food Guide in Old Manali", youtubeId: "dQw4w9WgXcQ" },
+      { title: "Best Street Food of Manali Mall Road | Old Manali", youtubeId: "uhHb65agJY0" },
+      { title: "Trying Manali Street Food for 24 Hours", youtubeId: "kRPYJ1gGqM0" },
     ],
     essentials: {
       weather:
@@ -203,6 +204,71 @@ export const travelGuides: Record<string, TravelGuidesBundle> = {
       { title: "Himachal Tourism", url: "https://himachaltourism.gov.in/" },
       { title: "Manali Weather Forecast", url: "https://www.accuweather.com/en/in/manali/188511/weather-forecast/188511" },
       { title: "HRTC Bus Booking", url: "https://online.hrtchp.com/" },
+    ],
+  },
+  mussoorie: {
+    places: [
+      { title: "Watch This Guide Before Visiting Mussoorie", youtubeId: "4yPf1jVZ-dQ&t=19s" },
+      { title: "Mussoorie full video Telugu", youtubeId: "yGjqFRGPVO8" },
+      { title: "Mussoorie Tourist Places", youtubeId: "yFB3NxgpnMY" },
+    ],
+    food: [
+      { title: "Mussoorie Mall Road Food Tour", youtubeId: "0E8OETCGe4A" },
+      { title: "76 Yr Old Restaurant in Mussoorie", youtubeId: "PLCYXYLVQBekLOIhZB6yS0mAxhx5uJFt4Y" },
+    ],
+    essentials: {
+      weather:
+        "Pleasant in summers (15–25°C), cold in winters (can drop below 5°C). Evenings are cool year-round. Monsoons bring heavy rain and fog—visibility can drop significantly.",
+      language:
+        "Hindi is widely spoken. English is well understood in hotels, cafes, and tourist areas.",
+      currency:
+        "Indian Rupee (INR). UPI works in most places on Mall Road, but carry cash for small shops and remote spots like Landour.",
+      fashion:
+        "Layered clothing is ideal. Light woolens in summer evenings, heavy jackets in winter, and waterproof gear during monsoon. Comfortable walking shoes are a must due to slopes.",
+      tips: [
+        "Only local vehicles are allowed inside Mall Road. Bike rentals and cabs are not allowed.",
+        "Mall Road gets extremely crowded in evenings—visit early morning or late night for a better experience.",
+        "Avoid driving inside Mall Road during peak hours; parking is limited and restricted.",
+        "Start early for places like Kempty Falls to avoid traffic and crowds.",
+        "Fog can disrupt views suddenly—keep buffer time in your itinerary.",
+        "Book hotels with parking if you’re driving; not all properties have it.",
+      ],
+    },
+    
+    transport: [
+      "Nearest railhead is  (~35 km). Taxis are easily available from there.",
+      "Nearest airport is  (~60 km).",
+      "Regular buses (including Volvo) run from Delhi to Dehradun; from there take taxi/shared cab to Mussoorie.",
+      "Local transport mainly consists of taxis; autos are limited.",
+      "Walking is the best way to explore areas like  and .",
+      "Roads are narrow and steep—self-driving can be tricky during peak season or rains.",
+    ],
+    
+    money: {
+      atm:
+        "ATMs are available around Mall Road and Library Chowk but may run out of cash during peak tourist seasons.",
+      exchange:
+        "Foreign currency exchange options are very limited—better to exchange in Delhi or Dehradun.",
+      tips: [
+        "Carry small cash for street food, local taxis, and entry tickets.",
+        "UPI works well in main areas but network issues can occur in Landour or outskirts.",
+        "Some cafes in Landour may prefer cash or have minimum card limits.",
+      ],
+    },
+    
+    links: [
+      {
+        title: "Uttarakhand Tourism",
+        url: "https://uttarakhandtourism.gov.in/",
+      },
+      {
+        title: "Mussoorie Weather Forecast",
+        url: "https://www.accuweather.com/en/in/mussoorie/189187/weather-forecast/189187",
+      },
+      {
+        title: "UTC Bus Services",
+        url: "https://utconline.uk.gov.in/",
+      },
     ],
   },
 };

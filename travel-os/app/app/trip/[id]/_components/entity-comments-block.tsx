@@ -2,6 +2,7 @@
 
 import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { ChevronDown, MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -24,6 +25,8 @@ type EntityCommentsBlockProps = {
   currentUserId: string;
   initialComments: EntityCommentDTO[];
   memberLabelByUserId: Record<string, string>;
+  /** Itinerary cards: collapsible thread + design-token styling. Expenses keep the default block. */
+  collapsible?: boolean;
 };
 
 function formatCommentTime(iso: string) {
@@ -44,6 +47,18 @@ function labelFor(
   return memberLabelByUserId[userId]?.trim() || "Member";
 }
 
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const a = parts[0]?.[0];
+    const b = parts[1]?.[0];
+    if (a && b) return `${a}${b}`.toUpperCase();
+  }
+  const one = parts[0] ?? "";
+  if (one.length >= 2) return one.slice(0, 2).toUpperCase();
+  return (one[0] ?? "?").toUpperCase();
+}
+
 /** Newest first for display */
 function sortCommentsNewestFirst(list: EntityCommentDTO[]) {
   return [...list].sort(
@@ -59,6 +74,7 @@ export default function EntityCommentsBlock({
   currentUserId,
   initialComments,
   memberLabelByUserId,
+  collapsible = false,
 }: EntityCommentsBlockProps) {
   const [comments, setComments] = useState<EntityCommentDTO[]>(() =>
     sortCommentsNewestFirst(initialComments),
@@ -66,6 +82,7 @@ export default function EntityCommentsBlock({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [threadOpen, setThreadOpen] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -113,6 +130,7 @@ export default function EntityCommentsBlock({
         if (prev.some((c) => c.id === row.id)) return prev;
         return sortCommentsNewestFirst([...prev, row]);
       });
+      if (collapsible) setThreadOpen(true);
     }
     setDraft("");
     toast.success("Comment posted.");
@@ -120,6 +138,125 @@ export default function EntityCommentsBlock({
 
   const heading =
     entityType === "activity" ? "Activity comments" : "Expense comments";
+
+  const meLabel = labelFor(currentUserId, memberLabelByUserId);
+  const meInitials = initialsFromName(meLabel);
+
+  if (collapsible) {
+    const count = comments.length;
+    return (
+      <div className="mt-0 border-t border-black/[0.08] pt-2">
+        <button
+          type="button"
+          onClick={() => setThreadOpen((o) => !o)}
+          className="flex w-full min-h-9 touch-manipulation items-center gap-1.5 rounded-lg px-0.5 py-0.5 text-left transition-colors hover:bg-black/[0.03]"
+          aria-expanded={threadOpen}
+        >
+          <MessageCircle className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
+          <span className="min-w-0 flex-1 text-[13px] text-slate-700">
+            {count === 0 ? "Comments" : `${count} comment${count === 1 ? "" : "s"}`}
+          </span>
+          <ChevronDown
+            className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-200 ${
+              threadOpen ? "rotate-180" : ""
+            }`}
+            aria-hidden
+          />
+        </button>
+
+        <div
+          className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+            threadOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          }`}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <div className="mt-1.5 rounded-lg bg-[#f8f8f6] p-2">
+              {comments.length > 0 ? (
+                <ul className="mb-2 max-h-[7.5rem] space-y-2 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+                  {comments.map((c) => {
+                    const name = labelFor(c.user_id, memberLabelByUserId);
+                    const isSelf = c.user_id === currentUserId;
+                    const bubbleInitials = initialsFromName(name);
+                    return (
+                      <li key={c.id} className="flex gap-1.5">
+                        <div
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                            isSelf
+                              ? "bg-[#E6F1FB] text-[#0C447C]"
+                              : "bg-[#EAF3DE] text-[#27500A]"
+                          }`}
+                          aria-hidden
+                        >
+                          {bubbleInitials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className="border border-black/[0.08] bg-white px-2 py-1.5 shadow-sm"
+                            style={{
+                              borderRadius: "0 8px 8px 8px",
+                            }}
+                          >
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                              <span className="text-[10px] font-medium text-slate-500">{name}</span>
+                              <span className="text-[10px] text-slate-400">
+                                {formatCommentTime(c.created_at)}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 whitespace-pre-wrap break-words text-xs leading-snug text-slate-800">
+                              {c.content}
+                            </p>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+
+              {error ? (
+                <p className="mb-1.5 rounded-md bg-rose-50 px-2 py-1 text-[11px] text-rose-800">
+                  {error}
+                </p>
+              ) : null}
+
+              <form onSubmit={handleSubmit} className="flex items-center gap-1.5">
+                <div
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#E6F1FB] text-[10px] font-semibold text-[#0C447C]"
+                  aria-hidden
+                >
+                  {meInitials}
+                </div>
+                <label htmlFor={`comment-${entityType}-${entityId}`} className="sr-only">
+                  Add comment
+                </label>
+                <input
+                  id={`comment-${entityType}-${entityId}`}
+                  type="text"
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder={
+                    count === 0 ? "Be the first to comment…" : "Write a comment…"
+                  }
+                  autoComplete="off"
+                  className="min-h-8 min-w-0 flex-1 rounded-full border border-transparent bg-white/80 px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-black/10 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#1a2340]/15"
+                />
+                <button
+                  type="submit"
+                  disabled={sending || !draft.trim()}
+                  className="flex min-h-8 shrink-0 items-center justify-center rounded-full bg-[#1a2340] px-3 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                >
+                  {sending ? <ButtonSpinner className="h-3 w-3 text-white" /> : "Post"}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -173,11 +310,11 @@ export default function EntityCommentsBlock({
         onSubmit={handleSubmit}
         className="sticky bottom-0 z-10 -mx-1 flex gap-2 rounded-xl bg-slate-50/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-slate-50/85"
       >
-        <label htmlFor={`comment-${entityType}-${entityId}`} className="sr-only">
+        <label htmlFor={`comment-flat-${entityType}-${entityId}`} className="sr-only">
           Add comment
         </label>
         <input
-          id={`comment-${entityType}-${entityId}`}
+          id={`comment-flat-${entityType}-${entityId}`}
           type="text"
           value={draft}
           onChange={(e) => {

@@ -190,7 +190,7 @@ export default function TripSwipeTabs({
   return (
     <TripActiveTabProvider activeTab={activeTabKey}>
       <TripFabRegistryProvider activeTab={activeTabKey}>
-        <div className="flex w-full max-w-md flex-col self-center">
+        <div className="flex w-full max-w-[390px] flex-col self-center">
           <nav
             ref={tabBarRef}
             className="scrollbar-hide sticky top-0 z-[115] -mx-4 flex gap-0.5 overflow-x-auto overscroll-x-contain border-b border-slate-200/90 bg-white/95 px-3 pb-0 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 [touch-action:pan-x]"
