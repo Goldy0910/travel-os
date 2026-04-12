@@ -306,7 +306,10 @@ export default function LanguageClient({ tripId, tripTitle, destination }: Props
 
   const [cameraResult, setCameraResult] = useState<MenuItem[]>([]);
   const [isScanningCamera, setIsScanningCamera] = useState(false);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  /** No `capture` — mobile OS shows gallery / files (and often camera as an extra choice). */
+  const menuGalleryInputRef = useRef<HTMLInputElement>(null);
+  /** `capture` — opens the camera directly for a new photo. */
+  const menuCameraInputRef = useRef<HTMLInputElement>(null);
 
   const [speakingKey, setSpeakingKey] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -695,21 +698,43 @@ export default function LanguageClient({ tripId, tripTitle, destination }: Props
                 We’ll read the image and translate visible items to English.
               </p>
               <input
-                ref={cameraInputRef}
+                ref={menuGalleryInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => void handleCameraUpload(e)}
+                className="hidden"
+                aria-hidden
+              />
+              <input
+                ref={menuCameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
                 onChange={(e) => void handleCameraUpload(e)}
                 className="hidden"
+                aria-hidden
               />
-              <button
-                type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                disabled={isScanningCamera}
-                className="min-h-11 w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-medium text-white disabled:opacity-50"
-              >
-                {isScanningCamera ? "Scanning…" : "Take or choose photo"}
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => menuGalleryInputRef.current?.click()}
+                  disabled={isScanningCamera}
+                  className="min-h-11 touch-manipulation rounded-xl border-2 border-indigo-200 bg-white py-2.5 text-xs font-semibold text-indigo-800 disabled:opacity-50 sm:text-sm"
+                >
+                  🖼️ Gallery
+                </button>
+                <button
+                  type="button"
+                  onClick={() => menuCameraInputRef.current?.click()}
+                  disabled={isScanningCamera}
+                  className="min-h-11 touch-manipulation rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white disabled:opacity-50 sm:text-sm"
+                >
+                  {isScanningCamera ? "Scanning…" : "📷 Camera"}
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Gallery: existing photos. Camera: take a new picture.
+              </p>
             </div>
 
             {cameraResult.length > 0 && (

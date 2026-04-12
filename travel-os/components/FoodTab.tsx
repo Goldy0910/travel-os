@@ -103,7 +103,8 @@ export default function FoodTab({ tripId, destination }: Props) {
   const [savedList, setSavedList] = useState<SavedRestaurantRow[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isTranslating, setIsTranslating] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const menuGalleryInputRef = useRef<HTMLInputElement>(null);
+  const menuCameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -612,21 +613,43 @@ export default function FoodTab({ tripId, destination }: Props) {
               AI reads and translates it to English (set GEMINI_API_KEY on the server).
             </p>
             <input
-              ref={fileInputRef}
+              ref={menuGalleryInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoUpload}
+              className="hidden"
+              aria-hidden
+            />
+            <input
+              ref={menuCameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
               onChange={handlePhotoUpload}
               className="hidden"
+              aria-hidden
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isTranslating}
-              className="min-h-12 w-full touch-manipulation rounded-xl bg-indigo-600 py-3 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {isTranslating ? "Translating…" : "📸 Take / Upload Photo"}
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => menuGalleryInputRef.current?.click()}
+                disabled={isTranslating}
+                className="min-h-12 touch-manipulation rounded-xl border-2 border-indigo-200 bg-white py-3 text-xs font-semibold text-indigo-800 disabled:opacity-50 sm:text-sm"
+              >
+                🖼️ Gallery
+              </button>
+              <button
+                type="button"
+                onClick={() => menuCameraInputRef.current?.click()}
+                disabled={isTranslating}
+                className="min-h-12 touch-manipulation rounded-xl bg-indigo-600 py-3 text-xs font-semibold text-white disabled:opacity-50 sm:text-sm"
+              >
+                {isTranslating ? "Translating…" : "📷 Camera"}
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Gallery: choose a saved photo. Camera: take a new picture.
+            </p>
           </div>
 
           {menuItems.length > 0 && (
