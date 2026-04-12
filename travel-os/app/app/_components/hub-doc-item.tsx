@@ -38,6 +38,7 @@ export default function HubDocItem({
     >
       <span className="inline-flex h-12 w-12 min-h-12 min-w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-xs font-semibold text-slate-700">
         {canTryPreview && !imageBroken ? (
+          // eslint-disable-next-line @next/next/no-img-element -- arbitrary storage URLs; next/image would need host allowlist
           <img
             src={fileUrl ?? ""}
             alt={fileName}

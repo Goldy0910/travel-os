@@ -253,40 +253,42 @@ function ExpenseFormSheet({
 
   useEffect(() => {
     if (!open) return;
-    const allIds = paidByMemberOptions.map((o) => o.userId);
-    const fallbackUserId =
-      paidByMemberOptions.find((o) => o.label === paidByDefault)?.userId ??
-      paidByMemberOptions[0]?.userId ??
-      "";
-    setAmountInput(amountDefault);
-    setDescriptionInput(titleDefault);
-    setPaidByUserId(fallbackUserId);
-    setSelectedParticipantIds(allIds);
-    setIncludePayer(true);
-    setExactAmounts(
-      Object.fromEntries(
-        allIds.map((id) => [id, id === fallbackUserId ? Number(amountDefault || 0) : 0]),
-      ),
-    );
-    setPercentages(
-      Object.fromEntries(
-        allIds.map((id) => [id, allIds.length > 0 ? Number((100 / allIds.length).toFixed(2)) : 0]),
-      ),
-    );
-    if (editing?.splitTypeRaw) {
-      setSplitType(normalizeUiSplitType(editing.splitTypeRaw));
-      return;
-    }
-    try {
-      const remembered = localStorage.getItem(LAST_SPLIT_KEY);
-      if (remembered === "equal" || remembered === "exact" || remembered === "percentage" || remembered === "none") {
-        setSplitType(remembered);
-      } else {
+    queueMicrotask(() => {
+      const allIds = paidByMemberOptions.map((o) => o.userId);
+      const fallbackUserId =
+        paidByMemberOptions.find((o) => o.label === paidByDefault)?.userId ??
+        paidByMemberOptions[0]?.userId ??
+        "";
+      setAmountInput(amountDefault);
+      setDescriptionInput(titleDefault);
+      setPaidByUserId(fallbackUserId);
+      setSelectedParticipantIds(allIds);
+      setIncludePayer(true);
+      setExactAmounts(
+        Object.fromEntries(
+          allIds.map((id) => [id, id === fallbackUserId ? Number(amountDefault || 0) : 0]),
+        ),
+      );
+      setPercentages(
+        Object.fromEntries(
+          allIds.map((id) => [id, allIds.length > 0 ? Number((100 / allIds.length).toFixed(2)) : 0]),
+        ),
+      );
+      if (editing?.splitTypeRaw) {
+        setSplitType(normalizeUiSplitType(editing.splitTypeRaw));
+        return;
+      }
+      try {
+        const remembered = localStorage.getItem(LAST_SPLIT_KEY);
+        if (remembered === "equal" || remembered === "exact" || remembered === "percentage" || remembered === "none") {
+          setSplitType(remembered);
+        } else {
+          setSplitType("equal");
+        }
+      } catch {
         setSplitType("equal");
       }
-    } catch {
-      setSplitType("equal");
-    }
+    });
   }, [open, editing, amountDefault, titleDefault, paidByMemberOptions, paidByDefault]);
 
   useEffect(() => {
@@ -308,7 +310,7 @@ function ExpenseFormSheet({
     for (const id of selectedParticipantIds) {
       nextExact[id] = targetIds.includes(id) ? Number(share.toFixed(2)) : 0;
     }
-    setExactAmounts(nextExact);
+    queueMicrotask(() => setExactAmounts(nextExact));
   }, [splitType, includePayer, selectedParticipantIds, paidByUserId, amountInput]);
 
   const amountNumber = Number(amountInput || 0);
@@ -620,7 +622,7 @@ export default function TripExpensesClient({
 
   useEffect(() => {
     if (activeTripTab !== "expenses" || !autoOpenAddExpense) return;
-    openAdd();
+    queueMicrotask(() => openAdd());
   }, [activeTripTab, autoOpenAddExpense, openAdd]);
 
   useEffect(() => {
@@ -635,8 +637,10 @@ export default function TripExpensesClient({
 
   useEffect(() => {
     if (activeTripTab !== "expenses") {
-      setSheetOpen(false);
-      setEditing(null);
+      queueMicrotask(() => {
+        setSheetOpen(false);
+        setEditing(null);
+      });
     }
   }, [activeTripTab]);
 

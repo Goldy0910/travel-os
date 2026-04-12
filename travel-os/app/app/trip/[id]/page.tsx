@@ -25,6 +25,10 @@ import TripDocsClient from "./docs/_components/trip-docs-client";
 import TripExpensesClient from "./expenses/_components/trip-expenses-client";
 import { loadTripTabPanelsData } from "./_lib/load-trip-panels-data";
 import { parseTripTabParam } from "./_lib/trip-tab-keys";
+import ChecklistTab from "@/app/app/_components/ChecklistTab";
+import LanguageClient from "@/app/app/trip/[id]/language/_components/LanguageClient";
+import FoodTab from "@/components/FoodTab";
+
 
 type TripPageProps = {
   params: Promise<{ id: string }>;
@@ -339,6 +343,38 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     membersError: tabKeyForErrors === "members" ? rawError : "",
   });
 
+  const startForChecklist = pickFirstString(trip, ["start_date", "startDate", "date_from"], "");
+  const endForChecklist = pickFirstString(trip, ["end_date", "endDate", "date_to"], "");
+  const ymdCheckStart = extractYMD(startForChecklist);
+  const ymdCheckEnd = extractYMD(endForChecklist);
+  let checklistDurationDays = 7;
+  if (ymdCheckStart && ymdCheckEnd) {
+    const t0 = new Date(`${ymdCheckStart}T12:00:00`).getTime();
+    const t1 = new Date(`${ymdCheckEnd}T12:00:00`).getTime();
+    if (Number.isFinite(t0) && Number.isFinite(t1) && t1 >= t0) {
+      checklistDurationDays = Math.max(1, Math.round((t1 - t0) / 86400000) + 1);
+    }
+  }
+  const checklistTravelMonth = (() => {
+    if (!ymdCheckStart) return "";
+    const d = new Date(`${ymdCheckStart}T12:00:00`);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("en-US", { month: "long" });
+  })();
+
+  const checklistActivities: string[] = [];
+  if (activeTab === "checklist") {
+    const { data: actRows } = await supabase
+      .from("itinerary_items")
+      .select("activity_name, title")
+      .eq("trip_id", tripId)
+      .limit(40);
+    for (const row of actRows ?? []) {
+      const r = row as { activity_name?: string | null; title?: string | null };
+      const label = String(r.activity_name || r.title || "").trim();
+      if (label) checklistActivities.push(label);
+    }
+  }
+
   return (
     <>
       <SetAppHeader title={title} showBack />
@@ -405,7 +441,34 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                   <TripGuidesPanel bundle={guidesBundle} destinationLabel={tripPlace || location} />
                 ) : null
               }
-              members={activeTab === "members" ? <TripMembersPanel {...panels.members} /> : null}
+              members={
+                activeTab === "members" ? <TripMembersPanel {...panels.members} /> : null
+              }
+              checklist={
+                activeTab === "checklist" ? (
+                  <ChecklistTab
+                    tripId={tripId}
+                    destination={tripPlace || location || title}
+                    durationDays={checklistDurationDays}
+                    travelMonth={checklistTravelMonth}
+                    activities={checklistActivities}
+                  />
+                ) : null
+              }
+              food={
+                activeTab === "food" ? (
+                  <FoodTab tripId={tripId} destination={tripPlace || location || title} />
+                ) : null
+              }
+              language={
+                activeTab === "language" ? (
+                  <LanguageClient
+                    tripId={tripId}
+                    tripTitle={title}
+                    destination={tripPlace || location || title}
+                  />
+                ) : null
+              }
             />
           </Suspense>
         </div>

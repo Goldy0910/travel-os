@@ -598,7 +598,7 @@ export default function TripDocsClient({
 
   useEffect(() => {
     if (activeTripTab !== "docs" || !autoOpenUpload) return;
-    setUploadOpen(true);
+    queueMicrotask(() => setUploadOpen(true));
   }, [activeTripTab, autoOpenUpload]);
 
   useEffect(() => {
@@ -613,7 +613,7 @@ export default function TripDocsClient({
 
   useEffect(() => {
     if (activeTripTab !== "docs") {
-      setUploadOpen(false);
+      queueMicrotask(() => setUploadOpen(false));
     }
   }, [activeTripTab]);
 

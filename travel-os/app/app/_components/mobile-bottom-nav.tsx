@@ -133,7 +133,7 @@ export default function MobileBottomNav() {
 
   useEffect(() => {
     // Route/search change means navigation finished; stop FAB loader.
-    setFabLoading(false);
+    queueMicrotask(() => setFabLoading(false));
   }, [pathname, searchParams]);
 
   const pathForUi = pathname;
@@ -162,7 +162,9 @@ export default function MobileBottomNav() {
       tripTabParam === "expenses" ||
       tripTabParam === "members" ||
       tripTabParam === "chat" ||
-      tripTabParam === "guides");
+      tripTabParam === "guides" ||
+      tripTabParam === "checklist" ||
+      tripTabParam === "food");
 
   const onTripToolPage =
     !!extractTripIdFromPath(pathForUi) &&
@@ -177,7 +179,9 @@ export default function MobileBottomNav() {
     !!pathTripId &&
     (tripTabLower === "guides" ||
       tripTabLower === "members" ||
-      tripTabLower === "chat");
+      tripTabLower === "chat" ||
+      tripTabLower === "checklist" ||
+      tripTabLower === "food");
   const hideFabOnGlobalMembers = normalizedPath === "/members";
   const showFab = !hideFabOnTripTab && !hideFabOnGlobalMembers;
 

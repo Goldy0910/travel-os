@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useLayoutEffect,
   useMemo,
   useRef,
   type ReactNode,
@@ -39,7 +40,9 @@ export function TripFabRegistryProvider({
   const openExpenseRef = useRef<OpenFn>(null);
   const openUploadRef = useRef<OpenFn>(null);
   const activeTabRef = useRef(activeTab);
-  activeTabRef.current = activeTab;
+  useLayoutEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   const setOpenActivity = useCallback((fn: OpenFn) => {
     openActivityRef.current = fn;

@@ -5,6 +5,9 @@ export const TRIP_TAB_KEYS = [
   "docs",
   "guides",
   "members",
+  "checklist",
+  "food",
+  "language",
 ] as const;
 
 export type TripTabKey = (typeof TRIP_TAB_KEYS)[number];
@@ -16,6 +19,9 @@ export const TRIP_TAB_LABELS: Record<TripTabKey, string> = {
   docs: "Docs",
   guides: "Guides",
   members: "Members",
+  checklist: "Checklist",
+  food: "Food",
+  language: "Language",
 };
 
 export function parseTripTabParam(raw: string | undefined | null): TripTabKey {

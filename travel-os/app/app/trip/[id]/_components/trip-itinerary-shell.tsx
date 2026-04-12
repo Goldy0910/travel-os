@@ -337,8 +337,10 @@ export default function TripItineraryShell({
 
   useEffect(() => {
     if (!itineraryTabActive) {
-      setSheetOpen(false);
-      setTripUpdateOpen(false);
+      queueMicrotask(() => {
+        setSheetOpen(false);
+        setTripUpdateOpen(false);
+      });
     }
   }, [itineraryTabActive]);
 
@@ -366,7 +368,7 @@ export default function TripItineraryShell({
 
   useEffect(() => {
     if (!itineraryTabActive || !autoOpenAddActivity) return;
-    openAdd();
+    queueMicrotask(() => openAdd());
   }, [autoOpenAddActivity, itineraryTabActive, openAdd]);
 
   useEffect(() => {

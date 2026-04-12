@@ -21,6 +21,9 @@ type Props = {
   docs: ReactNode;
   guides: ReactNode;
   members: ReactNode;
+  checklist: ReactNode;
+  food: ReactNode;
+  language: ReactNode;
 };
 
 /**
@@ -35,8 +38,11 @@ export default function TripSwipeTabs({
   docs,
   guides,
   members,
+  checklist,
+  food,
+  language,
 }: Props) {
-  const panels: ReactNode[] = [itinerary, expenses, chat, docs, guides, members];
+  const panels: ReactNode[] = [itinerary, expenses, chat, docs, guides, members, checklist, food, language];
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -62,6 +68,9 @@ export default function TripSwipeTabs({
       docs: pathname,
       guides: pathname,
       members: pathname,
+      checklist: pathname,
+      food: pathname,
+      language: pathname,
     };
     for (const key of TRIP_TAB_KEYS) {
       const sp = new URLSearchParams(base.toString());
@@ -179,6 +188,8 @@ export default function TripSwipeTabs({
 
   const activeTabKey: TripTabKey = TRIP_TAB_KEYS[uiIndex] ?? "itinerary";
 
+  /* Tab panels: parent passes null for inactive tabs; cache last non-null tree per key for instant restore. */
+  /* eslint-disable react-hooks/refs -- ref holds memoized panel trees; read/write during render keeps cache in sync with props */
   for (let i = 0; i < panels.length; i += 1) {
     const key = TRIP_TAB_KEYS[i]!;
     const panel = panels[i];
@@ -258,6 +269,7 @@ export default function TripSwipeTabs({
                 </section>
               );
             })}
+            {/* eslint-enable react-hooks/refs */}
           </div>
         </div>
       </TripFabRegistryProvider>

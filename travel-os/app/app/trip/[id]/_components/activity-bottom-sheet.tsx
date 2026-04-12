@@ -69,7 +69,7 @@ export default function ActivityBottomSheet({
   const [timeValue, setTimeValue] = useState(timeDefault);
 
   useEffect(() => {
-    setTimeValue(timeDefault);
+    queueMicrotask(() => setTimeValue(timeDefault));
   }, [timeDefault, formKey, open]);
 
   const timeReadable = useMemo(() => to12hLabel(timeValue), [timeValue]);
