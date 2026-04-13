@@ -137,7 +137,7 @@ export default async function DocsHubPage() {
       uploadedBy,
       uploadedAt,
       createdAt: createdAtRaw,
-      href: tripId ? `/app/trip/${tripId}?tab=docs` : "/app/docs",
+      href: tripId ? `/app/trip/${tripId}?tab=connect&section=docs` : "/app/docs",
     };
   }));
 

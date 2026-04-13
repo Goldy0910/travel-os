@@ -50,7 +50,7 @@ export default function TripCommandFab({ tripId }: { tripId: string }) {
             <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-700" />
           </Link>
           <Link
-            href={`/app/trip/${tripId}?tab=docs`}
+            href={`/app/trip/${tripId}?tab=connect&section=docs`}
             role="menuitem"
             className="flex min-h-11 items-center justify-between gap-2 whitespace-nowrap rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50"
             onClick={() => setOpen(false)}

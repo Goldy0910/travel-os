@@ -21,10 +21,9 @@ import TripGuidesPanel from "./_components/trip-guides-panel";
 import TripSwipeTabs from "./_components/trip-swipe-tabs";
 import TripTabsFallback from "./_components/trip-tabs-fallback";
 import TripChatClient from "./chat/_components/trip-chat-client";
-import TripDocsClient from "./docs/_components/trip-docs-client";
 import TripExpensesClient from "./expenses/_components/trip-expenses-client";
 import { loadTripTabPanelsData } from "./_lib/load-trip-panels-data";
-import { parseTripTabParam } from "./_lib/trip-tab-keys";
+import { parseConnectSectionFromSearch, parseTripTabParam } from "./_lib/trip-tab-keys";
 import ChecklistTab from "@/app/app/_components/ChecklistTab";
 import LanguageClient from "@/app/app/trip/[id]/language/_components/LanguageClient";
 import FoodTab from "@/components/FoodTab";
@@ -132,7 +131,12 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   const query = (await searchParams) ?? {};
   const showJoinWelcome =
     query.welcome === "1" || query.welcome === "true";
-  const activeTab = parseTripTabParam(pickFirstQuery(query, "tab"));
+  const rawTabQuery = pickFirstQuery(query, "tab");
+  const activeTab = parseTripTabParam(rawTabQuery);
+  const connectSection = parseConnectSectionFromSearch(
+    rawTabQuery || null,
+    pickFirstQuery(query, "section") || null,
+  );
   const quickAction = pickFirstQuery(query, "quickAction").trim().toLowerCase();
 
   const supabase = await createSupabaseServerClient();
@@ -339,8 +343,10 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     activeTab,
     expensesError: tabKeyForErrors === "expenses" ? rawError : "",
     docsSuccess,
-    docsError: tabKeyForErrors === "docs" ? rawError : "",
-    membersError: tabKeyForErrors === "members" ? rawError : "",
+    docsError:
+      tabKeyForErrors === "connect" && connectSection === "docs" ? rawError : "",
+    membersError:
+      tabKeyForErrors === "connect" && connectSection === "members" ? rawError : "",
   });
 
   const startForChecklist = pickFirstString(trip, ["start_date", "startDate", "date_from"], "");
@@ -417,8 +423,8 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                   />
                 ) : null
               }
-              chat={
-                activeTab === "chat" ? (
+              connectChat={
+                activeTab === "connect" ? (
                   <TripChatClient
                     tripId={tripId}
                     currentUserId={user.id}
@@ -427,22 +433,22 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                   />
                 ) : null
               }
-              docs={
-                activeTab === "docs" ? (
-                  <TripDocsClient
-                    tripId={tripId}
-                    {...panels.docs}
-                    autoOpenUpload={quickAction === "doc"}
-                  />
-                ) : null
+              connectDocsProps={
+                activeTab === "connect"
+                  ? {
+                      tripId,
+                      ...panels.docs,
+                      autoOpenUpload: quickAction === "doc",
+                    }
+                  : null
               }
               guides={
                 activeTab === "guides" ? (
                   <TripGuidesPanel bundle={guidesBundle} destinationLabel={tripPlace || location} />
                 ) : null
               }
-              members={
-                activeTab === "members" ? <TripMembersPanel {...panels.members} /> : null
+              connectMembers={
+                activeTab === "connect" ? <TripMembersPanel {...panels.members} /> : null
               }
               checklist={
                 activeTab === "checklist" ? (

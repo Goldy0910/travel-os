@@ -5,7 +5,6 @@ import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import { showNoInternetModal } from "@/app/app/_components/no-internet-modal";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { useTripActiveTab } from "../../_lib/trip-active-tab-context";
 import { useTripFabRegistry } from "../../_lib/trip-tab-fab-registry";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -29,13 +28,18 @@ export type DocumentDTO = {
   created_at: string | null;
 };
 
-type TripDocsClientProps = {
+export type TripDocsClientProps = {
   tripId: string;
   documents: DocumentDTO[];
   initialSuccess: string;
   initialError: string;
   autoOpenUpload?: boolean;
+  /** Whether the Docs segment is visible inside the Connect hub. */
+  connectDocsActive: boolean;
 };
+
+/** Serializable props for `TripDocsClient` when `connectDocsActive` is set by the Connect hub. */
+export type TripDocsClientInputProps = Omit<TripDocsClientProps, "connectDocsActive">;
 
 function formatUploadedAt(iso: string | null) {
   if (!iso) return "";
@@ -570,9 +574,10 @@ export default function TripDocsClient({
   initialSuccess,
   initialError,
   autoOpenUpload = false,
+  connectDocsActive,
 }: TripDocsClientProps) {
   const router = useRouter();
-  const activeTripTab = useTripActiveTab();
+  const docsSurfaceActive = connectDocsActive;
   const { setOpenUpload } = useTripFabRegistry();
   const [uploadOpen, setUploadOpen] = useState(false);
   const [docMenuOpenId, setDocMenuOpenId] = useState<string | null>(null);
@@ -591,31 +596,36 @@ export default function TripDocsClient({
     setUploadOpen(true);
   }, []);
 
+  /** Register FAB opener only while Docs is visible so the handler always matches the visible + button. */
   useEffect(() => {
+    if (!docsSurfaceActive) {
+      setOpenUpload(null);
+      return;
+    }
     setOpenUpload(openUploadSheet);
     return () => setOpenUpload(null);
-  }, [setOpenUpload, openUploadSheet]);
+  }, [docsSurfaceActive, setOpenUpload, openUploadSheet]);
 
   useEffect(() => {
-    if (activeTripTab !== "docs" || !autoOpenUpload) return;
+    if (!docsSurfaceActive || !autoOpenUpload) return;
     queueMicrotask(() => setUploadOpen(true));
-  }, [activeTripTab, autoOpenUpload]);
+  }, [docsSurfaceActive, autoOpenUpload]);
 
   useEffect(() => {
     const onQuickAction = (event: Event) => {
-      if (activeTripTab !== "docs") return;
+      if (!docsSurfaceActive) return;
       const detail = (event as CustomEvent<{ action?: string }>).detail;
       if (detail?.action === "doc") setUploadOpen(true);
     };
     window.addEventListener(QUICK_ACTION_EVENT, onQuickAction as EventListener);
     return () => window.removeEventListener(QUICK_ACTION_EVENT, onQuickAction as EventListener);
-  }, [activeTripTab]);
+  }, [docsSurfaceActive]);
 
   useEffect(() => {
-    if (activeTripTab !== "docs") {
+    if (!docsSurfaceActive) {
       queueMicrotask(() => setUploadOpen(false));
     }
-  }, [activeTripTab]);
+  }, [docsSurfaceActive]);
 
   const openViewer = (doc: DocumentDTO) => {
     const url = doc.file_url ?? "";

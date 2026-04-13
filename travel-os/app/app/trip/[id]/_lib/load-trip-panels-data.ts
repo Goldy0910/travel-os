@@ -187,10 +187,11 @@ export async function loadTripTabPanelsData(
   },
 ): Promise<TripTabPanelsData> {
   const wantsExpenses = query.activeTab === "expenses";
-  const wantsDocs = query.activeTab === "docs";
-  const wantsChat = query.activeTab === "chat";
-  const wantsMembers = query.activeTab === "members";
-  const needsRole = wantsExpenses || wantsMembers;
+  const wantsConnect = query.activeTab === "connect";
+  const wantsDocs = wantsConnect;
+  const wantsChat = wantsConnect;
+  const wantsMembers = wantsConnect;
+  const needsRole = wantsExpenses || wantsConnect;
 
   const memberRole = needsRole ? await getMemberRole(supabase, tripId, user.id) : null;
   const isOrganizer = memberRole === "organizer";
@@ -235,7 +236,7 @@ export async function loadTripTabPanelsData(
     ? await supabase.from("members").select("*").eq("trip_id", tripId).order("created_at", { ascending: true })
     : { data: [], error: null };
 
-  const profileRes = wantsExpenses || wantsMembers
+  const profileRes = wantsExpenses || wantsConnect
     ? await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle()
     : { data: null, error: null };
 

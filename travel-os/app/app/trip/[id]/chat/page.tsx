@@ -6,5 +6,5 @@ type ChatPageProps = {
 
 export default async function TripChatPage({ params }: ChatPageProps) {
   const { id: tripId } = await params;
-  redirect(`/app/trip/${tripId}?tab=chat`);
+  redirect(`/app/trip/${tripId}?tab=connect`);
 }

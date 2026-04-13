@@ -117,8 +117,8 @@ export default async function TripsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-6 pb-[calc(var(--travel-os-bottom-nav-h)+6rem)]">
-      <div className="mx-auto w-full max-w-md space-y-5">
+    <main className="w-full bg-slate-50 px-4 py-5 pb-[calc(var(--travel-os-bottom-nav-h)+5rem)] sm:py-6 sm:pb-[calc(var(--travel-os-bottom-nav-h)+5.5rem)]">
+      <div className="mx-auto w-full max-w-[390px] space-y-5">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Trips</h1>
           <p className="mt-1 text-sm text-slate-600">
@@ -126,7 +126,7 @@ export default async function TripsPage() {
           </p>
         </div>
 
-        <section className="space-y-3">
+        <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">All trips</h2>
             <span className="text-sm text-slate-500">{trips.length}</span>

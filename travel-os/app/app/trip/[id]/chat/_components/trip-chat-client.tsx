@@ -20,13 +20,20 @@ type TripChatClientProps = {
   memberLabelByUserId: Record<string, string>;
 };
 
-function formatMessageTime(iso: string) {
+function formatMessageTimestamp(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat("en-US", {
+  const now = new Date();
+  const opts: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(d);
+  };
+  if (d.getFullYear() !== now.getFullYear()) {
+    opts.year = "numeric";
+  }
+  return new Intl.DateTimeFormat("en-US", opts).format(d);
 }
 
 function initialsFromLabel(label: string) {
@@ -242,7 +249,7 @@ export default function TripChatClient({
                     <span
                       className={`px-1 text-[11px] text-slate-400 ${mine ? "text-right" : ""}`}
                     >
-                      {formatMessageTime(m.created_at)}
+                      {formatMessageTimestamp(m.created_at)}
                     </span>
                   </div>
                 </div>

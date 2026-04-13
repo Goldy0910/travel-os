@@ -47,6 +47,9 @@ function detectLanguage(destination: string): string {
   if (d.includes("netherlands") || d.includes("amsterdam")) return "Dutch";
   if (d.includes("tamil nadu") || d.includes("chennai")) return "Tamil";
   if (d.includes("telangana") || d.includes("hyderabad")) return "Telugu";
+  if (d.includes("kerala") || d.includes("kochi") || d.includes("thiruvananthapuram")) return "Malayalam";
+  if (d.includes("odisha") || d.includes("orissa") || d.includes("bhubaneswar") || d.includes("puri"))
+    return "Odia";
 
   return "English";
 }
@@ -302,6 +305,9 @@ export default function LanguageClient({ tripId, tripTitle, destination }: Props
   const [phrasebook, setPhrasebook] = useState<PhraseCategory[]>([]);
   const [phrasebookLoaded, setPhrasebookLoaded] = useState(false);
   const [isLoadingPhrases, setIsLoadingPhrases] = useState(false);
+  const [phrasebookSource, setPhrasebookSource] = useState<"static" | "generated_cached" | "generated" | "error" | null>(
+    null,
+  );
   const [activeCategory, setActiveCategory] = useState(0);
 
   const [cameraResult, setCameraResult] = useState<MenuItem[]>([]);
@@ -322,21 +328,30 @@ export default function LanguageClient({ tripId, tripTitle, destination }: Props
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ language, destination }),
       });
-      const data: unknown = await res.json();
+      const data = (await res.json()) as {
+        categories?: PhraseCategory[];
+        source?: string;
+        error?: string;
+      };
       if (!res.ok) {
-        const err = data && typeof data === "object" && "error" in data ? String((data as { error: string }).error) : "Phrasebook failed";
-        toast.error(err);
+        toast.error(data.error || "Phrasebook failed");
         setPhrasebook([]);
+        setPhrasebookSource("error");
         return;
       }
-      if (Array.isArray(data)) {
-        setPhrasebook(data as PhraseCategory[]);
-      } else {
-        setPhrasebook([]);
-      }
+      const cats = Array.isArray(data.categories) ? data.categories : [];
+      setPhrasebook(cats);
+      setPhrasebookSource(
+        data.source === "static" || data.source === "generated_cached" || data.source === "generated"
+          ? data.source
+          : cats.length > 0
+            ? "generated"
+            : "error",
+      );
     } catch {
       toast.error("Could not load phrasebook.");
       setPhrasebook([]);
+      setPhrasebookSource("error");
     } finally {
       setIsLoadingPhrases(false);
       setPhrasebookLoaded(true);
@@ -627,6 +642,12 @@ export default function LanguageClient({ tripId, tripTitle, destination }: Props
               </div>
             ) : (
               <>
+                {phrasebookSource === "static" ? (
+                  <p className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-center text-[11px] leading-snug text-emerald-900">
+                    Using built-in phrasebook for {language} — no AI generation. Audio still uses TTS when you tap play
+                    (cached after first play).
+                  </p>
+                ) : null}
                 <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-webkit-overflow-scrolling:touch]">
                   {phrasebook.map((cat, i) => (
                     <button

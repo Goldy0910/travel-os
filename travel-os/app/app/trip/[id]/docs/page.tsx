@@ -9,7 +9,8 @@ export default async function TripDocsPage({ params, searchParams }: DocsPagePro
   const { id: tripId } = await params;
   const query = (await searchParams) ?? {};
   const sp = new URLSearchParams();
-  sp.set("tab", "docs");
+  sp.set("tab", "connect");
+  sp.set("section", "docs");
   const success = query.success;
   if (typeof success === "string" && success.length > 0) sp.set("success", success);
   const err = query.error;

@@ -448,7 +448,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
               <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-600 shadow-sm">
                 No documents yet.{" "}
                 <Link
-                  href={`/app/trip/${activeTripId}?tab=docs`}
+                  href={`/app/trip/${activeTripId}?tab=connect&section=docs`}
                   className="inline-flex items-center gap-1 font-semibold text-slate-900 underline"
                 >
                   Upload
@@ -531,7 +531,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Group</h2>
               <Link
-                href={`/app/trip/${activeTripId}?tab=members`}
+                href={`/app/trip/${activeTripId}?tab=connect&section=members`}
                 className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-indigo-600"
               >
                 Manage

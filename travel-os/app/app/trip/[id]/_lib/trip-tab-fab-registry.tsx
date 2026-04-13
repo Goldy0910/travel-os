@@ -9,7 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import type { TripTabKey } from "./trip-tab-keys";
+import type { ConnectSection, TripTabKey } from "./trip-tab-keys";
 
 type OpenFn = (() => void) | null;
 
@@ -31,9 +31,12 @@ export function useTripFabRegistry(): RegistryContextValue {
 
 export function TripFabRegistryProvider({
   activeTab,
+  connectSection,
   children,
 }: {
   activeTab: TripTabKey;
+  /** When `activeTab === "connect"`, which sub-panel is visible (for upload FAB). */
+  connectSection?: ConnectSection | null;
   children: ReactNode;
 }) {
   const openActivityRef = useRef<OpenFn>(null);
@@ -58,7 +61,8 @@ export function TripFabRegistryProvider({
     const t = activeTabRef.current;
     if (t === "itinerary") openActivityRef.current?.();
     else if (t === "expenses") openExpenseRef.current?.();
-    else if (t === "docs") openUploadRef.current?.();
+    // FAB is only shown for Connect when the Docs segment is active (`docsFab`); no second gate on refs.
+    else if (t === "connect") openUploadRef.current?.();
   }, []);
 
   const ctx = useMemo(
@@ -66,10 +70,11 @@ export function TripFabRegistryProvider({
     [setOpenActivity, setOpenExpense, setOpenUpload],
   );
 
+  const docsFab =
+    activeTab === "connect" && (connectSection ?? "chat") === "docs";
+
   const showFab =
-    activeTab === "itinerary" ||
-    activeTab === "expenses" ||
-    activeTab === "docs";
+    activeTab === "itinerary" || activeTab === "expenses" || docsFab;
 
   const fabLabel =
     activeTab === "itinerary"

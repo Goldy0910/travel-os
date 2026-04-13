@@ -14,7 +14,7 @@ export default function AppShellLayout({
         <AppHeader />
         <div
           id="app-shell-scroll-root"
-          className="flex min-h-0 flex-1 touch-pan-y flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain [webkit-overflow-scrolling:touch]"
+          className="relative min-h-0 flex-1 touch-pan-y overflow-x-clip overflow-y-auto overscroll-y-auto"
         >
           {children}
         </div>

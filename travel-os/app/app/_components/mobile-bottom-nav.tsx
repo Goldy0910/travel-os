@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import MobileNavTabInner from "./mobile-nav-tab-inner";
 import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
-import { Plus } from "lucide-react";
+import { Plus, UserRound } from "lucide-react";
 
 const LAST_TRIP_STORAGE_KEY = "travel-os-last-trip-id";
 const QUICK_ACTION_EVENT = "travel-os-open-quick-action";
@@ -51,53 +51,13 @@ function TripsIcon({ active }: { active: boolean }) {
   );
 }
 
-function DocsIcon({ active }: { active: boolean }) {
+function ProfileIcon({ active }: { active: boolean }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
+    <UserRound
       className={`h-5 w-5 ${active ? "text-slate-900" : "text-slate-400"}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      aria-hidden="true"
-    >
-      <path d="M7 4h7l4 4v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
-      <path d="M14 4v5h5" />
-      <path d="M9 13h6M9 16h5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ExpensesIcon({ active }: { active: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={`h-5 w-5 ${active ? "text-slate-900" : "text-slate-400"}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      aria-hidden="true"
-    >
-      <rect x="3" y="6" width="18" height="12" rx="2" />
-      <path d="M3 10h18M7 14h2" />
-    </svg>
-  );
-}
-
-function MembersIcon({ active }: { active: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={`h-5 w-5 ${active ? "text-slate-900" : "text-slate-400"}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      aria-hidden="true"
-    >
-      <circle cx="9" cy="7" r="3" />
-      <circle cx="17" cy="9" r="2.5" />
-      <path d="M3 19.5v-.5a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v.5M17 14h.5a2.5 2.5 0 0 1 2.5 2.5V19" />
-    </svg>
+      strokeWidth={2}
+      aria-hidden
+    />
   );
 }
 
@@ -162,9 +122,11 @@ export default function MobileBottomNav() {
       tripTabParam === "expenses" ||
       tripTabParam === "members" ||
       tripTabParam === "chat" ||
+      tripTabParam === "connect" ||
       tripTabParam === "guides" ||
       tripTabParam === "checklist" ||
-      tripTabParam === "food");
+      tripTabParam === "food" ||
+      tripTabParam === "language");
 
   const onTripToolPage =
     !!extractTripIdFromPath(pathForUi) &&
@@ -175,13 +137,21 @@ export default function MobileBottomNav() {
       isTripTabTool);
 
   const tripTabLower = (tripTabParam ?? "").toLowerCase();
+  const sectionLower = (searchParams.get("section") ?? "").toLowerCase();
+  const connectShowsDocsFab =
+    tripTabLower === "docs" ||
+    (tripTabLower === "connect" && sectionLower === "docs");
+  // On trip Connect (any segment) or legacy `?tab=docs`, hide this FAB so it does not stack above the trip upload button (z-122 vs z-110).
   const hideFabOnTripTab =
     !!pathTripId &&
     (tripTabLower === "guides" ||
+      tripTabLower === "checklist" ||
+      tripTabLower === "food" ||
+      tripTabLower === "language" ||
       tripTabLower === "members" ||
       tripTabLower === "chat" ||
-      tripTabLower === "checklist" ||
-      tripTabLower === "food");
+      tripTabLower === "connect" ||
+      connectShowsDocsFab);
   const hideFabOnGlobalMembers = normalizedPath === "/members";
   const showFab = !hideFabOnTripTab && !hideFabOnGlobalMembers;
 
@@ -209,22 +179,10 @@ export default function MobileBottomNav() {
       icon: TripsIcon,
     },
     {
-      label: "Docs",
-      href: "/app/docs",
-      active: normalizedPath === "/docs",
-      icon: DocsIcon,
-    },
-    {
-      label: "Expenses",
-      href: "/app/expenses",
-      active: normalizedPath === "/expenses",
-      icon: ExpensesIcon,
-    },
-    {
-      label: "Members",
-      href: "/app/members",
-      active: normalizedPath === "/members" || normalizedPath.includes("/members"),
-      icon: MembersIcon,
+      label: "Profile",
+      href: "/app/settings",
+      active: normalizedPath === "/settings",
+      icon: ProfileIcon,
     },
   ];
 
@@ -253,7 +211,13 @@ export default function MobileBottomNav() {
     if (pathTripId) {
       const sp = new URLSearchParams(searchParams.toString());
       const tab = (sp.get("tab") ?? "itinerary").toLowerCase();
-      const action = tab === "docs" ? "doc" : tab === "expenses" ? "expense" : "activity";
+      const section = (sp.get("section") ?? "").toLowerCase();
+      const action =
+        tab === "docs" || (tab === "connect" && section === "docs")
+          ? "doc"
+          : tab === "expenses"
+            ? "expense"
+            : "activity";
       window.dispatchEvent(new CustomEvent(QUICK_ACTION_EVENT, { detail: { action } }));
       return;
     }
@@ -262,7 +226,7 @@ export default function MobileBottomNav() {
     if (normalizedPath === "/docs" && effectiveTripId) {
       setFabLoading(true);
       router.push(
-        `/app/trip/${encodeURIComponent(effectiveTripId)}?tab=docs&quickAction=doc`,
+        `/app/trip/${encodeURIComponent(effectiveTripId)}?tab=connect&section=docs&quickAction=doc`,
       );
       return;
     }
@@ -349,7 +313,7 @@ export default function MobileBottomNav() {
         className="pointer-events-auto fixed inset-x-0 bottom-0 z-[100] border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
         aria-label="App"
       >
-        <div className="mx-auto grid w-full max-w-md grid-cols-5 px-0.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+        <div className="mx-auto grid w-full max-w-md grid-cols-3 px-0.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (

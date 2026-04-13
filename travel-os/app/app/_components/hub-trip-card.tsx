@@ -35,7 +35,7 @@ export default function HubTripCard({
   return (
     <Link
       href={href}
-      className="relative block overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition active:bg-slate-50"
+      className="relative block touch-manipulation overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition active:bg-slate-50"
     >
       <span className="pointer-events-none absolute right-3 top-3 z-10 inline-flex rounded-full bg-white/90 p-1">
         <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-600" />
