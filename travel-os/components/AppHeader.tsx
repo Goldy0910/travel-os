@@ -68,7 +68,7 @@ function defaultHeaderForPath(pathname: string): AppHeaderOverride {
       expenses: "Expenses",
       members: "Members",
       chat: "Chat",
-      guides: "Guides",
+      guides: "Explore",
     };
     return { title: map[m[1] ?? ""] ?? "Trip", showBack: true };
   }

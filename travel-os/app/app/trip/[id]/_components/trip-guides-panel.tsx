@@ -127,7 +127,7 @@ export default function TripGuidesPanel({ bundle, destinationLabel }: Props) {
   }, [bundle]);
 
   const activeLabel = useMemo(
-    () => GUIDE_CATEGORIES.find((c) => c.id === activeTab)?.label ?? "Guides",
+    () => GUIDE_CATEGORIES.find((c) => c.id === activeTab)?.label ?? "Explore",
     [activeTab],
   );
 
@@ -135,7 +135,7 @@ export default function TripGuidesPanel({ bundle, destinationLabel }: Props) {
     return (
       <div className="space-y-3">
         <header className="space-y-1">
-          <h2 className="text-base font-semibold text-slate-900">Travel guides</h2>
+          <h2 className="text-base font-semibold text-slate-900">Explore</h2>
           <p className="text-sm text-slate-600">
             Premium beta assistant for quick trip planning.
           </p>
@@ -148,7 +148,7 @@ export default function TripGuidesPanel({ bundle, destinationLabel }: Props) {
   return (
     <div className="space-y-5">
       <header className="space-y-1">
-        <h2 className="text-base font-semibold text-slate-900">Travel guides</h2>
+        <h2 className="text-base font-semibold text-slate-900">Explore</h2>
         <p className="text-sm text-slate-600">
           Plan smarter for{" "}
           <span className="font-medium text-slate-800">
@@ -160,7 +160,7 @@ export default function TripGuidesPanel({ bundle, destinationLabel }: Props) {
       <div
         className="scrollbar-hide -mx-1 flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [touch-action:pan-x] [&::-webkit-scrollbar]:hidden"
         role="tablist"
-        aria-label="Guide categories"
+        aria-label="Explore categories"
       >
         {GUIDE_CATEGORIES.map((c) => (
           <button

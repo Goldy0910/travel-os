@@ -20,7 +20,7 @@ export const TRIP_TAB_LABELS: Record<TripTabKey, string> = {
   expenses: "Expenses",
   language: "Language",
   food: "Food",
-  guides: "Guides",
+  guides: "Explore",
 };
 
 export const CONNECT_SECTION_LABELS: Record<ConnectSection, string> = {

@@ -52,6 +52,96 @@ function displayName(
   return memberLabelByUserId[userId]?.trim() || "Member";
 }
 
+type TextPart = { type: "text"; value: string } | { type: "url"; value: string };
+
+function splitMessageParts(content: string): TextPart[] {
+  const urlRegex = /((https?:\/\/|www\.)[^\s<]+)/gi;
+  const parts: TextPart[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = urlRegex.exec(content)) !== null) {
+    const start = match.index;
+    const raw = match[0];
+    if (start > last) parts.push({ type: "text", value: content.slice(last, start) });
+    parts.push({ type: "url", value: raw });
+    last = start + raw.length;
+  }
+  if (last < content.length) parts.push({ type: "text", value: content.slice(last) });
+  return parts.length > 0 ? parts : [{ type: "text", value: content }];
+}
+
+function normalizeHref(raw: string): string {
+  const v = raw.trim();
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^www\./i.test(v)) return `https://${v}`;
+  return "";
+}
+
+type YoutubePreview = {
+  videoId: string;
+  watchUrl: string;
+  thumbnailUrl: string;
+};
+
+function getYoutubePreview(content: string): YoutubePreview | null {
+  const parts = splitMessageParts(content).filter((p): p is Extract<TextPart, { type: "url" }> => p.type === "url");
+  for (const part of parts) {
+    const href = normalizeHref(part.value);
+    if (!href) continue;
+    try {
+      const u = new URL(href);
+      const host = u.hostname.toLowerCase().replace(/^www\./, "");
+      let videoId = "";
+      if (host === "youtu.be") {
+        videoId = u.pathname.split("/").filter(Boolean)[0] ?? "";
+      } else if (host === "youtube.com" || host === "m.youtube.com") {
+        if (u.pathname === "/watch") {
+          videoId = u.searchParams.get("v") ?? "";
+        } else if (u.pathname.startsWith("/shorts/")) {
+          videoId = u.pathname.split("/")[2] ?? "";
+        } else if (u.pathname.startsWith("/embed/")) {
+          videoId = u.pathname.split("/")[2] ?? "";
+        }
+      }
+      videoId = videoId.trim();
+      if (!videoId) continue;
+      return {
+        videoId,
+        watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+      };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+function renderMessageContent(content: string, mine: boolean) {
+  const parts = splitMessageParts(content);
+  return parts.map((part, idx) => {
+    if (part.type === "text") {
+      return <span key={`text-${idx}`}>{part.value}</span>;
+    }
+    const href = normalizeHref(part.value);
+    if (!href) return <span key={`text-url-${idx}`}>{part.value}</span>;
+    return (
+      <a
+        key={`url-${idx}`}
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className={`underline underline-offset-2 transition ${
+          mine ? "font-medium text-sky-200 hover:text-sky-100" : "font-medium text-sky-700 hover:text-sky-800"
+        }`}
+      >
+        {part.value}
+      </a>
+    );
+  });
+}
+
 function SendIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -213,6 +303,7 @@ export default function TripChatClient({
               const mine = m.user_id === currentUserId;
               const name = displayName(m.user_id, memberLabelByUserId);
               const initials = initialsFromLabel(name);
+              const youtubePreview = getYoutubePreview(m.content);
 
               return (
                 <div
@@ -244,7 +335,30 @@ export default function TripChatClient({
                           : "rounded-bl-md border border-slate-100 bg-white text-slate-900"
                       }`}
                     >
-                      <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                      <p className="whitespace-pre-wrap break-words">{renderMessageContent(m.content, mine)}</p>
+                      {youtubePreview ? (
+                        <a
+                          href={youtubePreview.watchUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`mt-2 block overflow-hidden rounded-xl border ${
+                            mine ? "border-slate-700 bg-slate-800/70" : "border-slate-200 bg-slate-50"
+                          }`}
+                        >
+                          <img
+                            src={youtubePreview.thumbnailUrl}
+                            alt="YouTube video thumbnail"
+                            className="h-36 w-full object-cover"
+                            loading="lazy"
+                          />
+                          <div className={`px-3 py-2 text-xs ${mine ? "text-slate-100" : "text-slate-700"}`}>
+                            <p className="font-semibold">YouTube</p>
+                            <p className={mine ? "text-slate-300" : "text-slate-500"}>
+                              Tap to open video
+                            </p>
+                          </div>
+                        </a>
+                      ) : null}
                     </div>
                     <span
                       className={`px-1 text-[11px] text-slate-400 ${mine ? "text-right" : ""}`}

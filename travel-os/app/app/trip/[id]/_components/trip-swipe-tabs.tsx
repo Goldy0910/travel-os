@@ -43,7 +43,7 @@ type Props = {
 /**
  * Trip section tabs: one panel visible at a time (no horizontal swipe carousel).
  * Avoids mobile browsers treating vertical scroll as horizontal tab changes and
- * conflicts with nested horizontal strips (e.g. Guides categories).
+ * conflicts with nested horizontal strips (e.g. Explore categories).
  */
 export default function TripSwipeTabs({
   itinerary,
