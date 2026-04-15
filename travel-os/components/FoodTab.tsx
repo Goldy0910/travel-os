@@ -208,6 +208,7 @@ export default function FoodTab({ tripId, destination }: Props) {
         error?: string;
         hint?: string;
         notice?: string;
+        cached?: boolean;
       };
       if (!res.ok) {
         const msg = [data.error, data.hint].filter(Boolean).join(" ");
@@ -221,6 +222,9 @@ export default function FoodTab({ tripId, destination }: Props) {
       }
       toast.dismiss(PLACES_SEARCH_TOAST_ID);
       setRestaurants(data.places || []);
+      if (data.cached) {
+        toast.message("Showing cached results.");
+      }
       if (data.notice) toast.message(data.notice, { duration: 6000 });
     } finally {
       setIsSearching(false);

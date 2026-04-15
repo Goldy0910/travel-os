@@ -10,26 +10,37 @@ function initials(value: string) {
 }
 
 export default function HubMemberItem({ name, trips }: HubMemberItemProps) {
+  const sortedTrips = [...trips].sort((a, b) => a.localeCompare(b));
+  const visibleTrips = sortedTrips.slice(0, 3);
+  const remainingCount = Math.max(0, sortedTrips.length - visibleTrips.length);
+
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-3">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-white">
-          {initials(name)}
-        </span>
-        <div className="min-w-0">
+    <article className="flex items-start gap-3 px-3 py-2.5">
+      <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-semibold text-white">
+        {initials(name)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
           <h3 className="truncate text-sm font-semibold text-slate-900">{name}</h3>
-          <p className="text-xs text-slate-500">{trips.length} trip(s)</p>
+          <p className="flex-shrink-0 text-[11px] text-slate-500">
+            {trips.length} trip{trips.length === 1 ? "" : "s"}
+          </p>
         </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {trips.map((trip) => (
-          <span
-            key={`${name}-${trip}`}
-            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700"
-          >
-            {trip}
-          </span>
-        ))}
+        <div className="mt-1.5 flex gap-1 overflow-x-auto whitespace-nowrap pb-0.5 [-webkit-overflow-scrolling:touch]">
+          {visibleTrips.map((trip) => (
+            <span
+              key={`${name}-${trip}`}
+              className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700"
+            >
+              {trip}
+            </span>
+          ))}
+          {remainingCount > 0 ? (
+            <span className="inline-flex rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+              +{remainingCount} more
+            </span>
+          ) : null}
+        </div>
       </div>
     </article>
   );

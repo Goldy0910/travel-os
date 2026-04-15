@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getStaticPhrasebook } from "@/lib/phrasebook-static";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -145,25 +146,33 @@ function parsePhrasebookJson(raw: string): PhrasebookCategory[] | null {
 
 export async function POST(req: NextRequest) {
   const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) {
-    return NextResponse.json({ error: "GEMINI_API_KEY is not configured." }, { status: 503 });
-  }
-
   let body: { language?: unknown; destination?: unknown };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ categories: [], source: "error" as const, error: "Invalid JSON" }, { status: 400 });
   }
 
   const language = typeof body.language === "string" ? body.language.trim() : "";
   const destination = typeof body.destination === "string" ? body.destination.trim() : "";
 
   if (!language) {
-    return NextResponse.json({ error: "language is required" }, { status: 400 });
+    return NextResponse.json(
+      { categories: [], source: "error" as const, error: "language is required" },
+      { status: 400 },
+    );
   }
-  if (!destination) {
-    return NextResponse.json({ error: "destination is required" }, { status: 400 });
+
+  const staticPhrasebook = getStaticPhrasebook(language);
+  if (staticPhrasebook) {
+    return NextResponse.json({ categories: staticPhrasebook, source: "static" as const });
+  }
+
+  if (!key) {
+    return NextResponse.json(
+      { categories: [], source: "error" as const, error: "Phrasebook unavailable (no AI key)." },
+      { status: 503 },
+    );
   }
 
   const categoryList = CATEGORY_ORDER.map((c, i) => `${i + 1}. ${c}`).join("\n");
@@ -211,25 +220,30 @@ Rules:
   if (!response.ok) {
     const msg = geminiErrorMessage(data) || `HTTP ${response.status}`;
     return NextResponse.json(
-      { error: msg },
+      { categories: [], source: "error" as const, error: msg },
       { status: response.status >= 400 && response.status < 600 ? response.status : 502 },
     );
   }
 
   const apiErr = geminiErrorMessage(data);
   if (apiErr) {
-    return NextResponse.json({ error: apiErr }, { status: 502 });
+    return NextResponse.json({ categories: [], source: "error" as const, error: apiErr }, { status: 502 });
   }
 
   const rawText = extractText(data);
   if (!rawText) {
-    return NextResponse.json({ error: "Empty response from model" }, { status: 502 });
+    return NextResponse.json(
+      { categories: [], source: "error" as const, error: "Empty response from model" },
+      { status: 502 },
+    );
   }
 
   const categories = parsePhrasebookJson(rawText);
   if (!categories) {
     return NextResponse.json(
       {
+        categories: [],
+        source: "error" as const,
         error: "Could not parse phrasebook JSON from model",
         ...(process.env.NODE_ENV === "development" ? { raw: rawText } : {}),
       },
@@ -237,5 +251,5 @@ Rules:
     );
   }
 
-  return NextResponse.json(categories);
+  return NextResponse.json({ categories, source: "generated" as const });
 }

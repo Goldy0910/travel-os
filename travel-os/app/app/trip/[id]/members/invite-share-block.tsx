@@ -35,9 +35,9 @@ export default function InviteShareBlock({
   }, [joinUrl]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       {!hasInviteCode ? (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           This trip does not have an invite code yet. Ask an organizer to refresh trip settings or
           run the latest database migration so links work for new guests.
         </p>
@@ -47,11 +47,11 @@ export default function InviteShareBlock({
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Invite link
         </p>
-        <div className="mt-2 min-h-[3.25rem] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-900 break-all">
+        <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-900 break-all">
           {joinUrl}
         </div>
         {inviteCode ? (
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-1.5 text-[11px] text-slate-500">
             Code: <span className="font-mono font-medium text-slate-800">{inviteCode}</span>
           </p>
         ) : null}
@@ -61,22 +61,22 @@ export default function InviteShareBlock({
         <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
       ) : null}
 
-      <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={copyLink}
-          className="flex min-h-14 w-full touch-manipulation items-center justify-center rounded-2xl border-2 border-slate-900 bg-white px-4 text-base font-semibold text-slate-900 shadow-sm transition active:scale-[0.99] active:bg-slate-50"
+          className="flex min-h-10 w-full touch-manipulation items-center justify-center rounded-lg border border-slate-900 bg-white px-3 text-sm font-semibold text-slate-900 transition active:scale-[0.99] active:bg-slate-50"
         >
-          {copied ? "Copied to clipboard" : "Copy invite link"}
+          {copied ? "Copied" : "Copy link"}
         </button>
         <a
           href={whatsappHref}
           target="_blank"
           rel="noreferrer"
-          className="flex min-h-14 w-full touch-manipulation items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 text-base font-semibold text-white shadow-md shadow-emerald-900/15 transition active:scale-[0.99] active:bg-[#20BD5A]"
+          className="flex min-h-10 w-full touch-manipulation items-center justify-center gap-1.5 rounded-lg bg-[#25D366] px-3 text-sm font-semibold text-white transition active:scale-[0.99] active:bg-[#20BD5A]"
         >
-          <WhatsAppGlyph className="h-6 w-6 shrink-0" aria-hidden />
-          Share on WhatsApp
+          <WhatsAppGlyph className="h-4 w-4 shrink-0" aria-hidden />
+          WhatsApp
         </a>
       </div>
     </div>

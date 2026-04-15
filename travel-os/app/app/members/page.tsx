@@ -75,28 +75,28 @@ export default async function MembersHubPage() {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-6 pb-[calc(var(--travel-os-bottom-nav-h)+6rem)]">
-      <div className="mx-auto w-full max-w-md space-y-4">
+    <main className="min-h-screen bg-slate-50 px-4 py-4 pb-[calc(var(--travel-os-bottom-nav-h)+5rem)]">
+      <div className="mx-auto w-full max-w-md space-y-3">
         <header>
-          <h1 className="text-2xl font-semibold text-slate-900">Members</h1>
-          <p className="mt-1 text-sm text-slate-600">People across all your trips.</p>
+          <h1 className="text-xl font-semibold text-slate-900">Members</h1>
+          <p className="mt-0.5 text-xs text-slate-600">People across all your trips.</p>
         </header>
         {error ? (
           <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error.message}</p>
         ) : members.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
             <p>No members found yet.</p>
-            <div className="mt-3 flex gap-3">
+            <div className="mt-2.5 flex gap-2">
               <Link
                 href="/app/create-trip"
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white"
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-900 px-3 text-sm font-medium text-white"
               >
                 Create trip
                 <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-white" />
               </Link>
               <Link
                 href="/app/home"
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700"
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"
               >
                 Go home
                 <LinkLoadingIndicator spinnerClassName="h-3.5 w-3.5 text-slate-600" />
@@ -104,9 +104,9 @@ export default async function MembersHubPage() {
             </div>
           </div>
         ) : (
-          <ul className="space-y-2">
+          <ul className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             {members.map((member) => (
-              <li key={`${member.name}-${member.trips.join("|")}`}>
+              <li key={`${member.name}-${member.trips.join("|")}`} className="border-b border-slate-100 last:border-0">
                 <HubMemberItem name={member.name} trips={member.trips} />
               </li>
             ))}

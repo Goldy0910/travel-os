@@ -1,7 +1,7 @@
 "use client";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 const CATEGORIES = ["documents", "clothes", "electronics", "health", "toiletries", "misc"] as const;
@@ -44,6 +44,10 @@ function normalizeCategory(raw: string): string {
   return CATEGORIES.includes(c as (typeof CATEGORIES)[number]) ? c : "misc";
 }
 
+function normalizeLabel(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 export default function ChecklistTab({
   tripId,
   destination,
@@ -51,7 +55,8 @@ export default function ChecklistTab({
   travelMonth,
   activities = [],
 }: Props) {
-  const supabase = createSupabaseBrowserClient();
+  // Keep one client instance for this mounted tab to avoid re-fetch loops on each render.
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [userId, setUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"personal" | "shared">("personal");
   const [personalChecklist, setPersonalChecklist] = useState<Checklist | null>(null);
@@ -63,6 +68,7 @@ export default function ChecklistTab({
     Array<{ id: string; name: string; checklist_template_items?: ItemTemplateRow[] }>
   >([]);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const current = activeTab === "personal" ? personalChecklist : sharedChecklist;
   const setCurrent = activeTab === "personal" ? setPersonalChecklist : setSharedChecklist;
@@ -70,7 +76,7 @@ export default function ChecklistTab({
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase.auth.getUser();
+      const { data } = await (supabase.auth as { getUser: () => Promise<{ data: { user: { id: string } | null } }> }).getUser();
       if (!cancelled) setUserId(data.user?.id ?? null);
     })();
     return () => {
@@ -176,7 +182,20 @@ export default function ChecklistTab({
   }, [userId, loadChecklists]);
 
   async function addItem() {
-    if (!newLabel.trim() || !current) return;
+    if (!current) {
+      toast.message("Checklist is still loading. Please try again.");
+      return;
+    }
+    if (!newLabel.trim()) {
+      toast.message("Enter an item name first.");
+      return;
+    }
+    const normalizedNewLabel = normalizeLabel(newLabel);
+    const alreadyExists = current.items.some((item) => normalizeLabel(item.label) === normalizedNewLabel);
+    if (alreadyExists) {
+      toast.message("That item is already in your checklist.");
+      return;
+    }
     const { data, error } = await supabase
       .from("checklist_items")
       .insert({
@@ -195,6 +214,7 @@ export default function ChecklistTab({
     if (data) {
       setCurrent((prev) => (prev ? { ...prev, items: [...prev.items, normalizeItemRow(data as ItemRow)] } : prev));
       setNewLabel("");
+      setIsAddModalOpen(false);
     }
   }
 
@@ -263,9 +283,23 @@ export default function ChecklistTab({
         toast.message("No items returned. Set GEMINI_API_KEY or try again.");
         return;
       }
-      const newItems = rawItems.map((item, i) => ({
+      const existingLabelSet = new Set((current.items ?? []).map((item) => normalizeLabel(item.label)));
+      const dedupedRawItems: Array<{ label: string; category?: string }> = [];
+      for (const item of rawItems) {
+        const cleanedLabel = String(item.label ?? "").trim();
+        if (!cleanedLabel) continue;
+        const key = normalizeLabel(cleanedLabel);
+        if (existingLabelSet.has(key)) continue;
+        existingLabelSet.add(key);
+        dedupedRawItems.push({ label: cleanedLabel, category: item.category });
+      }
+      if (dedupedRawItems.length === 0) {
+        toast.message("All generated items already exist in your checklist.");
+        return;
+      }
+      const newItems = dedupedRawItems.map((item, i) => ({
         checklist_id: current.id,
-        label: item.label.trim(),
+        label: item.label,
         category: normalizeCategory(item.category ?? "misc"),
         created_by: userId,
         sort_order: (current.items?.length || 0) + i + 1,
@@ -280,7 +314,12 @@ export default function ChecklistTab({
         setCurrent((prev) =>
           prev ? { ...prev, items: [...prev.items, ...rows.map((row) => normalizeItemRow(row))] } : prev,
         );
-        toast.success(`Added ${inserted.length} items.`);
+        const skipped = rawItems.length - inserted.length;
+        if (skipped > 0) {
+          toast.success(`Added ${inserted.length} items (${skipped} duplicate${skipped === 1 ? "" : "s"} skipped).`);
+        } else {
+          toast.success(`Added ${inserted.length} items.`);
+        }
       }
     } finally {
       setIsGenerating(false);
@@ -315,7 +354,22 @@ export default function ChecklistTab({
       toast.message("This template has no items.");
       return;
     }
-    const items = rows.map((i, idx) => ({
+    const existingLabelSet = new Set((current.items ?? []).map((item) => normalizeLabel(item.label)));
+    const dedupedRows: ItemTemplateRow[] = [];
+    for (const row of rows) {
+      const cleanedLabel = String(row.label ?? "").trim();
+      if (!cleanedLabel) continue;
+      const key = normalizeLabel(cleanedLabel);
+      if (existingLabelSet.has(key)) continue;
+      existingLabelSet.add(key);
+      dedupedRows.push({ ...row, label: cleanedLabel });
+    }
+    if (dedupedRows.length === 0) {
+      toast.message("All template items already exist in your checklist.");
+      setShowTemplates(false);
+      return;
+    }
+    const items = dedupedRows.map((i, idx) => ({
       checklist_id: current.id,
       label: i.label,
       category: normalizeCategory(i.category ?? "misc"),
@@ -332,7 +386,14 @@ export default function ChecklistTab({
       setCurrent((prev) =>
         prev ? { ...prev, items: [...prev.items, ...rows.map((row) => normalizeItemRow(row))] } : prev,
       );
-      toast.success(`Added ${inserted.length} items from template.`);
+      const skipped = (template.checklist_template_items ?? []).length - inserted.length;
+      if (skipped > 0) {
+        toast.success(
+          `Added ${inserted.length} items from template (${skipped} duplicate${skipped === 1 ? "" : "s"} skipped).`,
+        );
+      } else {
+        toast.success(`Added ${inserted.length} items from template.`);
+      }
     }
     setShowTemplates(false);
   }
@@ -431,35 +492,6 @@ export default function ChecklistTab({
         </div>
       ) : null}
 
-      <div className="flex gap-2">
-        <select
-          value={newCategory}
-          onChange={(e) => setNewCategory(e.target.value)}
-          className="w-32 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
-        >
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {CATEGORY_ICONS[c]} {c}
-            </option>
-          ))}
-        </select>
-        <input
-          value={newLabel}
-          onChange={(e) => setNewLabel(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void addItem()}
-          placeholder="Add item…"
-          className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
-        />
-        <button
-          type="button"
-          onClick={() => void addItem()}
-          disabled={!current}
-          className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          Add
-        </button>
-      </div>
-
       {Object.entries(grouped).map(([category, catItems]) => (
         <div key={category} className="overflow-hidden rounded-xl border border-gray-100 bg-white">
           <div className="border-b border-gray-100 bg-gray-50 px-4 py-2">
@@ -502,6 +534,81 @@ export default function ChecklistTab({
         <div className="py-10 text-center text-sm text-gray-400">
           <p className="mb-2 text-2xl">🎒</p>
           <p>No items yet. Use AI Generate or add manually.</p>
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        aria-label="Add checklist item"
+        onClick={() => setIsAddModalOpen(true)}
+        disabled={!current}
+        className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        +
+      </button>
+
+      {isAddModalOpen ? (
+        <div className="fixed inset-0 z-[120] flex items-end bg-black/40 sm:items-center sm:justify-center">
+          <button
+            type="button"
+            aria-label="Close add item modal"
+            onClick={() => setIsAddModalOpen(false)}
+            className="absolute inset-0 h-full w-full"
+          />
+          <div className="relative z-[121] w-full rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:max-w-md sm:rounded-2xl sm:pb-4">
+            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200 sm:hidden" />
+            <h3 className="text-base font-semibold text-gray-900">Add checklist item</h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Pick a category and save the item to your current checklist.
+            </p>
+
+            <div className="mt-4 flex flex-col gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-gray-600">Category</span>
+                <select
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {CATEGORY_ICONS[c]} {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-gray-600">Item</span>
+                <input
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void addItem()}
+                  placeholder="e.g. Passport, charger, jacket"
+                  className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+                  autoFocus
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void addItem()}
+                disabled={!current || !newLabel.trim()}
+                className="flex-1 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

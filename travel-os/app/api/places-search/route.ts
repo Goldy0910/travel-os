@@ -30,6 +30,57 @@ const NEW_API_FIELD_MASK_FULL =
 const NEW_API_FIELD_MASK_MIN =
   "places.id,places.displayName,places.formattedAddress,places.rating,places.priceLevel,places.googleMapsUri,places.types,places.userRatingCount,places.photos";
 
+const SEARCH_CACHE_TTL_MS = 1000 * 60 * 15; // 15 minutes
+const SEARCH_CACHE_MAX_ENTRIES = 200;
+
+type CacheEntry = {
+  expiresAt: number;
+  places: NormalizedPlace[];
+};
+
+const placesSearchCache = new Map<string, CacheEntry>();
+
+function roundCoord(value?: number): string {
+  if (value == null || !Number.isFinite(value)) return "";
+  // ~1.1km precision at equator; enough for nearby repeat searches.
+  return value.toFixed(2);
+}
+
+function makeCacheKey(input: {
+  textQuery: string;
+  budget: string;
+  lat?: number;
+  lon?: number;
+}): string {
+  return JSON.stringify({
+    q: input.textQuery.trim().toLowerCase(),
+    b: input.budget.trim().toLowerCase(),
+    lat: roundCoord(input.lat),
+    lon: roundCoord(input.lon),
+  });
+}
+
+function readFromCache(cacheKey: string): NormalizedPlace[] | null {
+  const cached = placesSearchCache.get(cacheKey);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    placesSearchCache.delete(cacheKey);
+    return null;
+  }
+  return cached.places;
+}
+
+function writeToCache(cacheKey: string, places: NormalizedPlace[]) {
+  if (placesSearchCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
+    const firstKey = placesSearchCache.keys().next().value;
+    if (typeof firstKey === "string") placesSearchCache.delete(firstKey);
+  }
+  placesSearchCache.set(cacheKey, {
+    places,
+    expiresAt: Date.now() + SEARCH_CACHE_TTL_MS,
+  });
+}
+
 function newApiErrorMessage(data: unknown): string {
   if (!data || typeof data !== "object") return "";
   const err = (data as { error?: { message?: string; status?: string } }).error;
@@ -220,10 +271,17 @@ export async function POST(req: NextRequest) {
   const lon =
     typeof body.longitude === "number" && Number.isFinite(body.longitude) ? body.longitude : undefined;
 
+  const cacheKey = makeCacheKey({ textQuery, budget, lat, lon });
+  const cachedPlaces = readFromCache(cacheKey);
+  if (cachedPlaces) {
+    return jsonResponse({ places: cachedPlaces, source: "places_new_cache" as const, cached: true as const });
+  }
+
   const newResult = await searchPlacesNew(key, textQuery, budget, lat, lon);
 
   if (newResult.ok) {
-    return jsonResponse({ places: newResult.places, source: "places_new" as const });
+    writeToCache(cacheKey, newResult.places);
+    return jsonResponse({ places: newResult.places, source: "places_new" as const, cached: false as const });
   }
 
   const blocked =
