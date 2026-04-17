@@ -144,16 +144,16 @@ function toStringList(value: unknown): string[] {
 
 function toSteps(value: unknown): VisaProcessStep[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((entry) => {
-      const record = entry as Record<string, unknown>;
-      const title = typeof record.title === "string" ? record.title.trim() : "";
-      const tip = typeof record.tip === "string" ? record.tip.trim() : "";
-      const link = typeof record.link === "string" ? record.link.trim() : null;
-      if (!title || !tip) return null;
-      return { title, tip, link: link || null };
-    })
-    .filter((s): s is VisaProcessStep => s != null);
+  const out: VisaProcessStep[] = [];
+  for (const entry of value) {
+    const record = entry as Record<string, unknown>;
+    const title = typeof record.title === "string" ? record.title.trim() : "";
+    const tip = typeof record.tip === "string" ? record.tip.trim() : "";
+    const linkRaw = typeof record.link === "string" ? record.link.trim() : "";
+    if (!title || !tip) continue;
+    out.push(linkRaw ? { title, tip, link: linkRaw } : { title, tip });
+  }
+  return out;
 }
 
 function rowToGuide(row: VisaGuideRow): VisaGuide {

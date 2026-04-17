@@ -7,8 +7,8 @@ type AiActivity = {
 };
 
 type ExtractedPdfActivity = {
-  date?: string;
-  day?: string;
+  date?: string | null;
+  day?: string | null;
   title?: string;
   time?: string | null;
   location?: string | null;
