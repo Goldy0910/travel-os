@@ -158,5 +158,8 @@ export async function createTripAction(formData: FormData): Promise<FormActionRe
 
   revalidatePath("/app/trips");
   revalidatePath("/app/home");
-  return actionSuccess("Trip created.", "/app/trips");
+  return actionSuccess(
+    "Trip created.",
+    `/app/trip/${encodeURIComponent(tripId)}?tab=itinerary&setupItinerary=1`,
+  );
 }

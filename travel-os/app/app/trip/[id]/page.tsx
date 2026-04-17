@@ -1,5 +1,5 @@
 import { SetAppHeader } from "@/components/AppHeader";
-import { getTravelGuidesForPlace } from "@/lib/travelGuides";
+import { getTravelGuidesForPlaceScalable } from "@/lib/travelGuides-sheet";
 import { pruneItineraryOutsideTripRange } from "@/lib/itinerary-trip-range";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { countTripMembers, getMemberRole, isTripMember } from "@/lib/trip-membership";
@@ -138,6 +138,10 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     pickFirstQuery(query, "section") || null,
   );
   const quickAction = pickFirstQuery(query, "quickAction").trim().toLowerCase();
+  const setupItinerary = pickFirstQuery(query, "setupItinerary").trim().toLowerCase();
+  const foodTab = pickFirstQuery(query, "foodTab").trim().toLowerCase();
+  const initialFoodView: "discover" | "saved" | "translate" =
+    foodTab === "menu" ? "translate" : foodTab === "saved" ? "saved" : "discover";
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -176,7 +180,8 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     ["place", "location", "destination", "city"],
     "",
   );
-  const guidesBundle = activeTab === "guides" ? getTravelGuidesForPlace(tripPlace) : null;
+  const guidesBundle =
+    activeTab === "guides" ? await getTravelGuidesForPlaceScalable(tripPlace) : null;
   const tripEditDefaults = {
     title,
     location: location || title,
@@ -409,6 +414,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                       currentUserId={user.id}
                       memberLabelByUserId={itineraryData.memberLabelByUserId}
                       autoOpenAddActivity={quickAction === "activity"}
+                      showItinerarySetupPrompt={setupItinerary === "1" || setupItinerary === "true"}
                     />
                     <TripActivityFeed tripId={tripId} />
                   </div>
@@ -463,7 +469,11 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
               }
               food={
                 activeTab === "food" ? (
-                  <FoodTab tripId={tripId} destination={tripPlace || location || title} />
+                  <FoodTab
+                    tripId={tripId}
+                    destination={tripPlace || location || title}
+                    initialView={initialFoodView}
+                  />
                 ) : null
               }
               language={

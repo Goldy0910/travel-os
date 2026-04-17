@@ -4,7 +4,8 @@ import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
 import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import { updateTripDetailsAction } from "../data-actions";
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { resolveDestination } from "@/app/app/_lib/destination-intel";
 
 export type TripEditDefaults = {
   title: string;
@@ -36,11 +37,22 @@ export default function TripUpdateBottomSheet({
   formKey,
 }: TripUpdateBottomSheetProps) {
   const d = defaults ?? EMPTY_TRIP_EDIT_DEFAULTS;
+  const [locationValue, setLocationValue] = useState(d.location);
   const saveAction = useCallback(
     (fd: FormData) => updateTripDetailsAction(tripId, fd),
     [tripId],
   );
   const { pending, handleForm } = useFormActionFeedback();
+  const destinationIntel = useMemo(() => resolveDestination(locationValue), [locationValue]);
+  const showDetected =
+    locationValue.trim().length > 0 &&
+    destinationIntel.country.trim().length > 0 &&
+    destinationIntel.country !== "Unknown";
+  const detectedLabel = `${destinationIntel.city}, ${destinationIntel.country}`;
+
+  useEffect(() => {
+    setLocationValue(d.location);
+  }, [d.location, formKey, open]);
 
   return (
     <BottomSheetModal
@@ -72,10 +84,21 @@ export default function TripUpdateBottomSheet({
           <input
             name="location"
             required
-            defaultValue={d.location}
+            value={locationValue}
+            onChange={(e) => setLocationValue(e.target.value)}
             placeholder="City or region"
             className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-base text-slate-900 outline-none focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
           />
+          {showDetected ? (
+            <button
+              type="button"
+              onClick={() => setLocationValue(detectedLabel)}
+              className="mt-2 w-full rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-left text-xs font-medium text-indigo-800"
+            >
+              Detected: {detectedLabel}
+              <span className="ml-1 text-indigo-600 underline">Tap to autofill</span>
+            </button>
+          ) : null}
         </label>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

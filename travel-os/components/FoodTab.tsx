@@ -3,6 +3,7 @@
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { resolveDestination } from "@/app/app/_lib/destination-intel";
 
 const CUISINES = [
   "Any",
@@ -68,6 +69,7 @@ type MenuItem = {
 type Props = {
   tripId: string;
   destination: string;
+  initialView?: "discover" | "saved" | "translate";
 };
 
 function toRestaurantForSave(r: Restaurant | SavedRestaurantRow): Restaurant {
@@ -88,10 +90,10 @@ function toRestaurantForSave(r: Restaurant | SavedRestaurantRow): Restaurant {
   };
 }
 
-export default function FoodTab({ tripId, destination }: Props) {
+export default function FoodTab({ tripId, destination, initialView = "discover" }: Props) {
   const supabase = createSupabaseBrowserClient();
   const [userId, setUserId] = useState<string | null>(null);
-  const [view, setView] = useState<"discover" | "saved" | "translate">("discover");
+  const [view, setView] = useState<"discover" | "saved" | "translate">(initialView);
   const [cuisine, setCuisine] = useState("Any");
   const [dietary, setDietary] = useState("None");
   const [budget, setBudget] = useState("");
@@ -105,11 +107,16 @@ export default function FoodTab({ tripId, destination }: Props) {
   const [isTranslating, setIsTranslating] = useState(false);
   const menuGalleryInputRef = useRef<HTMLInputElement>(null);
   const menuCameraInputRef = useRef<HTMLInputElement>(null);
+  const hasAutoSearchedRef = useRef(false);
+  const destinationIntel = resolveDestination(destination);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase.auth.getUser();
+      const authClient = supabase.auth as unknown as {
+        getUser: () => Promise<{ data: { user: { id: string } | null } }>;
+      };
+      const { data } = await authClient.getUser();
       if (!cancelled) setUserId(data.user?.id ?? null);
     })();
     return () => {
@@ -159,8 +166,8 @@ export default function FoodTab({ tripId, destination }: Props) {
     }
   }, [userId, loadSaved, loadVotes]);
 
-  async function searchRestaurants() {
-    const dest = destination.trim();
+  const searchRestaurants = useCallback(async () => {
+    const dest = (destinationIntel.searchQuery || destination).trim();
     if (!dest) {
       toast.error("Set a trip destination to search restaurants.");
       return;
@@ -229,7 +236,26 @@ export default function FoodTab({ tripId, destination }: Props) {
     } finally {
       setIsSearching(false);
     }
-  }
+  }, [budget, cuisine, destination, destinationIntel.searchQuery, dietary]);
+
+  useEffect(() => {
+    // Reset auto-search guard when opening a different trip.
+    hasAutoSearchedRef.current = false;
+  }, [tripId]);
+
+  useEffect(() => {
+    setView(initialView);
+  }, [initialView]);
+
+  useEffect(() => {
+    // Auto-load default discover results on first open for better UX.
+    if (view !== "discover") return;
+    if (hasAutoSearchedRef.current) return;
+    if (searched || isSearching) return;
+    if (!destination.trim()) return;
+    hasAutoSearchedRef.current = true;
+    void searchRestaurants();
+  }, [destination, isSearching, searchRestaurants, searched, view]);
 
   async function toggleSave(r: Restaurant | SavedRestaurantRow) {
     const row = toRestaurantForSave(r);
@@ -417,7 +443,7 @@ export default function FoodTab({ tripId, destination }: Props) {
             <select
               value={dietary}
               onChange={(e) => setDietary(e.target.value)}
-              className="min-h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+              className="min-h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 pr-9 text-sm text-gray-700"
             >
               {DIETARY.map((d) => (
                 <option key={d} value={d}>
@@ -428,7 +454,7 @@ export default function FoodTab({ tripId, destination }: Props) {
             <select
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
-              className="min-h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+              className="min-h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 pr-9 text-sm text-gray-700"
             >
               {BUDGETS.map((b) => (
                 <option key={b.value || "any"} value={b.value}>
@@ -444,7 +470,7 @@ export default function FoodTab({ tripId, destination }: Props) {
             disabled={isSearching}
             className="min-h-12 w-full touch-manipulation rounded-xl bg-indigo-600 py-3 text-sm font-medium text-white disabled:opacity-50"
           >
-            {isSearching ? "Searching…" : `🍽️ Find restaurants in ${destination.trim() || "…"}`}
+            {isSearching ? "Searching…" : `🍽️ Find restaurants in ${destinationIntel.searchQuery || destination.trim() || "…"}`}
           </button>
 
           {restaurants.map((r) => {

@@ -8,6 +8,8 @@ import { useTripActiveTab } from "../_lib/trip-active-tab-context";
 import { useTripFabRegistry } from "../_lib/trip-tab-fab-registry";
 import {
   deleteItineraryItemAction,
+  generateAiItineraryAction,
+  importPdfItineraryAction,
   deleteTripAction,
   saveItineraryActivityAction,
 } from "../data-actions";
@@ -18,6 +20,7 @@ import EntityCommentsBlock, {
 import TripUpdateBottomSheet, {
   type TripEditDefaults,
 } from "./trip-update-bottom-sheet";
+import ItineraryCreationSetup from "./itinerary-creation-setup";
 
 const FALLBACK_TRIP_EDIT_DEFAULTS: TripEditDefaults = {
   title: "",
@@ -51,6 +54,7 @@ type TripItineraryShellProps = {
   currentUserId: string;
   memberLabelByUserId: Record<string, string>;
   autoOpenAddActivity?: boolean;
+  showItinerarySetupPrompt?: boolean;
 };
 
 function formatDateLabel(input: string) {
@@ -316,6 +320,7 @@ export default function TripItineraryShell({
   currentUserId,
   memberLabelByUserId,
   autoOpenAddActivity = false,
+  showItinerarySetupPrompt = false,
 }: TripItineraryShellProps) {
   const activeTripTab = useTripActiveTab();
   const itineraryTabActive = activeTripTab === "itinerary";
@@ -360,6 +365,30 @@ export default function TripItineraryShell({
     setFormKey(`new-${formKeySeq.current}`);
     setSheetOpen(true);
   }, [defaultDateForAdd]);
+
+  const generateAiAction = useCallback(
+    (fd: FormData) => generateAiItineraryAction(tripId, fd),
+    [tripId],
+  );
+  const importPdfAction = useCallback(
+    (fd: FormData) => importPdfItineraryAction(tripId, fd),
+    [tripId],
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        `travel-os-itinerary-cache:${tripId}`,
+        JSON.stringify({
+          orderedDates,
+          grouped,
+          cachedAt: new Date().toISOString(),
+        }),
+      );
+    } catch {
+      // ignore cache write failures
+    }
+  }, [grouped, orderedDates, tripId]);
 
   useEffect(() => {
     setOpenActivity(openAdd);
@@ -468,6 +497,17 @@ export default function TripItineraryShell({
 
       <section className="mt-4 rounded-xl border border-black/[0.08] bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-[#1a2340]">Itinerary</h2>
+
+        {showItinerarySetupPrompt ? (
+          <div className="mt-3">
+            <ItineraryCreationSetup
+              tripId={tripId}
+              onGenerateAi={generateAiAction}
+              onImportPdf={importPdfAction}
+              onChooseManual={() => openAdd()}
+            />
+          </div>
+        ) : null}
 
         {initialError ? (
           <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{initialError}</p>

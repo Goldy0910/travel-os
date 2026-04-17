@@ -3,6 +3,7 @@
 import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { resolveDestination } from "@/app/app/_lib/destination-intel";
 
 /** v0.15+ auth-helpers: use createBrowserClient (createClientComponentClient was consolidated into @supabase/ssr). */
 function useSupabaseBrowser() {
@@ -18,6 +19,8 @@ function useSupabaseBrowser() {
 
 /** Infer primary spoken language from destination text (cities & regions). */
 function detectLanguage(destination: string): string {
+  const intel = resolveDestination(destination);
+  const inferredLanguage = intel.language;
   const raw = destination.toLowerCase().trim();
   if (!raw) return "English";
   const d = ` ${raw.replace(/[^\p{L}\p{N}\s,-]/gu, " ").replace(/\s+/g, " ")} `;
@@ -62,6 +65,8 @@ function detectLanguage(destination: string): string {
   if (hasAny(["gujarat", "ahmedabad", "surat", "vadodara", "rajkot"])) return "Gujarati";
   if (hasAny(["punjab", "ludhiana", "jalandhar", "patiala"])) return "Punjabi";
   if (hasAny(["odisha", "orissa", "bhubaneswar", "puri", "cuttack"])) return "Odia";
+
+  if (inferredLanguage && inferredLanguage !== "English") return inferredLanguage;
 
   if (hasAny(["japan", "tokyo", "osaka", "kyoto", "sapporo", "hokkaido"])) return "Japanese";
   if (hasAny(["france", "paris", "lyon", "nice", "marseille"])) return "French";
@@ -672,12 +677,6 @@ export default function LanguageClient({ tripId, tripTitle, destination }: Props
               </div>
             ) : (
               <>
-                {phrasebookSource === "static" ? (
-                  <p className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-center text-[11px] leading-snug text-emerald-900">
-                    Using built-in phrasebook for {language} — no AI generation. Audio still uses TTS when you tap play
-                    (cached after first play).
-                  </p>
-                ) : null}
                 <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-webkit-overflow-scrolling:touch]">
                   {phrasebook.map((cat, i) => (
                     <button

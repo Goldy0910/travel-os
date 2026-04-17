@@ -40,7 +40,7 @@ function GuideVideoCard({ title, youtubeId }: { title: string; youtubeId: string
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group relative block w-[min(17.5rem,78vw)] shrink-0 snap-start overflow-hidden rounded-2xl bg-slate-900 shadow-md ring-1 ring-slate-200/90 transition active:scale-[0.98]"
+      className="group relative block w-full overflow-hidden rounded-2xl bg-slate-900 shadow-md ring-1 ring-slate-200/90 transition active:scale-[0.98]"
     >
       <div className="relative aspect-video w-full overflow-hidden bg-slate-800">
         {/* eslint-disable-next-line @next/next/no-img-element -- external YouTube CDN; no API */}
@@ -87,7 +87,7 @@ function VideoSection({
   if (videos.length === 0) return <EmptyState destinationLabel={destinationLabel} />;
 
   return (
-    <div className="scrollbar-hide -mx-1 flex gap-3 overflow-x-auto overscroll-x-contain px-1 pb-1 pt-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [touch-action:pan-x] [&::-webkit-scrollbar]:hidden">
+    <div className="flex flex-col gap-3">
       {videos.map((v) => (
         <GuideVideoCard key={`${v.youtubeId}-${v.title}`} {...v} />
       ))}

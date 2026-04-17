@@ -4,10 +4,19 @@ import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
 import Link from "next/link";
+import { useMemo, useState } from "react";
+import { resolveDestination } from "@/app/app/_lib/destination-intel";
 import { createTripAction } from "./actions";
 
 export default function CreateTripForm() {
   const { pending, handleForm } = useFormActionFeedback();
+  const [location, setLocation] = useState("");
+  const destinationIntel = useMemo(() => resolveDestination(location), [location]);
+  const showDetected =
+    location.trim().length > 0 &&
+    destinationIntel.country.trim().length > 0 &&
+    destinationIntel.country !== "Unknown";
+  const detectedLabel = `${destinationIntel.city}, ${destinationIntel.country}`;
 
   return (
     <form onSubmit={(e) => handleForm(e, createTripAction)} className="space-y-4">
@@ -20,10 +29,22 @@ export default function CreateTripForm() {
           name="location"
           type="text"
           placeholder="Tokyo"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
           className="h-12 w-full rounded-xl border border-slate-300 px-4 text-base text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
           required
           disabled={pending}
         />
+        {showDetected ? (
+          <button
+            type="button"
+            onClick={() => setLocation(detectedLabel)}
+            className="mt-2 w-full rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-left text-xs font-medium text-indigo-800"
+          >
+            Detected: {detectedLabel}
+            <span className="ml-1 text-indigo-600 underline">Tap to autofill</span>
+          </button>
+        ) : null}
       </div>
 
       <div>

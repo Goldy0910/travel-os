@@ -15,6 +15,11 @@ import {
   computeExpenseSplit,
   type SplitType,
 } from "@/app/app/trip/[id]/expenses/_lib/expense-split";
+import {
+  enumerateTripDates,
+  extractPdfItineraryDraft,
+  generateAiItineraryDraft,
+} from "@/app/app/trip/[id]/_lib/itinerary-bootstrap-ai";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -61,6 +66,83 @@ async function ensureItineraryDayId(
     throw new Error(dayInsertError?.message || "Could not create itinerary day");
   }
   return newDay.id;
+}
+
+type DraftActivityRow = {
+  date: string;
+  title: string;
+  time: string | null;
+  location: string;
+  notes: string | null;
+};
+
+function pickFirstTripDateValue(row: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const raw = row[key];
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+  }
+  return "";
+}
+
+function normalizeTripDateInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  const ymd = extractYMD(trimmed);
+  if (ymd) return ymd;
+  const d = new Date(trimmed);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+async function replaceItineraryWithDraft(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  tripId: string,
+  userId: string,
+  rows: DraftActivityRow[],
+) {
+  if (rows.length === 0) return;
+  const uniqueDates = Array.from(new Set(rows.map((r) => r.date)));
+
+  const { data: existingDays } = await supabase
+    .from("itinerary_days")
+    .select("id, date")
+    .eq("trip_id", tripId)
+    .in("date", uniqueDates);
+  const dayIdByDate = new Map<string, string | number>();
+  for (const row of existingDays ?? []) {
+    if (row.date != null && row.id != null) dayIdByDate.set(String(row.date), row.id);
+  }
+
+  for (const date of uniqueDates) {
+    if (dayIdByDate.has(date)) continue;
+    const dayId = await ensureItineraryDayId(supabase, tripId, userId, date);
+    dayIdByDate.set(date, dayId);
+  }
+
+  // Replace only the items for the dates touched by generated/parsed draft.
+  await supabase.from("itinerary_items").delete().eq("trip_id", tripId).in("date", uniqueDates);
+
+  const payload = rows.map((row) => {
+    const title = row.notes ? `${row.title} — ${row.notes}` : row.title;
+    return {
+      trip_id: tripId,
+      user_id: userId,
+      itinerary_day_id: dayIdByDate.get(row.date) ?? null,
+      date: row.date,
+      activity_name: title,
+      title,
+      location: row.location || "Location TBD",
+      time: row.time,
+    };
+  });
+
+  const { error } = await supabase.from("itinerary_items").insert(payload);
+  if (error) {
+    throw new Error(error.message || "Could not save generated itinerary.");
+  }
 }
 
 export async function saveItineraryActivityAction(
@@ -166,6 +248,118 @@ export async function saveItineraryActivityAction(
   return actionSuccess(
     itemIdRaw ? "Activity updated." : "Activity added.",
   );
+}
+
+export async function generateAiItineraryAction(
+  tripId: string,
+  formData: FormData,
+): Promise<FormActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/app/login");
+
+  const ok = await isTripMember(supabase, tripId, user.id);
+  if (!ok) redirect("/app/home");
+
+  const interests = String(formData.get("interests") ?? "").trim();
+  const budget = String(formData.get("budget") ?? "").trim();
+
+  const { data: trip } = await supabase
+    .from("trips")
+    .select("*")
+    .eq("id", tripId)
+    .maybeSingle();
+  const row = (trip ?? {}) as Record<string, unknown>;
+  const destination =
+    String(row.destination ?? row.location ?? row.city ?? row.place ?? "").trim() || "Destination";
+  const startDate = normalizeTripDateInput(
+    pickFirstTripDateValue(row, ["start_date", "startDate", "date_from"]),
+  );
+  const endDate = normalizeTripDateInput(
+    pickFirstTripDateValue(row, ["end_date", "endDate", "date_to"]),
+  );
+  const tripDates = enumerateTripDates(startDate, endDate);
+  if (tripDates.length === 0) {
+    return actionError("Trip dates are invalid. Please update trip dates first.");
+  }
+
+  try {
+    const draft = await generateAiItineraryDraft({ destination, tripDates, interests, budget });
+    if (draft.length === 0) {
+      return actionError("AI generation failed. Please retry.");
+    }
+    await replaceItineraryWithDraft(supabase, tripId, user.id, draft);
+  } catch {
+    return actionError("AI generation failed. Please retry.");
+  }
+
+  revalidatePath(`/app/trip/${tripId}`);
+  revalidatePath("/app/home");
+  return actionSuccess("AI itinerary draft created.");
+}
+
+export async function importPdfItineraryAction(
+  tripId: string,
+  formData: FormData,
+): Promise<FormActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/app/login");
+
+  const ok = await isTripMember(supabase, tripId, user.id);
+  if (!ok) redirect("/app/home");
+
+  const file = formData.get("itineraryPdf");
+  if (!(file instanceof File) || file.size <= 0) {
+    return actionError("Please upload a PDF file.");
+  }
+  if (file.type !== "application/pdf") {
+    return actionError("Uploaded file must be a PDF.");
+  }
+
+  const { data: trip } = await supabase
+    .from("trips")
+    .select("*")
+    .eq("id", tripId)
+    .maybeSingle();
+  const row = (trip ?? {}) as Record<string, unknown>;
+  const startDate = normalizeTripDateInput(
+    pickFirstTripDateValue(row, ["start_date", "startDate", "date_from"]),
+  );
+  const endDate = normalizeTripDateInput(
+    pickFirstTripDateValue(row, ["end_date", "endDate", "date_to"]),
+  );
+  const tripDates = enumerateTripDates(startDate, endDate);
+  if (tripDates.length === 0) {
+    return actionError("Trip dates are invalid. Please update trip dates first.");
+  }
+
+  try {
+    const arr = new Uint8Array(await file.arrayBuffer());
+    const pdfBase64 = Buffer.from(arr).toString("base64");
+
+    const draft = await extractPdfItineraryDraft({ pdfBase64, tripDates });
+    if (draft.length === 0) {
+      return actionError("Couldn't extract itinerary clearly. Please review or add manually.");
+    }
+    await replaceItineraryWithDraft(supabase, tripId, user.id, draft);
+  } catch (e) {
+    if (process.env.NODE_ENV !== "production") {
+      const reason = e instanceof Error ? e.message : "Unknown extraction error";
+      return actionError(
+        `Couldn't extract itinerary clearly. Please review or add manually. (${reason})`,
+      );
+    }
+    return actionError("Couldn't extract itinerary clearly. Please review or add manually.");
+  }
+
+  revalidatePath(`/app/trip/${tripId}`);
+  revalidatePath("/app/home");
+  return actionSuccess("PDF itinerary imported.");
 }
 
 export async function updateTripDetailsAction(
