@@ -213,6 +213,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     canDeleteTrip: false,
     orderedDates: [] as string[],
     grouped: {} as Record<string, ItineraryItemDTO[]>,
+    hasActivities: false,
     activityCommentsByItemId: {} as Record<string, EntityCommentDTO[]>,
     memberLabelByUserId: {} as Record<string, string>,
     defaultDateForAdd: todayYmd,
@@ -295,6 +296,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
           orderedDates.forEach((date) => {
             grouped[date] = (groupedMap.get(date) ?? []).map(toItemDTO);
           });
+          const hasActivities = Object.values(grouped).some((list) => list.length > 0);
 
           const activityCommentsByItemId = groupCommentsByEntityId(
             (activityCommentsData ?? []) as EntityCommentDTO[],
@@ -341,6 +343,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
             canDeleteTrip: myRole === "organizer",
             orderedDates,
             grouped,
+            hasActivities,
             activityCommentsByItemId,
             memberLabelByUserId,
             defaultDateForAdd: orderedDates[0] ?? todayYmd,
@@ -425,7 +428,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                       autoOpenAddActivity={quickAction === "activity"}
                       showItinerarySetupPrompt={setupItinerary === "1" || setupItinerary === "true"}
                     />
-                    <TripActivityFeed tripId={tripId} />
+                    {itineraryData.hasActivities ? <TripActivityFeed tripId={tripId} /> : null}
                   </div>
                 ) : null
               }

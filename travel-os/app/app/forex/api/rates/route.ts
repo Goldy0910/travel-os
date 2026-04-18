@@ -11,6 +11,7 @@ const FALLBACK_INR: Record<string, number> = {
   USD: 83.5,
   EUR: 90.5,
   GBP: 106.5,
+  INR: 1,
   AED: 22.75,
   SGD: 61.5,
   JPY: 0.55,

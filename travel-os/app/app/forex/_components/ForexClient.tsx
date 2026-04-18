@@ -17,7 +17,7 @@ import { loadRateCache, saveRateCache } from "@/app/app/forex/_lib/storage";
 import { currencyForPlace, inferCountryFromPlace } from "@/app/app/forex/_lib/geo-currency";
 import { resolveDestination } from "@/app/app/_lib/destination-intel";
 
-const CURRENCIES = ["USD", "EUR", "GBP", "AED", "SGD", "JPY", "THB", "AUD", "CAD"];
+const CURRENCIES = ["USD", "EUR", "GBP", "INR", "AED", "SGD", "JPY", "THB", "AUD", "CAD"];
 
 type Props = {
   trips: TripForexOption[];
@@ -53,7 +53,11 @@ function bestEffectiveChannel(
 
 export default function ForexClient({ trips, initialTripId }: Props) {
   const router = useRouter();
-  const [currency, setCurrency] = useState("USD");
+  const initialTrip =
+    trips.find((t) => t.id === (initialTripId || trips[0]?.id)) ?? trips[0] ?? null;
+  const [currency, setCurrency] = useState(() =>
+    currencyForPlace(initialTrip?.destination ?? ""),
+  );
   const [rate, setRate] = useState<ForexRateResponse | null>(null);
   const [rateLoading, setRateLoading] = useState(false);
 
@@ -239,7 +243,7 @@ export default function ForexClient({ trips, initialTripId }: Props) {
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" aria-labelledby="forex-expense-rates-heading">
           <h2 id="forex-expense-rates-heading" className="mb-2 text-sm font-semibold text-slate-900">
-            Expense Rates
+            Exchange Rate
           </h2>
 
           {rateLoading ? (

@@ -1,5 +1,7 @@
 "use client";
 
+import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
+import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { useState } from "react";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import type { FormActionResult } from "@/lib/form-action-result";
@@ -9,6 +11,7 @@ type Props = {
   onGenerateAi: (formData: FormData) => Promise<FormActionResult>;
   onImportPdf: (formData: FormData) => Promise<FormActionResult>;
   onChooseManual: () => void;
+  onCreated: () => void;
 };
 
 type SetupMode = "none" | "ai" | "pdf";
@@ -25,6 +28,7 @@ export default function ItineraryCreationSetup({
   onGenerateAi,
   onImportPdf,
   onChooseManual,
+  onCreated,
 }: Props) {
   const [mode, setMode] = useState<SetupMode>("none");
   const [inlineError, setInlineError] = useState("");
@@ -95,9 +99,15 @@ export default function ItineraryCreationSetup({
         </button>
       </div>
 
-      {mode === "ai" ? (
+      <BottomSheetModal
+        open={mode === "ai"}
+        onClose={() => setMode("none")}
+        title="AI itinerary draft"
+        description="Add optional context before generating your itinerary."
+        panelClassName="max-h-[80vh]"
+      >
         <form
-          className="mt-3 space-y-2.5 rounded-xl border border-indigo-200 bg-indigo-50 p-3"
+          className="space-y-2.5 pb-2"
           onSubmit={(e) =>
             handleForm(
               e,
@@ -116,45 +126,58 @@ export default function ItineraryCreationSetup({
               },
               () => {
                 setMode("none");
+                onCreated();
               },
             )
           }
         >
-          <p className="text-sm font-semibold text-indigo-900">AI itinerary draft</p>
           <input
             type="text"
             name="interests"
             placeholder="Interests (optional)"
-            className="min-h-11 w-full rounded-xl border border-indigo-200 px-3 text-sm"
+            className="min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
           />
           <input
             type="text"
             name="budget"
             placeholder="Budget (optional)"
-            className="min-h-11 w-full rounded-xl border border-indigo-200 px-3 text-sm"
+            className="min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
           />
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setMode("none")}
-              className="min-h-11 flex-1 rounded-xl border border-indigo-200 bg-white text-sm font-semibold text-slate-700"
+              className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={pending}
-              className="min-h-11 flex-1 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white disabled:opacity-60"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {pending ? "Generating..." : "Generate"}
+              {pending ? (
+                <>
+                  <ButtonSpinner className="h-4 w-4 text-white" />
+                  Generating...
+                </>
+              ) : (
+                "Generate"
+              )}
             </button>
           </div>
         </form>
-      ) : null}
+      </BottomSheetModal>
 
-      {mode === "pdf" ? (
+      <BottomSheetModal
+        open={mode === "pdf"}
+        onClose={() => setMode("none")}
+        title="Import from PDF"
+        description="Upload your itinerary PDF and preview extracted activities."
+        panelClassName="max-h-[85vh]"
+      >
         <form
-          className="mt-3 space-y-2.5 rounded-xl border border-indigo-200 bg-indigo-50 p-3"
+          className="space-y-2.5 pb-2"
           onSubmit={(e) =>
             handleForm(
               e,
@@ -174,18 +197,18 @@ export default function ItineraryCreationSetup({
               },
               () => {
                 setMode("none");
+                onCreated();
               },
             )
           }
         >
-          <p className="text-sm font-semibold text-indigo-900">Import from PDF</p>
           <input
             id={`itinerary-pdf-upload-${tripId}`}
             type="file"
             name="itineraryPdf"
             accept="application/pdf"
             required
-            className="min-h-11 w-full rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm"
+            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
           />
           <button
             type="button"
@@ -230,7 +253,7 @@ export default function ItineraryCreationSetup({
               }
             }}
             disabled={previewLoading || pending}
-            className="min-h-11 w-full rounded-xl border border-indigo-200 bg-white px-3 text-sm font-semibold text-slate-700 disabled:opacity-60"
+            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 disabled:opacity-60"
           >
             {previewLoading ? "Previewing..." : "Preview extracted itinerary"}
           </button>
@@ -242,7 +265,7 @@ export default function ItineraryCreationSetup({
           ) : null}
 
           {previewRows.length > 0 ? (
-            <div className="rounded-xl border border-indigo-200 bg-white p-2.5">
+            <div className="rounded-xl border border-slate-200 bg-white p-2.5">
               <p className="text-xs font-semibold text-slate-700">
                 Preview ({previewRows.length} extracted activities)
               </p>
@@ -263,7 +286,7 @@ export default function ItineraryCreationSetup({
             <button
               type="button"
               onClick={() => setMode("none")}
-              className="min-h-11 flex-1 rounded-xl border border-indigo-200 bg-white text-sm font-semibold text-slate-700"
+              className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700"
             >
               Cancel
             </button>
@@ -276,7 +299,7 @@ export default function ItineraryCreationSetup({
             </button>
           </div>
         </form>
-      ) : null}
+      </BottomSheetModal>
 
     </section>
   );

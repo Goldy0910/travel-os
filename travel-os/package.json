@@ -6,7 +6,7 @@
     "node": "20.x"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/start-dev.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

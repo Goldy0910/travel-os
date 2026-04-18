@@ -31,11 +31,9 @@ export type TripMembersPanelProps = {
   tripId: string;
   tripTitle: string;
   pageError: string;
-  inviteCode: string;
   canInvite: boolean;
   joinUrl: string;
   whatsappLink: string;
-  hasInviteCode: boolean;
   rows: GenericRecord[];
   membersError: { message: string } | null;
 };
@@ -43,11 +41,9 @@ export type TripMembersPanelProps = {
 export default function TripMembersPanel({
   tripId,
   pageError,
-  inviteCode,
   canInvite,
   joinUrl,
   whatsappLink,
-  hasInviteCode,
   rows,
   membersError,
 }: TripMembersPanelProps) {
@@ -68,8 +64,6 @@ export default function TripMembersPanel({
           <InviteShareBlock
             joinUrl={joinUrl}
             whatsappHref={whatsappLink}
-            hasInviteCode={hasInviteCode}
-            inviteCode={hasInviteCode ? inviteCode : undefined}
           />
         </div>
       </section>

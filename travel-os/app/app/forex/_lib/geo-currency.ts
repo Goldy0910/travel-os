@@ -2,6 +2,8 @@ import { resolveDestination } from "@/app/app/_lib/destination-intel";
 
 const COUNTRY_PLACE_KEYWORDS: Record<string, string[]> = {
   India: [
+    "india",
+    "bharat",
     "manali",
     "mussoorie",
     "goa",
@@ -85,11 +87,15 @@ export function inferCountryFromPlace(placeRaw: string): string {
 }
 
 export function currencyForPlace(placeRaw: string): string {
-  const intel = resolveDestination(placeRaw);
-  if (intel.currency && intel.country !== "Unknown") return intel.currency;
-  const inferredCountry = inferCountryByKeywords(placeRaw);
-  if (inferredCountry && COUNTRY_TO_CURRENCY[inferredCountry]) {
-    return COUNTRY_TO_CURRENCY[inferredCountry];
+  const country = inferCountryFromPlace(placeRaw);
+  if (country !== "Unknown" && COUNTRY_TO_CURRENCY[country]) {
+    return COUNTRY_TO_CURRENCY[country];
   }
-  return intel.currency || "USD";
+
+  const intel = resolveDestination(placeRaw);
+  if (intel.country !== "Unknown" && intel.currency) {
+    return intel.currency;
+  }
+
+  return "USD";
 }

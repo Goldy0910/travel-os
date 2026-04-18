@@ -8,23 +8,42 @@ import { useMemo, useState } from "react";
 import { resolveDestination } from "@/app/app/_lib/destination-intel";
 import { createTripAction } from "./actions";
 
+const PLACE_SUGGESTIONS = [
+  "Tokyo, Japan",
+  "Bangkok, Thailand",
+  "Dubai, United Arab Emirates",
+  "Singapore, Singapore",
+  "Bali, Indonesia",
+  "Paris, France",
+  "London, United Kingdom",
+  "Rome, Italy",
+  "Barcelona, Spain",
+  "New York, United States",
+];
+
 export default function CreateTripForm() {
   const { pending, handleForm } = useFormActionFeedback();
   const [location, setLocation] = useState("");
   const [autofillApplied, setAutofillApplied] = useState(false);
   const destinationIntel = useMemo(() => resolveDestination(location), [location]);
+  const placeSuggestionChips = useMemo(() => {
+    const query = location.trim().toLowerCase();
+    if (!query) return PLACE_SUGGESTIONS.slice(0, 6);
+    return PLACE_SUGGESTIONS.filter((place) => place.toLowerCase().includes(query)).slice(0, 6);
+  }, [location]);
   const showDetected =
     !autofillApplied &&
     location.trim().length > 0 &&
     destinationIntel.country.trim().length > 0 &&
     destinationIntel.country !== "Unknown";
+  const showPlaceSuggestions = !autofillApplied && placeSuggestionChips.length > 0;
   const detectedLabel = `${destinationIntel.city}, ${destinationIntel.country}`;
 
   return (
     <form onSubmit={(e) => handleForm(e, createTripAction)} className="space-y-4">
       <div>
         <label htmlFor="location" className="mb-1 block text-sm font-medium text-slate-700">
-          Location
+          Place
         </label>
         <input
           id="location"
@@ -40,6 +59,28 @@ export default function CreateTripForm() {
           required
           disabled={pending}
         />
+        {showPlaceSuggestions ? (
+          <div className="mt-2">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Suggestions
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {placeSuggestionChips.map((place) => (
+                <button
+                  key={place}
+                  type="button"
+                  onClick={() => {
+                    setLocation(place);
+                    setAutofillApplied(true);
+                  }}
+                  className="max-w-full break-words rounded-2xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-medium leading-snug text-slate-700 transition active:scale-[0.98]"
+                >
+                  {place}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {showDetected ? (
           <button
             type="button"
@@ -93,7 +134,7 @@ export default function CreateTripForm() {
         </Link>
       </div>
 
-      <div className="fixed inset-x-0 bottom-[var(--travel-os-sticky-cta-bottom)] z-[110] px-4">
+      <div className="fixed bottom-[var(--travel-os-sticky-cta-bottom)] left-0 right-0 z-[110] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]">
         <button
           type="submit"
           disabled={pending}

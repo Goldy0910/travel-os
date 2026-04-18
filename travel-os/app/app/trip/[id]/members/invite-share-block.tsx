@@ -7,21 +7,15 @@ type Props = {
   /** Full join URL including ?code= when available */
   joinUrl: string;
   whatsappHref: string;
-  hasInviteCode: boolean;
-  inviteCode?: string;
 };
 
 export default function InviteShareBlock({
   joinUrl,
   whatsappHref,
-  hasInviteCode,
-  inviteCode,
 }: Props) {
   const [copied, setCopied] = useState(false);
-  const [error, setError] = useState("");
 
   const copyLink = useCallback(async () => {
-    setError("");
     try {
       await navigator.clipboard.writeText(joinUrl);
       setCopied(true);
@@ -29,38 +23,12 @@ export default function InviteShareBlock({
       window.setTimeout(() => setCopied(false), 2200);
     } catch {
       const msg = "Could not copy. Select the link below and copy manually.";
-      setError(msg);
       toast.error(msg);
     }
   }, [joinUrl]);
 
   return (
     <div className="space-y-3">
-      {!hasInviteCode ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          This trip does not have an invite code yet. Ask an organizer to refresh trip settings or
-          run the latest database migration so links work for new guests.
-        </p>
-      ) : null}
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Invite link
-        </p>
-        <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-900 break-all">
-          {joinUrl}
-        </div>
-        {inviteCode ? (
-          <p className="mt-1.5 text-[11px] text-slate-500">
-            Code: <span className="font-mono font-medium text-slate-800">{inviteCode}</span>
-          </p>
-        ) : null}
-      </div>
-
-      {error ? (
-        <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
-      ) : null}
-
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"

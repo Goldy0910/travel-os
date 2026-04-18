@@ -201,7 +201,15 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
                 <span className="inline-flex min-h-7 items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700">
                   Primary Trip
                 </span>
-                <h1 className="text-xl font-semibold leading-tight text-slate-900">{tripTitle}</h1>
+                <h1 className="text-xl font-semibold leading-tight text-slate-900">
+                  <Link
+                    href={`/app/trip/${primaryTripId}?tab=itinerary`}
+                    prefetch
+                    className="rounded-md underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  >
+                    {tripTitle}
+                  </Link>
+                </h1>
                 <p className="text-sm text-slate-600">{destination}</p>
                 <p className="text-sm text-slate-500">{dateRange}</p>
               </div>

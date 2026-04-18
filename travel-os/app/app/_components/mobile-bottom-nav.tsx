@@ -157,11 +157,15 @@ export default function MobileBottomNav() {
     normalizedPath === "/local-apps" || normalizedPath.startsWith("/local-apps/");
   const hideFabOnForex =
     normalizedPath === "/forex" || normalizedPath.startsWith("/forex/");
+  /** FAB navigates here; fixed primary CTA already fills the thumb zone — overlap breaks mobile layout. */
+  const hideFabOnCreateTrip =
+    normalizedPath === "/create-trip" || normalizedPath.startsWith("/create-trip/");
   const showFab =
     !hideFabOnTripTab &&
     !hideFabOnGlobalMembers &&
     !hideFabOnLocalApps &&
-    !hideFabOnForex;
+    !hideFabOnForex &&
+    !hideFabOnCreateTrip;
 
   const fabAriaLabel =
     normalizedPath === "/home" || normalizedPath === "/trips"
@@ -299,11 +303,11 @@ export default function MobileBottomNav() {
           type="button"
           onClick={onFabClick}
           disabled={fabLoading}
-          className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[122] grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-slate-900 p-0 text-white shadow-lg shadow-slate-900/25 ring-0 outline-none [appearance:none] [backface-visibility:hidden] [box-sizing:border-box] [transform:translateZ(0)] [webkit-tap-highlight-color:transparent] focus:outline-none focus-visible:outline-none focus-visible:ring-0 disabled:opacity-85"
+          className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[122] flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 p-0 text-white shadow-lg shadow-slate-900/25 ring-0 outline-none [appearance:none] [backface-visibility:hidden] [box-sizing:border-box] [transform:translateZ(0)] [webkit-tap-highlight-color:transparent] focus:outline-none focus-visible:outline-none focus-visible:ring-0 disabled:opacity-85"
           aria-label={fabAriaLabel}
           aria-expanded={actionsOpen}
         >
-          <span className="pointer-events-none grid h-5 w-5 place-items-center">
+          <span className="pointer-events-none flex h-5 w-5 items-center justify-center">
             {fabLoading ? (
               <span className="grid h-5 w-5 grid-cols-3 place-items-center gap-1" aria-hidden>
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:0ms]" />
@@ -311,7 +315,7 @@ export default function MobileBottomNav() {
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
               </span>
             ) : (
-              <Plus className="block h-[18px] w-[18px] translate-y-[0.5px]" strokeWidth={2.75} aria-hidden />
+              <Plus className="h-[18px] w-[18px] shrink-0" strokeWidth={2.75} aria-hidden />
             )}
           </span>
         </button>

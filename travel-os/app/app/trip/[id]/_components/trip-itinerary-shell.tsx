@@ -21,6 +21,7 @@ import TripUpdateBottomSheet, {
   type TripEditDefaults,
 } from "./trip-update-bottom-sheet";
 import ItineraryCreationSetup from "./itinerary-creation-setup";
+import ActivityDetailsNavLink from "./activity-details-nav-link";
 
 const FALLBACK_TRIP_EDIT_DEFAULTS: TripEditDefaults = {
   title: "",
@@ -78,6 +79,12 @@ type ActivityVisual = {
   tileClass: string;
   tagClass: string;
 };
+
+function compactActivityTitle(activityName: string | null, title: string | null): string {
+  const raw = (activityName || title || "Activity").trim();
+  if (raw.length <= 60) return raw;
+  return `${raw.slice(0, 57).trimEnd()}...`;
+}
 
 /** Display-only “type” from title/location — no DB field; avoids migrations. */
 function inferActivityVisual(activityName: string | null, title: string | null, location: string | null): ActivityVisual {
@@ -339,6 +346,8 @@ export default function TripItineraryShell({
   });
   const [formKey, setFormKey] = useState("new-0");
   const formKeySeq = useRef(0);
+  const [manualSetupSelected, setManualSetupSelected] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(false);
 
   useEffect(() => {
     if (!itineraryTabActive) {
@@ -457,6 +466,10 @@ export default function TripItineraryShell({
     0,
   );
   const dayCount = orderedDates.length;
+  const shouldShowItinerarySetupPrompt =
+    showItinerarySetupPrompt && !setupDismissed && totalActivities === 0;
+  const shouldShowDayWiseItinerary =
+    !shouldShowItinerarySetupPrompt || manualSetupSelected || totalActivities > 0;
 
   return (
     <>
@@ -481,7 +494,7 @@ export default function TripItineraryShell({
         </div>
       </section>
 
-      {orderedDates.length > 0 ? (
+      {shouldShowDayWiseItinerary && orderedDates.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
           <span className="inline-flex items-center rounded-full border border-black/[0.12] bg-white px-3 py-1 text-xs font-medium text-slate-700">
             {totalActivities} activit{totalActivities === 1 ? "y" : "ies"}
@@ -498,13 +511,18 @@ export default function TripItineraryShell({
       <section className="mt-4 rounded-xl border border-black/[0.08] bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-[#1a2340]">Itinerary</h2>
 
-        {showItinerarySetupPrompt ? (
+        {shouldShowItinerarySetupPrompt ? (
           <div className="mt-3">
             <ItineraryCreationSetup
               tripId={tripId}
               onGenerateAi={generateAiAction}
               onImportPdf={importPdfAction}
-              onChooseManual={() => openAdd()}
+              onChooseManual={() => {
+                setManualSetupSelected(true);
+                setSetupDismissed(true);
+                openAdd();
+              }}
+              onCreated={() => setSetupDismissed(true)}
             />
           </div>
         ) : null}
@@ -513,9 +531,9 @@ export default function TripItineraryShell({
           <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{initialError}</p>
         ) : null}
 
-        {emptyState}
+        {shouldShowDayWiseItinerary ? emptyState : null}
 
-        {orderedDates.length > 0 ? (
+        {shouldShowDayWiseItinerary && orderedDates.length > 0 ? (
           <div className="mt-5 space-y-8">
             {orderedDates.map((date) => {
               const dateItems = grouped[date] ?? [];
@@ -546,28 +564,39 @@ export default function TripItineraryShell({
                             item.title,
                             item.location,
                           );
-                          const titleText = item.activity_name || item.title || "Activity";
+                          const fullTitleText = item.activity_name || item.title || "Activity";
+                          const titleText = compactActivityTitle(item.activity_name, item.title);
                           return (
                             <article
                               key={item.id}
-                              className="rounded-xl border border-black/[0.08] bg-white p-3 shadow-sm"
+                              className="rounded-2xl border border-black/[0.08] bg-white p-3.5 shadow-sm"
                             >
-                              <div className="flex gap-3">
-                                <div
-                                  className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg text-lg leading-none ${vis.tileClass}`}
-                                  aria-hidden
+                              <div className="flex items-start gap-3">
+                                <ActivityDetailsNavLink
+                                  href={`/app/trip/${encodeURIComponent(tripId)}/activity/${encodeURIComponent(item.id)}?from=itinerary`}
+                                  className="flex min-w-0 flex-1 items-start gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                 >
-                                  {vis.emoji}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[15px] font-medium leading-snug text-slate-900">
-                                    {titleText}
-                                  </p>
-                                  <p className="mt-1 flex items-start gap-1 text-xs text-slate-500">
-                                    <MapPin className="mt-0.5 h-3 w-3 shrink-0 opacity-70" aria-hidden />
-                                    <span>{item.location?.trim() ? item.location : "No location"}</span>
-                                  </p>
-                                </div>
+                                  <div
+                                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg leading-none ${vis.tileClass}`}
+                                    aria-hidden
+                                  >
+                                    {vis.emoji}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p
+                                      className="line-clamp-2 text-[14px] font-semibold leading-5 text-slate-900"
+                                      title={fullTitleText}
+                                    >
+                                      {titleText}
+                                    </p>
+                                    <p className="mt-1.5 flex items-start gap-1 text-xs text-slate-500">
+                                      <MapPin className="mt-0.5 h-3 w-3 shrink-0 opacity-70" aria-hidden />
+                                      <span className="truncate">
+                                        {item.location?.trim() ? item.location : "Location TBD"}
+                                      </span>
+                                    </p>
+                                  </div>
+                                </ActivityDetailsNavLink>
                                 <div className="flex shrink-0 items-start gap-1">
                                   {item.time ? (
                                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
@@ -583,7 +612,7 @@ export default function TripItineraryShell({
                               </div>
                               {vis.tags.length > 0 ? (
                                 <div className="mt-2.5 flex flex-wrap gap-1.5">
-                                  {vis.tags.map((tag) => (
+                                  {vis.tags.slice(0, 2).map((tag) => (
                                     <span
                                       key={tag}
                                       className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${vis.tagClass}`}
