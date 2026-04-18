@@ -31,6 +31,8 @@ export type TripMembersPanelProps = {
   tripId: string;
   tripTitle: string;
   pageError: string;
+  inviteCode: string;
+  hasInviteCode: boolean;
   canInvite: boolean;
   joinUrl: string;
   whatsappLink: string;
