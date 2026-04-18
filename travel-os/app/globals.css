@@ -66,6 +66,20 @@ select {
   caret-color: #0f172a;
 }
 
+/*
+ * Mobile Safari/WebKit: native date/time/month/week inputs reserve a large intrinsic min-width,
+ * which breaks layout even with Tailwind w-full and causes horizontal overflow off the viewport.
+ */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"],
+input[type="week"] {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
 input::placeholder,
 textarea::placeholder {
   color: #475569;

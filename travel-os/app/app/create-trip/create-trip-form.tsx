@@ -39,9 +39,12 @@ export default function CreateTripForm() {
   const showPlaceSuggestions = !autofillApplied && placeSuggestionChips.length > 0;
   const detectedLabel = `${destinationIntel.city}, ${destinationIntel.country}`;
 
+  const fieldClass =
+    "box-border min-h-0 min-w-0 max-w-full rounded-xl border border-slate-300 px-4 text-base text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200";
+
   return (
-    <form onSubmit={(e) => handleForm(e, createTripAction)} className="space-y-4">
-      <div>
+    <form onSubmit={(e) => handleForm(e, createTripAction)} className="min-w-0 space-y-4">
+      <div className="min-w-0">
         <label htmlFor="location" className="mb-1 block text-sm font-medium text-slate-700">
           Place
         </label>
@@ -55,7 +58,7 @@ export default function CreateTripForm() {
             setLocation(e.target.value);
             setAutofillApplied(false);
           }}
-          className="h-12 w-full rounded-xl border border-slate-300 px-4 text-base text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+          className={`${fieldClass} h-12 w-full`}
           required
           disabled={pending}
         />
@@ -96,7 +99,7 @@ export default function CreateTripForm() {
         ) : null}
       </div>
 
-      <div>
+      <div className="min-w-0">
         <label htmlFor="startDate" className="mb-1 block text-sm font-medium text-slate-700">
           Start date
         </label>
@@ -104,13 +107,13 @@ export default function CreateTripForm() {
           id="startDate"
           name="startDate"
           type="date"
-          className="h-12 w-full rounded-xl border border-slate-300 px-4 text-base text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+          className={`${fieldClass} h-12 w-full`}
           required
           disabled={pending}
         />
       </div>
 
-      <div>
+      <div className="min-w-0">
         <label htmlFor="endDate" className="mb-1 block text-sm font-medium text-slate-700">
           End date
         </label>
@@ -118,7 +121,7 @@ export default function CreateTripForm() {
           id="endDate"
           name="endDate"
           type="date"
-          className="h-12 w-full rounded-xl border border-slate-300 px-4 text-base text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+          className={`${fieldClass} h-12 w-full`}
           required
           disabled={pending}
         />
@@ -134,11 +137,11 @@ export default function CreateTripForm() {
         </Link>
       </div>
 
-      <div className="fixed bottom-[var(--travel-os-sticky-cta-bottom)] left-0 right-0 z-[110] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]">
+      <div className="fixed bottom-[var(--travel-os-sticky-cta-bottom)] left-0 right-0 z-[110] box-border pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]">
         <button
           type="submit"
           disabled={pending}
-          className="mx-auto flex h-12 w-full max-w-md items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-base font-medium text-white shadow-lg transition hover:bg-slate-800 disabled:opacity-60"
+          className="mx-auto flex h-12 w-full max-w-md min-w-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-base font-medium text-white shadow-lg transition hover:bg-slate-800 disabled:opacity-60"
         >
           {pending ? (
             <>
