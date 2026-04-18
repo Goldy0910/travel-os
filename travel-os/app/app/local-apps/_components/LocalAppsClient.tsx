@@ -1,28 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Car, Landmark, MapPinned, Utensils } from "lucide-react";
 import type {
   LocalAppCategory,
-  LocalAppItem,
   LocalCityApps,
   LocalAppsTripOption,
 } from "@/app/app/local-apps/_lib/types";
 import {
   loadCityCache,
-  loadUserRatings,
   normalizeCityFromDestination,
   resolveCityApps,
   saveCityCache,
-  saveUserRatings,
   tripIsActive,
 } from "@/app/app/local-apps/_lib/local-apps-helpers";
 
 const CATEGORY_ORDER: LocalAppCategory[] = ["Transport", "Food", "Payments", "Navigation"];
-
-function averageWithUser(base: number, user?: number): number {
-  if (!user || user < 1) return base;
-  return Math.round(((base + user) / 2) * 10) / 10;
-}
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -36,6 +29,14 @@ function formatDateTime(iso: string): string {
   }).format(d);
 }
 
+function AppCategoryIcon({ category }: { category: LocalAppCategory }) {
+  const common = "h-4 w-4";
+  if (category === "Transport") return <Car className={common} aria-hidden />;
+  if (category === "Food") return <Utensils className={common} aria-hidden />;
+  if (category === "Payments") return <Landmark className={common} aria-hidden />;
+  return <MapPinned className={common} aria-hidden />;
+}
+
 type Props = {
   trips: LocalAppsTripOption[];
   initialTripId: string;
@@ -46,8 +47,6 @@ export default function LocalAppsClient({ trips, initialTripId }: Props) {
   const [loading, setLoading] = useState(true);
   const [switchingTrip, setSwitchingTrip] = useState(false);
   const [cityApps, setCityApps] = useState<LocalCityApps | null>(null);
-  const [selectedApp, setSelectedApp] = useState<LocalAppItem | null>(null);
-  const [userRatings, setUserRatings] = useState<Record<string, number>>({});
 
   const selectedTrip = useMemo(
     () => trips.find((trip) => trip.id === selectedTripId) ?? trips[0] ?? null,
@@ -60,12 +59,7 @@ export default function LocalAppsClient({ trips, initialTripId }: Props) {
     : cityKey;
 
   useEffect(() => {
-    setUserRatings(loadUserRatings());
-  }, []);
-
-  useEffect(() => {
     if (!selectedTrip) return;
-    setSelectedApp(null);
     setLoading(true);
     setCityApps(null);
     setSwitchingTrip(true);
@@ -98,12 +92,6 @@ export default function LocalAppsClient({ trips, initialTripId }: Props) {
   const isArrivalContext = selectedTrip
     ? tripIsActive(selectedTrip.startDate, selectedTrip.endDate)
     : false;
-
-  const onRateApp = (appId: string, rating: number) => {
-    const next = { ...userRatings, [appId]: rating };
-    setUserRatings(next);
-    saveUserRatings(next);
-  };
 
   return (
     <main className="min-h-screen bg-slate-50 pb-[calc(var(--travel-os-bottom-nav-h)+5rem)]">
@@ -173,8 +161,6 @@ export default function LocalAppsClient({ trips, initialTripId }: Props) {
                 <section key={category} className="space-y-2">
                   <h2 className="text-sm font-semibold text-slate-900">{category}</h2>
                   {apps.map((app) => {
-                    const userRating = userRatings[app.id];
-                    const shownRating = averageWithUser(app.rating, userRating);
                     return (
                       <article
                         key={app.id}
@@ -183,14 +169,18 @@ export default function LocalAppsClient({ trips, initialTripId }: Props) {
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
+                          <div className="flex min-w-0 items-start gap-2.5">
+                            <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                              <AppCategoryIcon category={app.category} />
+                            </span>
+                            <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-slate-900">{app.name}</p>
-                            <p className="text-xs text-slate-500">Rating {shownRating.toFixed(1)} ★</p>
                             {app.mostUseful ? (
                               <p className="mt-1 inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
                                 Most useful
                               </p>
                             ) : null}
+                            </div>
                           </div>
                           <div className="flex flex-col gap-1">
                             <a
@@ -209,33 +199,6 @@ export default function LocalAppsClient({ trips, initialTripId }: Props) {
                             <li key={tip}>{tip}</li>
                           ))}
                         </ul>
-
-                        <div className="mt-3 flex items-center justify-between gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedApp(app)}
-                            className="min-h-11 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700"
-                          >
-                            View details
-                          </button>
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map((n) => (
-                              <button
-                                key={n}
-                                type="button"
-                                onClick={() => onRateApp(app.id, n)}
-                                className={`min-h-8 min-w-8 rounded-lg border text-[11px] font-semibold ${
-                                  (userRatings[app.id] ?? 0) >= n
-                                    ? "border-amber-300 bg-amber-100 text-amber-700"
-                                    : "border-slate-200 bg-white text-slate-500"
-                                }`}
-                                aria-label={`Rate ${app.name} ${n} stars`}
-                              >
-                                {n}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
                       </article>
                     );
                   })}
@@ -244,47 +207,6 @@ export default function LocalAppsClient({ trips, initialTripId }: Props) {
             })}
           </>
         )}
-
-        {selectedApp ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">App detail</p>
-            <h3 className="mt-1 text-lg font-semibold text-slate-900">{selectedApp.name}</h3>
-            <p className="mt-1 text-xs text-slate-500">Category: {selectedApp.category}</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Last updated: {formatDateTime(selectedApp.lastUpdatedIso)}
-            </p>
-            <ul className="mt-3 list-disc space-y-1.5 pl-4 text-sm text-slate-700">
-              {selectedApp.fullTips.map((tip) => (
-                <li key={tip}>{tip}</li>
-              ))}
-            </ul>
-            <div className="mt-4 flex gap-2">
-              <a
-                href={selectedApp.playStoreUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white"
-              >
-                Install (Play Store)
-              </a>
-              <a
-                href={selectedApp.appStoreUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700"
-              >
-                Install (App Store)
-              </a>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectedApp(null)}
-              className="mt-3 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700"
-            >
-              Close detail
-            </button>
-          </section>
-        ) : null}
       </div>
     </main>
   );

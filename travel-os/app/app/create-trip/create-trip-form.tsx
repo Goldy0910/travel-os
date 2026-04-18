@@ -11,8 +11,10 @@ import { createTripAction } from "./actions";
 export default function CreateTripForm() {
   const { pending, handleForm } = useFormActionFeedback();
   const [location, setLocation] = useState("");
+  const [autofillApplied, setAutofillApplied] = useState(false);
   const destinationIntel = useMemo(() => resolveDestination(location), [location]);
   const showDetected =
+    !autofillApplied &&
     location.trim().length > 0 &&
     destinationIntel.country.trim().length > 0 &&
     destinationIntel.country !== "Unknown";
@@ -30,7 +32,10 @@ export default function CreateTripForm() {
           type="text"
           placeholder="Tokyo"
           value={location}
-          onChange={(e) => setLocation(e.target.value)}
+          onChange={(e) => {
+            setLocation(e.target.value);
+            setAutofillApplied(false);
+          }}
           className="h-12 w-full rounded-xl border border-slate-300 px-4 text-base text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
           required
           disabled={pending}
@@ -38,7 +43,10 @@ export default function CreateTripForm() {
         {showDetected ? (
           <button
             type="button"
-            onClick={() => setLocation(detectedLabel)}
+            onClick={() => {
+              setLocation(detectedLabel);
+              setAutofillApplied(true);
+            }}
             className="mt-2 w-full rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-left text-xs font-medium text-indigo-800"
           >
             Detected: {detectedLabel}
@@ -85,20 +93,22 @@ export default function CreateTripForm() {
         </Link>
       </div>
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="fixed bottom-[var(--travel-os-sticky-cta-bottom)] left-1/2 z-[110] flex h-12 w-[min(28rem,calc(100vw-2rem-env(safe-area-inset-left,0px)-env(safe-area-inset-right,0px)))] -translate-x-1/2 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-base font-medium text-white shadow-lg transition hover:bg-slate-800 disabled:opacity-60"
-      >
-        {pending ? (
-          <>
-            <ButtonSpinner className="h-4 w-4 text-white" />
-            Creating…
-          </>
-        ) : (
-          "Save trip"
-        )}
-      </button>
+      <div className="fixed inset-x-0 bottom-[var(--travel-os-sticky-cta-bottom)] z-[110] px-4">
+        <button
+          type="submit"
+          disabled={pending}
+          className="mx-auto flex h-12 w-full max-w-md items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-base font-medium text-white shadow-lg transition hover:bg-slate-800 disabled:opacity-60"
+        >
+          {pending ? (
+            <>
+              <ButtonSpinner className="h-4 w-4 text-white" />
+              Creating…
+            </>
+          ) : (
+            "Save trip"
+          )}
+        </button>
+      </div>
     </form>
   );
 }

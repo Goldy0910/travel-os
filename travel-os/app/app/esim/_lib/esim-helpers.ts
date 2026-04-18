@@ -4,13 +4,97 @@ import { resolveDestination } from "@/app/app/_lib/destination-intel";
 
 const CACHE_PREFIX = "travel-os-esim-bundle";
 
+const CITY_TO_BUNDLE_KEY: Record<string, keyof typeof ESIM_CITY_DATA> = {
+  bangkok: "bangkok",
+  dubai: "dubai",
+  singapore: "singapore",
+};
+
+const COUNTRY_TO_BUNDLE_KEY: Record<string, keyof typeof ESIM_CITY_DATA> = {
+  india: "india",
+  japan: "japan",
+  thailand: "bangkok",
+  singapore: "singapore",
+  "united arab emirates": "dubai",
+  uae: "dubai",
+  emirates: "dubai",
+};
+
+const COUNTRY_PLACE_KEYWORDS: Record<string, string[]> = {
+  india: [
+    "manali",
+    "mussoorie",
+    "goa",
+    "delhi",
+    "new delhi",
+    "mumbai",
+    "bangalore",
+    "bengaluru",
+    "jaipur",
+    "udaipur",
+    "rishikesh",
+    "shimla",
+    "leh",
+    "ladakh",
+    "agra",
+    "varanasi",
+    "amritsar",
+    "kerala",
+    "kochi",
+    "munnar",
+    "andaman",
+    "hyderabad",
+    "chennai",
+    "kolkata",
+    "pune",
+    "kashmir",
+    "srinagar",
+    "darjeeling",
+  ],
+  japan: [
+    "tokyo",
+    "osaka",
+    "kyoto",
+    "sapporo",
+    "nara",
+    "hakone",
+    "hiroshima",
+    "fukuoka",
+    "okinawa",
+    "yokohama",
+    "nagoya",
+  ],
+};
+
+function normalizeText(input: string): string {
+  return input.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function includesTerm(haystack: string, term: string): boolean {
+  return ` ${haystack} `.includes(` ${term} `);
+}
+
+function inferCountryFromKeywords(normalized: string): string | null {
+  for (const [country, places] of Object.entries(COUNTRY_PLACE_KEYWORDS)) {
+    if (places.some((p) => includesTerm(normalized, p))) return country;
+  }
+  return null;
+}
+
 export function resolveBundleFromDestination(destination: string): SimConnectivityBundle {
   const intel = resolveDestination(destination);
-  const city = intel.city.toLowerCase();
-  const country = intel.country.toLowerCase();
-  if (city === "bangkok" || country === "thailand") return ESIM_CITY_DATA.bangkok;
-  if (city === "dubai" || country === "united arab emirates") return ESIM_CITY_DATA.dubai;
-  if (city === "singapore" || country === "singapore") return ESIM_CITY_DATA.singapore;
+  const normalized = normalizeText(intel.normalized);
+  const city = normalizeText(intel.city);
+  const country = normalizeText(intel.country);
+
+  const cityKey = CITY_TO_BUNDLE_KEY[city];
+  if (cityKey) return ESIM_CITY_DATA[cityKey];
+
+  const countryFromPlace = inferCountryFromKeywords(normalized);
+  const effectiveCountry = country !== "unknown" ? country : countryFromPlace ?? "";
+  const countryKey = COUNTRY_TO_BUNDLE_KEY[effectiveCountry];
+  if (countryKey) return ESIM_CITY_DATA[countryKey];
+
   return ESIM_CITY_DATA.global;
 }
 

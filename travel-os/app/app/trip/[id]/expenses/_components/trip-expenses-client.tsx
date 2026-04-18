@@ -5,6 +5,7 @@ import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import EntityCommentsBlock, {
   type EntityCommentDTO,
 } from "../../_components/entity-comments-block";
@@ -56,10 +57,17 @@ type TripExpensesClientProps = {
   memberLabelByUserId: Record<string, string>;
   expenseCommentsById: Record<string, EntityCommentDTO[]>;
   autoOpenAddExpense?: boolean;
+  /** INR amount for the add-expense sheet (e.g. deep link from Forex). */
+  prefillExpenseAmountInr?: number;
 };
 const QUICK_ACTION_EVENT = "travel-os-open-quick-action";
 
 const LAST_SPLIT_KEY = "travel-os-last-expense-split-type";
+
+function formatPrefillInrAmount(n: number): string {
+  if (!Number.isFinite(n)) return "";
+  return String(Math.round(n * 100) / 100);
+}
 
 function normalizeUiSplitType(raw: string | null | undefined): SplitType {
   const value = (raw ?? "").trim().toLowerCase();
@@ -218,6 +226,7 @@ function ExpenseFormSheet({
   editing,
   defaultPaidBy,
   paidByMemberOptions,
+  prefillAmountInr,
 }: {
   open: boolean;
   onClose: () => void;
@@ -226,12 +235,18 @@ function ExpenseFormSheet({
   editing: ExpenseCardDTO | null;
   defaultPaidBy: string;
   paidByMemberOptions: PaidByMemberOption[];
+  prefillAmountInr: number | null;
 }) {
   const saveAction = useCallback((fd: FormData) => saveExpenseAction(tripId, fd), [tripId]);
   const { pending, handleForm } = useFormActionFeedback();
 
   const titleDefault = editing?.title ?? "";
-  const amountDefault = editing ? String(editing.amount) : "";
+  const amountDefault =
+    editing != null
+      ? String(editing.amount)
+      : prefillAmountInr != null && Number.isFinite(prefillAmountInr)
+        ? formatPrefillInrAmount(prefillAmountInr)
+        : "";
   const paidByDefault = resolvePaidBySelectDefault(editing, defaultPaidBy, paidByMemberOptions);
   const [splitType, setSplitType] = useState<SplitType>(
     normalizeUiSplitType(editing?.splitTypeRaw),
@@ -289,7 +304,7 @@ function ExpenseFormSheet({
         setSplitType("equal");
       }
     });
-  }, [open, editing, amountDefault, titleDefault, paidByMemberOptions, paidByDefault]);
+  }, [open, editing, amountDefault, titleDefault, paidByMemberOptions, paidByDefault, prefillAmountInr]);
 
   useEffect(() => {
     try {
@@ -600,13 +615,29 @@ export default function TripExpensesClient({
   memberLabelByUserId,
   expenseCommentsById,
   autoOpenAddExpense = false,
+  prefillExpenseAmountInr,
 }: TripExpensesClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const activeTripTab = useTripActiveTab();
   const { setOpenExpense } = useTripFabRegistry();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseCardDTO | null>(null);
   const formKeySeq = useRef(0);
   const [formKey, setFormKey] = useState("expense-new-0");
+  const [prefillDraftInr, setPrefillDraftInr] = useState<number | null>(() =>
+    prefillExpenseAmountInr != null && Number.isFinite(prefillExpenseAmountInr)
+      ? prefillExpenseAmountInr
+      : null,
+  );
+  const strippedExpenseQueryRef = useRef(false);
+
+  useEffect(() => {
+    if (prefillExpenseAmountInr != null && Number.isFinite(prefillExpenseAmountInr)) {
+      setPrefillDraftInr(prefillExpenseAmountInr);
+    }
+  }, [prefillExpenseAmountInr]);
 
   const openAdd = useCallback(() => {
     formKeySeq.current += 1;
@@ -624,6 +655,19 @@ export default function TripExpensesClient({
     if (activeTripTab !== "expenses" || !autoOpenAddExpense) return;
     queueMicrotask(() => openAdd());
   }, [activeTripTab, autoOpenAddExpense, openAdd]);
+
+  useEffect(() => {
+    if (strippedExpenseQueryRef.current) return;
+    if (searchParams.get("quickAction") !== "expense" && !searchParams.get("prefillExpenseInr")) {
+      return;
+    }
+    strippedExpenseQueryRef.current = true;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("quickAction");
+    next.delete("prefillExpenseInr");
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [searchParams, pathname, router]);
 
   useEffect(() => {
     const onQuickAction = (event: Event) => {
@@ -654,6 +698,7 @@ export default function TripExpensesClient({
   const closeSheet = () => {
     setSheetOpen(false);
     setEditing(null);
+    setPrefillDraftInr(null);
   };
 
   return (
@@ -788,6 +833,7 @@ export default function TripExpensesClient({
         editing={editing}
         defaultPaidBy={defaultPaidBy}
         paidByMemberOptions={paidByMemberOptions}
+        prefillAmountInr={editing ? null : prefillDraftInr}
       />
     </>
   );

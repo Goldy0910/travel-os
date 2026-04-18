@@ -138,6 +138,15 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     pickFirstQuery(query, "section") || null,
   );
   const quickAction = pickFirstQuery(query, "quickAction").trim().toLowerCase();
+  const rawPrefillExpenseInr = decodeOptionalQueryParam(pickFirstQuery(query, "prefillExpenseInr")).trim();
+  const parsedPrefillExpenseInr =
+    rawPrefillExpenseInr !== ""
+      ? Number.parseFloat(rawPrefillExpenseInr.replace(/,/g, ""))
+      : NaN;
+  const prefillExpenseAmountInr =
+    Number.isFinite(parsedPrefillExpenseInr) && parsedPrefillExpenseInr >= 0
+      ? parsedPrefillExpenseInr
+      : undefined;
   const setupItinerary = pickFirstQuery(query, "setupItinerary").trim().toLowerCase();
   const foodTab = pickFirstQuery(query, "foodTab").trim().toLowerCase();
   const initialFoodView: "discover" | "saved" | "translate" =
@@ -389,7 +398,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   return (
     <>
       <SetAppHeader title={title} showBack />
-      <main className="flex w-full flex-col bg-[#f4f4f0] pb-28">
+      <main className="flex w-full flex-col bg-[#f4f4f0] pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]">
         <div className="mx-auto flex w-full max-w-[390px] flex-col">
           <Suspense fallback={<TripTabsFallback />}>
             <TripSwipeTabs
@@ -426,6 +435,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                     tripId={tripId}
                     {...panels.expenses}
                     autoOpenAddExpense={quickAction === "expense"}
+                    prefillExpenseAmountInr={prefillExpenseAmountInr}
                   />
                 ) : null
               }

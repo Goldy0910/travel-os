@@ -90,9 +90,9 @@ export default async function Visa2Page() {
   if (!tripOptions.length || !defaultTripId) {
     return (
       <>
-        <SetAppHeader title="Visa 2" showBack />
+        <SetAppHeader title="Visa" showBack />
         <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 pb-24 pt-8">
-          <p className="text-sm text-slate-600">Create a trip first to use Visa 2.</p>
+          <p className="text-sm text-slate-600">Create a trip first to use Visa.</p>
         </main>
       </>
     );
@@ -100,7 +100,7 @@ export default async function Visa2Page() {
 
   return (
     <>
-      <SetAppHeader title="Visa 2" showBack />
+      <SetAppHeader title="Visa" showBack />
       <Visa2Client
         trips={tripOptions}
         defaultTripId={defaultTripId}

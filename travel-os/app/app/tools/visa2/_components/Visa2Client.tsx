@@ -1,5 +1,6 @@
 "use client";
 
+import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { COUNTRY_OPTIONS, findCountryByName } from "@/app/app/tools/visa2/_lib/countries";
 import type {
   TripVisa2Option,
@@ -7,16 +8,13 @@ import type {
   VisaAlertsResponse,
   VisaLookupResponse,
 } from "@/app/app/tools/visa2/_lib/types";
-import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
 
 const PASSPORT_STORAGE_KEY = "travel-os-visa2-passport-country";
-const REMINDER_STORAGE_KEY = "travel-os-visa2-reminders";
 const ALERT_CACHE_PREFIX = "travel-os-visa2-alerts-cache";
 const CHECKLIST_PREFIX = "travel-os-visa2-checklist";
-const TRACKER_PREFIX = "travel-os-visa2-tracker";
 
-type TabKey = "guide" | "documents" | "tracker" | "alerts";
+type TabKey = "guide" | "documents" | "alerts";
 
 type Props = {
   trips: TripVisa2Option[];
@@ -57,13 +55,6 @@ function applyByDate(startDate: string, processingDays: number): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(ms));
 }
 
-function expectedDecisionDate(startDate: string): string {
-  const start = new Date(`${startDate}T12:00:00`);
-  if (Number.isNaN(start.getTime())) return "N/A";
-  const ms = start.getTime() - 7 * 24 * 60 * 60 * 1000;
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(ms));
-}
-
 function badgeTone(visaType: VisaLookupResponse["visaType"]): string {
   if (visaType === "Visa-free") return "bg-emerald-100 text-emerald-800 border-emerald-200";
   if (visaType === "Visa on arrival") return "bg-sky-100 text-sky-800 border-sky-200";
@@ -91,6 +82,20 @@ function saveJson<T>(key: string, value: T) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function SectionLoading({ label }: { label: string }) {
+  return (
+    <div
+      className="flex min-h-[120px] flex-col items-center justify-center gap-3 py-6"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <ButtonSpinner className="h-8 w-8 shrink-0 text-indigo-600" />
+      <p className="max-w-[280px] text-center text-sm font-medium text-slate-600">{label}</p>
+    </div>
+  );
+}
+
 export default function Visa2Client({ trips, defaultTripId, defaultPassportCountry }: Props) {
   const [tripId, setTripId] = useState(defaultTripId);
   const [passportCountry, setPassportCountry] = useState(defaultPassportCountry || "India");
@@ -104,8 +109,6 @@ export default function Visa2Client({ trips, defaultTripId, defaultPassportCount
   const [lookupReloadSeed, setLookupReloadSeed] = useState(0);
 
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
-  const [referenceNo, setReferenceNo] = useState("");
-  const [statusIndex, setStatusIndex] = useState(0);
 
   const selectedTrip = useMemo(
     () => trips.find((trip) => trip.id === tripId) ?? trips[0],
@@ -113,7 +116,6 @@ export default function Visa2Client({ trips, defaultTripId, defaultPassportCount
   );
 
   const checklistKey = `${CHECKLIST_PREFIX}:${tripId}:${passportCountry.toLowerCase()}`;
-  const trackerKey = `${TRACKER_PREFIX}:${tripId}:${passportCountry.toLowerCase()}`;
   const alertsCacheKey = `${ALERT_CACHE_PREFIX}:${tripId}:${passportCountry.toLowerCase()}`;
 
   const checklistReadyCount = useMemo(
@@ -140,15 +142,6 @@ export default function Visa2Client({ trips, defaultTripId, defaultPassportCount
     const saved = loadJson<Record<string, boolean>>(checklistKey, {});
     setCheckedItems(saved);
   }, [checklistKey]);
-
-  useEffect(() => {
-    const tracker = loadJson<{ referenceNo: string; statusIndex: number }>(trackerKey, {
-      referenceNo: "",
-      statusIndex: 0,
-    });
-    setReferenceNo(tracker.referenceNo);
-    setStatusIndex(Math.max(0, Math.min(4, tracker.statusIndex)));
-  }, [trackerKey]);
 
   useEffect(() => {
     if (!selectedTrip) return;
@@ -237,35 +230,6 @@ export default function Visa2Client({ trips, defaultTripId, defaultPassportCount
     saveJson(checklistKey, next);
   };
 
-  const onSaveReference = (nextRef: string) => {
-    setReferenceNo(nextRef);
-    saveJson(trackerKey, { referenceNo: nextRef, statusIndex });
-  };
-
-  const onAdvanceStatus = () => {
-    const next = Math.min(statusIndex + 1, 4);
-    setStatusIndex(next);
-    saveJson(trackerKey, { referenceNo, statusIndex: next });
-  };
-
-  const onReminder = () => {
-    if (!selectedTrip || !lookup) return;
-    const reminders = loadJson<Array<Record<string, string>>>(REMINDER_STORAGE_KEY, []);
-    const reminder = {
-      id: `${selectedTrip.id}-${passportCountry.toLowerCase()}`,
-      type: "visa-apply-deadline",
-      tripId: selectedTrip.id,
-      destination: selectedTrip.destinationCountry,
-      passportCountry,
-      applyBy: applyByDate(selectedTrip.startDate, lookup.processingDays),
-      createdAt: new Date().toISOString(),
-    };
-    const filtered = reminders.filter((item) => item.id !== reminder.id);
-    filtered.push(reminder);
-    saveJson(REMINDER_STORAGE_KEY, filtered);
-    toast.success("Visa deadline reminder saved.");
-  };
-
   const tabButton = (key: TabKey, label: string) => (
     <button
       type="button"
@@ -279,7 +243,7 @@ export default function Visa2Client({ trips, defaultTripId, defaultPassportCount
   );
 
   if (!selectedTrip) {
-    return <p className="text-sm text-slate-600">Create a trip first to use Visa 2.</p>;
+    return <p className="text-sm text-slate-600">Create a trip first to use Visa.</p>;
   }
 
   return (
@@ -323,17 +287,12 @@ export default function Visa2Client({ trips, defaultTripId, defaultPassportCount
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+        <section
+          className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm"
+          aria-busy={lookupLoading}
+        >
           {lookupLoading ? (
-            <div className="space-y-3">
-              <div className="h-6 w-36 animate-pulse rounded bg-slate-200" />
-              <div className="grid grid-cols-2 gap-2">
-                <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
-                <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
-                <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
-                <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
-              </div>
-            </div>
+            <SectionLoading label="Loading visa summary…" />
           ) : lookupError ? (
             <button
               type="button"
@@ -352,20 +311,11 @@ export default function Visa2Client({ trips, defaultTripId, defaultPassportCount
             </button>
           ) : (
             <>
-              <div className="flex flex-col items-stretch gap-2.5 md:flex-row md:items-center md:justify-between">
-                <span
-                  className={`inline-flex min-h-8 w-fit items-center rounded-full border px-2.5 text-[11px] font-bold sm:px-3 sm:text-xs ${badgeTone(lookup.visaType)}`}
-                >
-                  {lookup.visaType}
-                </span>
-                <button
-                  type="button"
-                  onClick={onReminder}
-                  className="min-h-11 w-full rounded-xl border border-slate-200 px-3 text-[13px] font-semibold text-slate-700 md:w-auto md:text-sm"
-                >
-                  Set deadline reminder
-                </button>
-              </div>
+              <span
+                className={`inline-flex min-h-8 w-fit items-center rounded-full border px-2.5 text-[11px] font-bold sm:px-3 sm:text-xs ${badgeTone(lookup.visaType)}`}
+              >
+                {lookup.visaType}
+              </span>
 
               <div className="mt-3 grid grid-cols-2 gap-2 text-[13px] xl:grid-cols-4">
                 <div className="min-w-0 rounded-xl bg-slate-50 p-3"><p className="text-[11px] text-slate-500">Processing</p><p className="truncate font-semibold leading-5 text-slate-900">{lookup.processingTime}</p></div>
@@ -394,19 +344,26 @@ export default function Visa2Client({ trips, defaultTripId, defaultPassportCount
           <div className="flex min-w-max gap-2 pb-1">
           {tabButton("guide", "Application Guide")}
           {tabButton("documents", `Documents ${lookup ? `(${checklistReadyCount}/${lookup.documents.length})` : ""}`)}
-          {tabButton("tracker", "Status Tracker")}
           {tabButton("alerts", "Entry Alerts")}
           </div>
         </section>
 
         {activeTab === "guide" ? (
-          <section className="space-y-2.5">
-            {lookupLoading || !lookup ? (
-              <>
-                <div className="h-16 animate-pulse rounded-xl bg-white" />
-                <div className="h-16 animate-pulse rounded-xl bg-white" />
-                <div className="h-16 animate-pulse rounded-xl bg-white" />
-              </>
+          <section className="space-y-2.5" aria-busy={lookupLoading}>
+            {lookupError ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-3.5 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setLookupReloadSeed((v) => v + 1)}
+                  className="flex min-h-16 w-full items-center justify-center rounded-xl px-4 text-center text-sm font-medium text-slate-700"
+                >
+                  {lookupError}
+                </button>
+              </div>
+            ) : lookupLoading || !lookup ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+                <SectionLoading label="Loading application guide…" />
+              </div>
             ) : (
               lookup.guideSteps.map((step, index) => (
                 <article key={step} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
@@ -419,9 +376,20 @@ export default function Visa2Client({ trips, defaultTripId, defaultPassportCount
         ) : null}
 
         {activeTab === "documents" ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-            {lookupLoading || !lookup ? (
-              <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
+          <section
+            className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm"
+            aria-busy={lookupLoading}
+          >
+            {lookupError ? (
+              <button
+                type="button"
+                onClick={() => setLookupReloadSeed((v) => v + 1)}
+                className="flex min-h-16 w-full items-center justify-center rounded-xl border border-dashed border-slate-300 px-4 text-sm font-medium text-slate-700"
+              >
+                {lookupError}
+              </button>
+            ) : lookupLoading || !lookup ? (
+              <SectionLoading label="Loading document checklist…" />
             ) : (
               <>
                 <p className="text-sm font-semibold text-slate-900">
@@ -445,64 +413,33 @@ export default function Visa2Client({ trips, defaultTripId, defaultPassportCount
           </section>
         ) : null}
 
-        {activeTab === "tracker" ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Application reference number
-            </label>
-            <input
-              value={referenceNo}
-              onChange={(e) => onSaveReference(e.target.value)}
-              placeholder="Enter reference number"
-              className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-[13px] sm:text-sm"
-            />
-            <p className="mt-3 text-sm text-slate-600">
-              Expected decision date:{" "}
-              <span className="font-semibold text-slate-900">
-                {expectedDecisionDate(selectedTrip.startDate)}
-              </span>
-            </p>
-            <ol className="mt-4 space-y-2">
-              {["Submitted", "Received", "Under review", "Decision", "Collected"].map((stage, idx) => (
-                <li
-                  key={stage}
-                  className={`rounded-xl border px-3 py-2 text-[13px] sm:text-sm ${
-                    idx <= statusIndex
-                      ? "border-indigo-300 bg-indigo-50 text-indigo-800"
-                      : "border-slate-200 bg-slate-50 text-slate-500"
-                  }`}
-                >
-                  {stage}
-                </li>
-              ))}
-            </ol>
-            <button
-              type="button"
-              onClick={onAdvanceStatus}
-              disabled={statusIndex >= 4}
-              className="mt-4 min-h-11 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Update status
-            </button>
-          </section>
-        ) : null}
-
         {activeTab === "alerts" ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+          <section
+            className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm"
+            aria-busy={alertsLoading}
+          >
             <div className="flex flex-col items-start gap-2 md:flex-row md:items-center md:justify-between">
               <p className="text-sm font-semibold text-slate-900">
-                Last refreshed {alertsData ? formatDate(alertsData.refreshedAtIso) : "—"}
+                Last refreshed {alertsData && !alertsLoading ? formatDate(alertsData.refreshedAtIso) : "—"}
               </p>
               <button
                 type="button"
                 onClick={() => void loadAlerts(true)}
-                className="min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 md:w-auto"
+                disabled={alertsLoading}
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 disabled:pointer-events-none disabled:opacity-60 md:w-auto"
               >
-                Refresh
+                {alertsLoading ? (
+                  <>
+                    <ButtonSpinner className="h-4 w-4 shrink-0 text-indigo-600" />
+                    Refreshing…
+                  </>
+                ) : (
+                  "Refresh"
+                )}
               </button>
             </div>
             {alertsLoading ? (
-              <div className="mt-3 h-24 animate-pulse rounded-xl bg-slate-100" />
+              <SectionLoading label="Loading entry alerts…" />
             ) : alertsError ? (
               <button
                 type="button"

@@ -6,7 +6,7 @@ import PageLoader from "@/components/ui/page-loader";
  */
 export default function AppRouteLoadingFallback() {
   return (
-    <main className="flex min-h-full w-full flex-1 flex-col bg-slate-50 pb-28">
+    <main className="flex min-h-full w-full flex-1 flex-col bg-slate-50 pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]">
       <PageLoader fillViewport message="Loading…" />
     </main>
   );

@@ -321,7 +321,7 @@ export default function TripSwipeTabs({
                   aria-labelledby={`trip-tab-${key}`}
                   aria-hidden={!visible}
                   hidden={!visible}
-                  className="box-border w-full px-4 py-4 pb-28"
+                  className="box-border w-full px-4 py-4 pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]"
                 >
                   {content}
                 </section>

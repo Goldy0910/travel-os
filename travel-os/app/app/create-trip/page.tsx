@@ -26,7 +26,7 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
   return (
     <>
       <SetAppHeader title="Create trip" showBack />
-      <main className="min-h-screen bg-slate-50 px-4 py-6 pb-28">
+      <main className="min-h-full bg-slate-50 px-4 py-6 pb-[calc(var(--travel-os-bottom-nav-h)+6rem)]">
         <div className="mx-auto w-full max-w-md space-y-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-6">

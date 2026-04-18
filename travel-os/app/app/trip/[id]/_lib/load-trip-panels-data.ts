@@ -450,13 +450,14 @@ export async function loadTripTabPanelsData(
 
   const inviteCode = wantsMembers ? pickFirstString(tripRow, ["invite_code"], "").trim() : "";
   const baseUrl = wantsMembers ? await getResolvedPublicSiteUrl() : "";
+  const inviteBaseUrl = baseUrl.replace("travel-os", "traveltill99");
   const hasInviteCode = inviteCode.length > 0;
   const joinUrl = hasInviteCode
-    ? `${baseUrl}/join?code=${encodeURIComponent(inviteCode)}`
-    : `${baseUrl}/join`;
+    ? `${inviteBaseUrl}/join?code=${encodeURIComponent(inviteCode)}`
+    : `${inviteBaseUrl}/join`;
   const whatsappText = hasInviteCode
     ? `Join my trip: ${joinUrl}`
-    : `Join my trip on Travel OS: ${joinUrl}`;
+    : `Join my trip on TravelTill99: ${joinUrl}`;
   const whatsappLink = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
 
   const memberRowsResolved: GenericRecord[] = (membersRowsData ?? []).map((row) => {

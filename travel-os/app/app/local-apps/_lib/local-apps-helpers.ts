@@ -9,32 +9,103 @@ export function normalizeCityFromDestination(destination: string): string {
   return resolveDestination(destination).city.toLowerCase();
 }
 
+const CITY_DATA_KEY_OVERRIDES: Record<string, keyof typeof LOCAL_APPS_DATA> = {
+  bangkok: "bangkok",
+  dubai: "dubai",
+  singapore: "singapore",
+  bali: "bali",
+  london: "london",
+};
+
+const COUNTRY_TO_DATA_KEY: Record<string, keyof typeof LOCAL_APPS_DATA> = {
+  india: "india",
+  japan: "japan",
+  thailand: "bangkok",
+  "united arab emirates": "dubai",
+  uae: "dubai",
+  emirates: "dubai",
+  singapore: "singapore",
+  indonesia: "bali",
+  "united kingdom": "london",
+  uk: "london",
+  britain: "london",
+};
+
+const COUNTRY_PLACE_KEYWORDS: Record<string, string[]> = {
+  india: [
+    "manali",
+    "mussoorie",
+    "goa",
+    "delhi",
+    "new delhi",
+    "mumbai",
+    "bangalore",
+    "bengaluru",
+    "jaipur",
+    "udaipur",
+    "rishikesh",
+    "shimla",
+    "leh",
+    "ladakh",
+    "agra",
+    "varanasi",
+    "amritsar",
+    "kerala",
+    "kochi",
+    "munnar",
+    "andaman",
+    "hyderabad",
+    "chennai",
+    "kolkata",
+    "pune",
+    "kashmir",
+    "srinagar",
+    "darjeeling",
+  ],
+  japan: [
+    "tokyo",
+    "osaka",
+    "kyoto",
+    "sapporo",
+    "nara",
+    "hakone",
+    "hiroshima",
+    "fukuoka",
+    "okinawa",
+    "yokohama",
+    "nagoya",
+  ],
+};
+
+function normalizeText(input: string): string {
+  return input.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function includesTerm(haystack: string, term: string): boolean {
+  return ` ${haystack} `.includes(` ${term} `);
+}
+
+function inferCountryFromKeywords(normalized: string): string | null {
+  for (const [country, places] of Object.entries(COUNTRY_PLACE_KEYWORDS)) {
+    if (places.some((p) => includesTerm(normalized, p))) return country;
+  }
+  return null;
+}
+
 export function resolveCityApps(destination: string): LocalCityApps {
   const intel = resolveDestination(destination);
-  const raw = intel.normalized;
-  const city = intel.city.toLowerCase();
-  if (LOCAL_APPS_DATA[city]) return LOCAL_APPS_DATA[city];
+  const normalized = normalizeText(intel.normalized);
+  const city = normalizeText(intel.city);
 
-  // Country/city inference based on selected destination string.
-  if (raw.includes("thailand") || city === "bangkok") return LOCAL_APPS_DATA.bangkok;
-  if (raw.includes("uae") || raw.includes("united arab emirates") || city === "dubai") {
-    return LOCAL_APPS_DATA.dubai;
-  }
-  if (raw.includes("singapore") || city === "singapore") return LOCAL_APPS_DATA.singapore;
-  if (raw.includes("indonesia") || city === "bali") return LOCAL_APPS_DATA.bali;
-  if (raw.includes("uk") || raw.includes("united kingdom") || city === "london") {
-    return LOCAL_APPS_DATA.london;
-  }
-  if (
-    raw.includes("india") ||
-    raw.includes("mussoorie") ||
-    raw.includes("delhi") ||
-    raw.includes("mumbai") ||
-    raw.includes("bangalore") ||
-    raw.includes("goa")
-  ) {
-    return LOCAL_APPS_DATA.india;
-  }
+  const cityDataKey = CITY_DATA_KEY_OVERRIDES[city];
+  if (cityDataKey) return LOCAL_APPS_DATA[cityDataKey];
+
+  const resolvedCountry = normalizeText(intel.country);
+  const inferredCountry = inferCountryFromKeywords(normalized);
+  const countryKey = resolvedCountry !== "unknown" ? resolvedCountry : inferredCountry ?? "";
+  const countryDataKey = COUNTRY_TO_DATA_KEY[countryKey];
+  if (countryDataKey) return LOCAL_APPS_DATA[countryDataKey];
+
   return LOCAL_APPS_DATA.global;
 }
 

@@ -11,14 +11,6 @@ export type ForexRateResponse = {
   source: "live" | "fallback";
 };
 
-export type ForexTransaction = {
-  id: string;
-  amount: number;
-  currency: string;
-  inr: number;
-  createdAtIso: string;
-};
-
 export type ForexPlace = {
   id: string;
   name: string;

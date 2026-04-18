@@ -108,6 +108,76 @@ export const ESIM_CITY_DATA: Record<string, SimConnectivityBundle> = {
     ],
     smartInsights: ["Buy in-city stores to save versus airport kiosks.", "Most travelers overpay for unlimited plans they don’t fully use."],
   },
+  india: {
+    city: "India",
+    country: "India",
+    updatedAtIso: NOW,
+    topCarriers: [
+      {
+        carrier: "Jio",
+        coverage: "Excellent",
+        bestOption: true,
+        plans: [
+          { id: "in-jio-7", name: "Tourist Starter", data: "1.5 GB/day", validityDays: 7, priceInr: 499 },
+          { id: "in-jio-14", name: "Tourist Plus", data: "2 GB/day", validityDays: 14, priceInr: 799 },
+        ],
+        rechargeMethods: ["App", "USSD", "Stores"],
+        airportPriceInr: 1099,
+        cityPriceInr: 799,
+      },
+      {
+        carrier: "Airtel",
+        coverage: "Excellent",
+        plans: [
+          { id: "in-airtel-7", name: "Travel Value", data: "10 GB", validityDays: 7, priceInr: 549 },
+          { id: "in-airtel-14", name: "Travel Max", data: "25 GB", validityDays: 14, priceInr: 899 },
+        ],
+        rechargeMethods: ["App", "USSD", "Stores"],
+        airportPriceInr: 1149,
+        cityPriceInr: 849,
+      },
+    ],
+    esimProviders: [
+      { provider: "Airalo", data: "10 GB", validityDays: 10, priceInr: 1050, purchaseUrl: "https://www.airalo.com" },
+      { provider: "Nomad", data: "15 GB", validityDays: 15, priceInr: 1390, purchaseUrl: "https://www.getnomad.app" },
+    ],
+    smartInsights: ["In India, city-store plans are usually cheaper than airport counters.", "UPI-enabled recharge apps make top-ups easy during trips."],
+  },
+  japan: {
+    city: "Japan",
+    country: "Japan",
+    updatedAtIso: NOW,
+    topCarriers: [
+      {
+        carrier: "NTT Docomo",
+        coverage: "Excellent",
+        bestOption: true,
+        plans: [
+          { id: "jp-docomo-7", name: "Travel Data", data: "10 GB", validityDays: 7, priceInr: 1290 },
+          { id: "jp-docomo-14", name: "Travel Data Plus", data: "20 GB", validityDays: 14, priceInr: 1990 },
+        ],
+        rechargeMethods: ["App", "Stores"],
+        airportPriceInr: 2390,
+        cityPriceInr: 1890,
+      },
+      {
+        carrier: "SoftBank",
+        coverage: "Excellent",
+        plans: [
+          { id: "jp-softbank-7", name: "Visitor SIM", data: "8 GB", validityDays: 7, priceInr: 1190 },
+          { id: "jp-softbank-14", name: "Visitor SIM Plus", data: "18 GB", validityDays: 14, priceInr: 1840 },
+        ],
+        rechargeMethods: ["App", "Stores"],
+        airportPriceInr: 2190,
+        cityPriceInr: 1790,
+      },
+    ],
+    esimProviders: [
+      { provider: "Ubigi", data: "10 GB", validityDays: 30, priceInr: 1480, purchaseUrl: "https://cellulardata.ubigi.com" },
+      { provider: "Airalo", data: "10 GB", validityDays: 30, priceInr: 1590, purchaseUrl: "https://www.airalo.com" },
+    ],
+    smartInsights: ["Japanese airport counters are convenient but often pricier than city stores.", "For rail-heavy trips, buy before arrival to avoid activation delays."],
+  },
   global: {
     city: "Global",
     country: "International",

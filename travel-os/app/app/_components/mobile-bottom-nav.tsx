@@ -153,7 +153,15 @@ export default function MobileBottomNav() {
       tripTabLower === "connect" ||
       connectShowsDocsFab);
   const hideFabOnGlobalMembers = normalizedPath === "/members";
-  const showFab = !hideFabOnTripTab && !hideFabOnGlobalMembers;
+  const hideFabOnLocalApps =
+    normalizedPath === "/local-apps" || normalizedPath.startsWith("/local-apps/");
+  const hideFabOnForex =
+    normalizedPath === "/forex" || normalizedPath.startsWith("/forex/");
+  const showFab =
+    !hideFabOnTripTab &&
+    !hideFabOnGlobalMembers &&
+    !hideFabOnLocalApps &&
+    !hideFabOnForex;
 
   const fabAriaLabel =
     normalizedPath === "/home" || normalizedPath === "/trips"
@@ -295,7 +303,7 @@ export default function MobileBottomNav() {
           aria-label={fabAriaLabel}
           aria-expanded={actionsOpen}
         >
-          <span className="pointer-events-none grid place-items-center">
+          <span className="pointer-events-none grid h-5 w-5 place-items-center">
             {fabLoading ? (
               <span className="grid h-5 w-5 grid-cols-3 place-items-center gap-1" aria-hidden>
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:0ms]" />
@@ -303,7 +311,7 @@ export default function MobileBottomNav() {
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
               </span>
             ) : (
-              <Plus className="block h-[18px] w-[18px]" strokeWidth={2.75} aria-hidden />
+              <Plus className="block h-[18px] w-[18px] translate-y-[0.5px]" strokeWidth={2.75} aria-hidden />
             )}
           </span>
         </button>

@@ -176,7 +176,7 @@ export default function SettingsClient({
   const cleanAvatar = avatarUrl?.split("?")[0] ?? null;
 
   return (
-    <div className="mx-auto w-full max-w-md space-y-8 px-4 py-6 pb-28">
+    <div className="mx-auto w-full max-w-md space-y-8 px-4 py-6 pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]">
       <header className="text-center">
         <p className="text-sm text-slate-600">Your profile and account</p>
       </header>
