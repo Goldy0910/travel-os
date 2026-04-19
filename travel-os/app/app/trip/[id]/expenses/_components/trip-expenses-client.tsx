@@ -703,6 +703,13 @@ export default function TripExpensesClient({
 
   return (
     <>
+      <section className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 shadow-sm">
+        <p className="text-sm font-semibold text-indigo-900">Track group costs and settle faster</p>
+        <p className="mt-1 text-xs leading-relaxed text-indigo-800">
+          Add each expense, split it fairly, and see who owes or gets paid so money conversations stay clear.
+        </p>
+      </section>
+
       {initialError ? (
         <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{initialError}</p>
       ) : null}

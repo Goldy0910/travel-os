@@ -645,8 +645,9 @@ export default function TripDocsClient({
   return (
     <>
       <header className="space-y-1 pb-2">
+        <p className="text-sm font-semibold text-slate-900">Keep all trip documents easy to find</p>
         <p className="text-sm text-slate-600">
-          Tickets, PDFs, and travel paperwork for this trip.
+          Upload tickets, visas, confirmations, and receipts here so anyone in the trip can quickly view or share them.
         </p>
       </header>
 

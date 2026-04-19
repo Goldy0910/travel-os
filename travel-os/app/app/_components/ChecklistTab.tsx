@@ -68,6 +68,7 @@ export default function ChecklistTab({
     Array<{ id: string; name: string; checklist_template_items?: ItemTemplateRow[] }>
   >([]);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const current = activeTab === "personal" ? personalChecklist : sharedChecklist;
@@ -329,6 +330,8 @@ export default function ChecklistTab({
   type ItemTemplateRow = { label: string; category?: string | null; sort_order?: number | null };
 
   async function loadTemplates() {
+    setShowTemplates(true);
+    setIsLoadingTemplates(true);
     const { data, error } = await supabase
       .from("checklist_templates")
       .select("*, checklist_template_items(*)");
@@ -338,10 +341,11 @@ export default function ChecklistTab({
       } else {
         toast.error(error.message || "Could not load templates.");
       }
+      setIsLoadingTemplates(false);
       return;
     }
     setTemplates((data ?? []) as typeof templates);
-    setShowTemplates(true);
+    setIsLoadingTemplates(false);
   }
 
   async function applyTemplate(template: {
@@ -412,6 +416,13 @@ export default function ChecklistTab({
 
   return (
     <div className="flex flex-col gap-4 px-0 py-1">
+      <section className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+        <p className="text-sm font-semibold text-indigo-900">Pack smarter and avoid last-minute misses</p>
+        <p className="mt-1 text-xs leading-relaxed text-indigo-800">
+          Build personal or shared checklists, track packing progress, and use AI/templates to create a list quickly.
+        </p>
+      </section>
+
       <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
         {(["personal", "shared"] as const).map((tab) => (
           <button
@@ -456,16 +467,21 @@ export default function ChecklistTab({
         <button
           type="button"
           onClick={() => void loadTemplates()}
+          disabled={isLoadingTemplates}
           className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700"
         >
-          📋 Templates
+          {isLoadingTemplates ? "Loading templates..." : "📋 Templates"}
         </button>
       </div>
 
       {showTemplates ? (
         <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-4">
           <p className="mb-1 text-sm font-medium text-gray-700">Choose a template</p>
-          {templates.length === 0 ? (
+          {isLoadingTemplates ? (
+            <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-500">
+              Loading templates...
+            </div>
+          ) : templates.length === 0 ? (
             <p className="text-sm text-gray-500">No templates available.</p>
           ) : (
             templates.map((t) => (
@@ -485,7 +501,7 @@ export default function ChecklistTab({
           <button
             type="button"
             onClick={() => setShowTemplates(false)}
-            className="mt-1 text-xs text-gray-400"
+            className="mt-2 min-h-10 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700"
           >
             Cancel
           </button>
@@ -555,7 +571,7 @@ export default function ChecklistTab({
             onClick={() => setIsAddModalOpen(false)}
             className="absolute inset-0 h-full w-full"
           />
-          <div className="relative z-[121] w-full rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:max-w-md sm:rounded-2xl sm:pb-4">
+          <div className="relative z-[121] w-full overflow-y-auto rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] [margin-bottom:env(keyboard-inset-height,0px)] max-h-[min(88dvh,calc(100dvh-1rem-env(keyboard-inset-height,0px)))] sm:max-h-[75vh] sm:max-w-md sm:rounded-2xl sm:pb-4">
             <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200 sm:hidden" />
             <h3 className="text-base font-semibold text-gray-900">Add checklist item</h3>
             <p className="mt-1 text-xs text-gray-500">
@@ -591,7 +607,7 @@ export default function ChecklistTab({
               </label>
             </div>
 
-            <div className="mt-4 flex gap-2">
+            <div className="sticky bottom-0 mt-4 flex gap-2 border-t border-gray-100 bg-white pt-3">
               <button
                 type="button"
                 onClick={() => setIsAddModalOpen(false)}

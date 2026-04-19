@@ -12,6 +12,11 @@ const ICONS: Record<ConnectSection, typeof MessageCircle> = {
   docs: Files,
   members: UsersRound,
 };
+const SECTION_HELP_TEXT: Record<ConnectSection, string> = {
+  chat: "Use Chat for live updates and quick coordination with everyone on the trip.",
+  docs: "Use Docs to keep tickets, confirmations, and travel files in one shared place.",
+  members: "Use Members to invite people, track who joined, and manage your travel group.",
+};
 
 type Props = {
   section: ConnectSection;
@@ -72,7 +77,7 @@ export default function TripConnectShell({
           })}
         </div>
         <p className="mt-2 px-1 text-center text-[11px] leading-snug text-slate-400">
-          Messages, trip files, and your crew — in one place.
+          {SECTION_HELP_TEXT[section]}
         </p>
       </div>
 

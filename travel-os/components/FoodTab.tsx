@@ -17,7 +17,7 @@ const CUISINES = [
   "American",
   "Local",
 ];
-const DIETARY = ["None", "Vegetarian", "Vegan", "Halal", "Kosher", "Gluten-free"];
+const DIETARY = ["None", "Vegetarian", "Non-vegetarian", "Vegan", "Halal", "Kosher", "Gluten-free"];
 const BUDGETS = [
   { label: "Any", value: "" },
   { label: "₹ Budget", value: "budget" },
@@ -405,6 +405,13 @@ export default function FoodTab({ tripId, destination, initialView = "discover" 
 
   return (
     <div className="flex flex-col gap-4 px-0 py-1 pb-8">
+      <section className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+        <p className="text-sm font-semibold text-indigo-900">Find, shortlist, and decide where to eat</p>
+        <p className="mt-1 text-xs leading-relaxed text-indigo-800">
+          Discover restaurants with filters, save favorites, vote as a group, and translate menu photos when needed.
+        </p>
+      </section>
+
       <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
         {(["discover", "saved", "translate"] as const).map((v) => (
           <button

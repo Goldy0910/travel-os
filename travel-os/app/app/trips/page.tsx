@@ -1,5 +1,6 @@
 import HubTripCard from "@/app/app/_components/hub-trip-card";
 import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
+import { getOrCacheTravelPlacePhotoUrls } from "@/lib/travel-place-photo-cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchTripsViaMembership } from "@/lib/trip-membership";
 import Link from "next/link";
@@ -11,24 +12,6 @@ import {
   pickFirstString,
   type TripRecord,
 } from "../_lib/trip-formatters";
-
-function normalizePlace(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-function destinationCover(location: string): string {
-  const key = normalizePlace(location);
-  if (key.includes("manali")) {
-    return "https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?auto=format&fit=crop&w=900&q=80";
-  }
-  if (key.includes("tokyo")) {
-    return "https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?auto=format&fit=crop&w=900&q=80";
-  }
-  if (key.includes("goa")) {
-    return "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=900&q=80";
-  }
-  return "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=900&q=80";
-}
 
 export default async function TripsPage() {
   const supabase = await createSupabaseServerClient();
@@ -44,6 +27,11 @@ export default async function TripsPage() {
     await fetchTripsViaMembership(supabase, user.id);
   const tripsError = membershipTripsError;
   const trips = (tripsRaw ?? []) as TripRecord[];
+  const { data: allPlacesRows } = await supabase.from("travel_places").select("canonical_location");
+  const allKnownLocations = (allPlacesRows ?? [])
+    .map((row) => String((row as { canonical_location?: string }).canonical_location ?? "").trim())
+    .filter((value) => value.length > 0);
+  const photoByLocation = await getOrCacheTravelPlacePhotoUrls(supabase, allKnownLocations);
 
   const { data: expensesData } =
     tripIds.length > 0
@@ -197,7 +185,7 @@ export default async function TripsPage() {
                   dateRange={dateLabel}
                   memberCount={memberCountByTrip.get(tripId) ?? 0}
                   netBalance={summary?.net ?? 0}
-                  imageUrl={destinationCover(location)}
+                  imageUrl={photoByLocation.get(location) ?? ""}
                 />
               ) : (
                 <article key={`${title}-${location}-${index}`} />

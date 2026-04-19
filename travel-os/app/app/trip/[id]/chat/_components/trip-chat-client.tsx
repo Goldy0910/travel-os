@@ -281,6 +281,14 @@ export default function TripChatClient({
 
   return (
     <div className="flex flex-col bg-slate-50">
+      <div className="px-4 pt-3">
+        <div className="mx-auto w-full max-w-md rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
+          <p className="text-sm font-semibold text-sky-900">Keep the group in sync instantly</p>
+          <p className="mt-1 text-xs leading-relaxed text-sky-800">
+            Use chat for quick decisions, sharing updates, and links so everyone sees trip communication in one thread.
+          </p>
+        </div>
+      </div>
       <div
         className="px-4 py-3"
         role="log"

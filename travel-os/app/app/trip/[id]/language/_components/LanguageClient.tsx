@@ -3,7 +3,7 @@
 import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { resolveDestination } from "@/app/app/_lib/destination-intel";
+import { detectTripLanguage } from "@/app/app/_lib/detect-trip-language";
 
 /** v0.15+ auth-helpers: use createBrowserClient (createClientComponentClient was consolidated into @supabase/ssr). */
 function useSupabaseBrowser() {
@@ -15,78 +15,6 @@ function useSupabaseBrowser() {
     }
     return createBrowserClient(url, key);
   }, [url, key]);
-}
-
-/** Infer primary spoken language from destination text (cities & regions). */
-function detectLanguage(destination: string): string {
-  const intel = resolveDestination(destination);
-  const inferredLanguage = intel.language;
-  const raw = destination.toLowerCase().trim();
-  if (!raw) return "English";
-  const d = ` ${raw.replace(/[^\p{L}\p{N}\s,-]/gu, " ").replace(/\s+/g, " ")} `;
-
-  const hasAny = (terms: readonly string[]) => terms.some((term) => d.includes(` ${term} `));
-
-  // India-first: city/state level destinations should resolve to the local most-used travel language.
-  if (
-    hasAny([
-      "manali",
-      "shimla",
-      "dharamshala",
-      "kullu",
-      "himachal",
-      "new delhi",
-      "delhi",
-      "mumbai",
-      "agra",
-      "jaipur",
-      "goa",
-      "varanasi",
-      "rishikesh",
-      "haridwar",
-      "mussoorie",
-      "udaipur",
-      "jodhpur",
-      "amritsar",
-      "india",
-      "bharat",
-    ])
-  ) {
-    return "Hindi";
-  }
-  if (hasAny(["tamil nadu", "chennai", "madurai", "coimbatore", "pondicherry"])) return "Tamil";
-  if (hasAny(["telangana", "hyderabad", "andhra pradesh", "vijayawada", "visakhapatnam", "vizag"]))
-    return "Telugu";
-  if (hasAny(["kerala", "kochi", "ernakulam", "thiruvananthapuram", "trivandrum", "kozhikode", "calicut"]))
-    return "Malayalam";
-  if (hasAny(["karnataka", "bengaluru", "bangalore", "mysuru", "mangalore"])) return "Kannada";
-  if (hasAny(["west bengal", "kolkata", "howrah", "darjeeling"])) return "Bengali";
-  if (hasAny(["maharashtra", "pune", "nagpur", "nashik"])) return "Marathi";
-  if (hasAny(["gujarat", "ahmedabad", "surat", "vadodara", "rajkot"])) return "Gujarati";
-  if (hasAny(["punjab", "ludhiana", "jalandhar", "patiala"])) return "Punjabi";
-  if (hasAny(["odisha", "orissa", "bhubaneswar", "puri", "cuttack"])) return "Odia";
-
-  if (inferredLanguage && inferredLanguage !== "English") return inferredLanguage;
-
-  if (hasAny(["japan", "tokyo", "osaka", "kyoto", "sapporo", "hokkaido"])) return "Japanese";
-  if (hasAny(["france", "paris", "lyon", "nice", "marseille"])) return "French";
-  if (hasAny(["spain", "madrid", "barcelona", "seville", "valencia"])) return "Spanish";
-  if (hasAny(["germany", "berlin", "munich", "hamburg", "frankfurt"])) return "German";
-  if (hasAny(["italy", "rome", "milan", "florence", "venice"])) return "Italian";
-  if (hasAny(["china", "beijing", "shanghai", "guangzhou", "shenzhen"])) return "Chinese";
-  if (hasAny(["south korea", "korea", "seoul", "busan", "incheon"])) return "Korean";
-  if (hasAny(["thailand", "bangkok", "phuket", "chiang mai", "krabi"])) return "Thai";
-  if (hasAny(["uae", "united arab emirates", "dubai", "abu dhabi", "sharjah", "qatar", "doha", "saudi", "kuwait", "oman"]))
-    return "Arabic";
-  if (hasAny(["vietnam", "hanoi", "ho chi minh", "saigon", "da nang"])) return "Vietnamese";
-  if (hasAny(["indonesia", "bali", "jakarta", "yogyakarta", "surabaya"])) return "Indonesian";
-  if (hasAny(["portugal", "lisbon", "porto", "brazil", "rio de janeiro", "sao paulo"])) return "Portuguese";
-  if (hasAny(["russia", "moscow", "saint petersburg"])) return "Russian";
-  if (hasAny(["turkey", "istanbul", "ankara", "izmir"])) return "Turkish";
-  if (hasAny(["greece", "athens", "santorini", "mykonos"])) return "Greek";
-  if (hasAny(["netherlands", "amsterdam", "rotterdam", "the hague"])) return "Dutch";
-
-  return "English";
 }
 
 const CULTURAL_TIPS: Record<string, string[]> = {
@@ -225,48 +153,6 @@ const CULTURAL_TIPS: Record<string, string[]> = {
   ],
 };
 
-const EMERGENCY_LINES: Record<string, string[]> = {
-  Japanese: [
-    "Police: 110",
-    "Ambulance / Fire: 119",
-    "Japan Visitor Hotline (multilingual): 050-3816-2787",
-    "Coast guard / maritime: 118",
-  ],
-  French: [
-    "EU emergency (police / medical / fire): 112",
-    "France-specific emergency: 15 (medical), 17 (police), 18 (fire)",
-  ],
-  Thai: [
-    "Police: 191",
-    "Ambulance / rescue: 1669",
-    "Tourist police: 1155",
-  ],
-  Arabic: [
-    "UAE police: 999",
-    "Ambulance: 998",
-    "Fire: 997",
-    "Confirm numbers on arrival — emirates may differ slightly.",
-  ],
-  Indonesian: [
-    "Police: 110",
-    "Ambulance: 118",
-    "Search & rescue (Bali): note local clinic + hotel concierge",
-  ],
-  Hindi: [
-    "All-in-one emergency: 112",
-    "Ambulance: 102",
-    "Police: 100",
-    "Fire: 101",
-  ],
-};
-
-const DEFAULT_EMERGENCY = [
-  "If in the EU: 112 (police / ambulance / fire).",
-  "If in doubt, ask your hotel or host for the local emergency number.",
-  "Save your embassy contact before you travel.",
-  "ICE: add an “In Case of Emergency” contact in your phone.",
-];
-
 function getCulturalTips(language: string): string[] {
   return (
     CULTURAL_TIPS[language] ?? [
@@ -276,10 +162,6 @@ function getCulturalTips(language: string): string[] {
       "Keep calm when plans change — flexibility is part of travel.",
     ]
   );
-}
-
-function getEmergencyLines(language: string): string[] {
-  return EMERGENCY_LINES[language] ?? DEFAULT_EMERGENCY;
 }
 
 type PhraseRow = {
@@ -328,7 +210,7 @@ export default function LanguageClient({ tripId, tripTitle, destination }: Props
     return () => subscription.unsubscribe();
   }, [supabase]);
 
-  const language = detectLanguage(destination);
+  const language = detectTripLanguage(destination);
 
   const [view, setView] = useState<"translate" | "phrasebook" | "camera" | "tips">("translate");
 
@@ -552,7 +434,6 @@ export default function LanguageClient({ tripId, tripTitle, destination }: Props
   }
 
   const culturalTips = getCulturalTips(language);
-  const emergencyLines = getEmergencyLines(language);
 
   return (
     <div className="min-h-0 bg-[#f4f4f0] pb-8" data-trip-id={tripId}>
@@ -560,6 +441,13 @@ export default function LanguageClient({ tripId, tripTitle, destination }: Props
         <p className="sr-only">
           {tripTitle} — language helper for {destination}
         </p>
+
+        <section className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+          <p className="text-sm font-semibold text-indigo-900">Communicate confidently while traveling</p>
+          <p className="mt-1 text-xs leading-relaxed text-indigo-800">
+            Translate phrases, play pronunciation, scan text from photos, and check local etiquette tips before conversations.
+          </p>
+        </section>
 
         <div className="flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
           <span className="text-2xl" aria-hidden>
@@ -825,22 +713,6 @@ export default function LanguageClient({ tripId, tripTitle, destination }: Props
                   <p className="text-sm leading-relaxed text-gray-700">{tip}</p>
                 </div>
               ))}
-            </div>
-
-            <div className="rounded-xl border border-gray-100 bg-white p-4">
-              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500">
-                Emergency &amp; safety
-              </p>
-              <ul className="space-y-2 text-sm text-gray-700">
-                {emergencyLines.map((line, i) => (
-                  <li key={i} className="border-b border-gray-50 pb-2 last:border-0 last:pb-0">
-                    {line}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-3 text-xs text-gray-400">
-                Numbers vary by country — verify with your hotel or official tourism site.
-              </p>
             </div>
           </div>
         )}

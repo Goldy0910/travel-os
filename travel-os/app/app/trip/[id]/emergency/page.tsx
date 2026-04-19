@@ -3,13 +3,13 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isTripMember } from "@/lib/trip-membership";
 import { redirect } from "next/navigation";
 
-import LanguageClient from "./_components/LanguageClient";
+import EmergencyClient from "./_components/EmergencyClient";
 
 type Props = {
   params: Promise<{ id: string }>;
 };
 
-export default async function TripLanguagePage({ params }: Props) {
+export default async function TripEmergencyPage({ params }: Props) {
   const { id } = await params;
 
   const supabase = await createSupabaseServerClient();
@@ -36,5 +36,7 @@ export default async function TripLanguagePage({ params }: Props) {
   const destination = pickFirstString(trip, ["place", "location", "destination", "city"], "");
   const title = pickFirstString(trip, ["title", "name", "trip_name"], "Trip");
 
-  return <LanguageClient tripId={String(trip.id ?? id)} tripTitle={title} destination={destination} />;
+  return (
+    <EmergencyClient tripId={String(trip.id ?? id)} tripTitle={title} destination={destination} />
+  );
 }

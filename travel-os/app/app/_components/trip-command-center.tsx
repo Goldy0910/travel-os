@@ -1,6 +1,7 @@
 import { selectPrimaryTrip } from "@/app/app/_lib/use-primary-trip";
 import { pickFirstString, type TripRecord } from "@/app/app/_lib/trip-formatters";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getOrCacheTravelPlacePhotoUrls } from "@/lib/travel-place-photo-cache";
 import { fetchTripsViaMembership } from "@/lib/trip-membership";
 import { SetAppHeader } from "@/components/AppHeader";
 import Link from "next/link";
@@ -159,25 +160,53 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
   const endRaw = pickFirstString(primaryTrip, ["end_date", "endDate", "date_to"], "");
   const dateRange = formatRange(startRaw, endRaw);
   const cover = getTripCoverStyle(primaryTrip);
+  const photoByLocation = await getOrCacheTravelPlacePhotoUrls(supabase, [destination]);
+  const destinationPhotoUrl = photoByLocation.get(destination) ?? "";
 
   const timeZone = "Asia/Kolkata";
   const todayYmd = getTodayYmd(timeZone, now);
   const nowMinutes = nowMinutesInTimeZone(now, timeZone);
 
-  const { data: todayItemsData } = await supabase
+  const { data: todayDayRows } = await supabase
+    .from("itinerary_days")
+    .select("id")
+    .eq("trip_id", primaryTripId)
+    .eq("date", todayYmd);
+  const todayDayIds = (todayDayRows ?? [])
+    .map((row) => (row.id != null ? String(row.id) : ""))
+    .filter((v) => v.length > 0);
+
+  const { data: todayItemsByDate } = await supabase
     .from("itinerary_items")
     .select("id, date, activity_name, title, location, time")
     .eq("trip_id", primaryTripId)
     .eq("date", todayYmd)
     .order("time", { ascending: true });
+  const { data: todayItemsByDay } =
+    todayDayIds.length > 0
+      ? await supabase
+          .from("itinerary_items")
+          .select("id, date, activity_name, title, location, time")
+          .eq("trip_id", primaryTripId)
+          .in("itinerary_day_id", todayDayIds)
+          .order("time", { ascending: true })
+      : { data: [] as ItineraryItem[] };
 
-  const todayItems = (todayItemsData ?? []) as ItineraryItem[];
+  const mergedTodayItems = [...(todayItemsByDate ?? []), ...(todayItemsByDay ?? [])] as ItineraryItem[];
+  const seenIds = new Set<string>();
+  const todayItems = mergedTodayItems.filter((item) => {
+    const id = String(item.id);
+    if (seenIds.has(id)) return false;
+    seenIds.add(id);
+    return true;
+  });
 
   const addExpenseHref = `/app/trip/${primaryTripId}?tab=expenses&quickAction=expense`;
   const addActivityHref = `/app/trip/${primaryTripId}?tab=itinerary&quickAction=activity`;
   const uploadDocHref = `/app/trip/${primaryTripId}?tab=connect&section=docs&quickAction=doc`;
   const inviteHref = `/app/trip/${primaryTripId}?tab=connect&section=members`;
   const languageHref = `/app/trip/${primaryTripId}?tab=language`;
+  const emergencyHref = `/app/trip/${primaryTripId}/emergency`;
   const restaurantsHref = `/app/trip/${primaryTripId}?tab=food&foodTab=discover`;
   const menuHref = `/app/trip/${primaryTripId}?tab=food&foodTab=menu`;
 
@@ -191,25 +220,35 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
               <div
                 className="h-28 w-full bg-gradient-to-br from-indigo-200 via-sky-100 to-violet-100"
                 style={{
-                  backgroundImage: cover.image ? `url(${cover.image})` : undefined,
+                  backgroundImage: cover.image
+                    ? `url(${cover.image})`
+                    : destinationPhotoUrl
+                      ? `url(${destinationPhotoUrl})`
+                      : undefined,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                   backgroundColor: cover.color || undefined,
                 }}
               />
               <div className="space-y-2 px-4 pb-4 pt-3">
-                <span className="inline-flex min-h-7 items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700">
-                  Primary Trip
-                </span>
-                <h1 className="text-xl font-semibold leading-tight text-slate-900">
-                  <Link
-                    href={`/app/trip/${primaryTripId}?tab=itinerary`}
-                    prefetch
-                    className="rounded-md underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                  >
-                    {tripTitle}
-                  </Link>
-                </h1>
+                <div className="flex items-center gap-2.5">
+                  {destinationPhotoUrl ? (
+                    <div
+                      className="h-10 w-10 shrink-0 rounded-lg bg-cover bg-center ring-1 ring-slate-200"
+                      style={{ backgroundImage: `url(${destinationPhotoUrl})` }}
+                      aria-hidden
+                    />
+                  ) : null}
+                  <h1 className="text-xl font-semibold leading-tight text-slate-900">
+                    <Link
+                      href={`/app/trip/${primaryTripId}?tab=itinerary`}
+                      prefetch
+                      className="rounded-md underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    >
+                      {tripTitle}
+                    </Link>
+                  </h1>
+                </div>
                 <p className="text-sm text-slate-600">{destination}</p>
                 <p className="text-sm text-slate-500">{dateRange}</p>
               </div>
@@ -293,6 +332,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
             <div className="grid grid-cols-2 gap-2.5">
               {[
                 { href: languageHref, icon: "🗣️", label: "Language Translator" },
+                { href: emergencyHref, icon: "🆘", label: "Emergency" },
                 { href: restaurantsHref, icon: "🍽️", label: "Restaurants" },
                 { href: menuHref, icon: "📋", label: "Menu Translator" },
                 { href: "/app/tools/visa2", icon: "", label: "Visa", Icon: Globe2 },

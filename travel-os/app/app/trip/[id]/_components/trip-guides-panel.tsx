@@ -137,7 +137,7 @@ export default function TripGuidesPanel({ bundle, destinationLabel }: Props) {
         <header className="space-y-1">
           <h2 className="text-base font-semibold text-slate-900">Explore</h2>
           <p className="text-sm text-slate-600">
-            Premium beta assistant for quick trip planning.
+            Use Explore to discover practical videos and local tips so you can plan key decisions faster.
           </p>
         </header>
         <EmptyState destinationLabel={destinationLabel} />
@@ -150,7 +150,7 @@ export default function TripGuidesPanel({ bundle, destinationLabel }: Props) {
       <header className="space-y-1">
         <h2 className="text-base font-semibold text-slate-900">Explore</h2>
         <p className="text-sm text-slate-600">
-          Plan smarter for{" "}
+          Get destination guides, essentials, and useful links for{" "}
           <span className="font-medium text-slate-800">
             {destinationLabel.trim() || "your trip"}
           </span>
@@ -234,30 +234,6 @@ export default function TripGuidesPanel({ bundle, destinationLabel }: Props) {
           ) : (
             <EmptyState destinationLabel={destinationLabel} />
           )
-        ) : null}
-
-        {activeTab === "money" ? (
-          <div className="grid grid-cols-1 gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">ATM</p>
-              <p className="mt-1.5 text-sm text-slate-700">{safeBundle.money.atm}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Exchange</p>
-              <p className="mt-1.5 text-sm text-slate-700">{safeBundle.money.exchange}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tips</p>
-              <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
-                {safeBundle.money.tips.map((tip) => (
-                  <li key={tip} className="flex gap-2">
-                    <span className="text-slate-400">•</span>
-                    <span>{tip}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
         ) : null}
 
         {activeTab === "links" ? (

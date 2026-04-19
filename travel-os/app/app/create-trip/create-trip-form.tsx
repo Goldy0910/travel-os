@@ -34,6 +34,8 @@ export default function CreateTripForm({
   const [query, setQuery] = useState("");
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  const [startDateValue, setStartDateValue] = useState("");
+  const [endDateValue, setEndDateValue] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const filteredPlaces = useMemo(() => {
@@ -58,6 +60,19 @@ export default function CreateTripForm({
     : "border-slate-300 focus:border-slate-500";
 
   const dateFieldClass = `${fieldClass} border-slate-300 h-12 w-full max-w-full focus:border-slate-500`;
+  const now = new Date();
+  const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  function friendlyDate(ymd: string): string {
+    if (!ymd) return "";
+    const d = new Date(`${ymd}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("en-US", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(d);
+  }
 
   const pickPlace = (place: TravelPlaceDTO) => {
     setSelectedSlug(place.slug);
@@ -138,10 +153,22 @@ export default function CreateTripForm({
           id="startDate"
           name="startDate"
           type="date"
+          value={startDateValue}
+          min={todayYmd}
+          onChange={(e) => {
+            const nextStart = e.target.value;
+            setStartDateValue(nextStart);
+            if (endDateValue && nextStart && endDateValue < nextStart) {
+              setEndDateValue(nextStart);
+            }
+          }}
           className={dateFieldClass}
           required
           disabled={pending}
         />
+        {startDateValue ? (
+          <p className="mt-1 text-xs text-slate-500">Selected: {friendlyDate(startDateValue)}</p>
+        ) : null}
       </div>
 
       <div className="min-w-0 max-w-full overflow-x-clip">
@@ -152,10 +179,16 @@ export default function CreateTripForm({
           id="endDate"
           name="endDate"
           type="date"
+          value={endDateValue}
+          min={startDateValue || todayYmd}
+          onChange={(e) => setEndDateValue(e.target.value)}
           className={dateFieldClass}
           required
           disabled={pending}
         />
+        {endDateValue ? (
+          <p className="mt-1 text-xs text-slate-500">Selected: {friendlyDate(endDateValue)}</p>
+        ) : null}
       </div>
 
       <div className="pt-2 text-sm">

@@ -450,11 +450,10 @@ export async function loadTripTabPanelsData(
 
   const inviteCode = wantsMembers ? pickFirstString(tripRow, ["invite_code"], "").trim() : "";
   const baseUrl = wantsMembers ? await getResolvedPublicSiteUrl() : "";
-  const inviteBaseUrl = baseUrl.replace("travel-os", "traveltill99");
   const hasInviteCode = inviteCode.length > 0;
   const joinUrl = hasInviteCode
-    ? `${inviteBaseUrl}/join?code=${encodeURIComponent(inviteCode)}`
-    : `${inviteBaseUrl}/join`;
+    ? `${baseUrl}/join?code=${encodeURIComponent(inviteCode)}`
+    : `${baseUrl}/join`;
   const whatsappText = hasInviteCode
     ? `Join my trip: ${joinUrl}`
     : `Join my trip on TravelTill99: ${joinUrl}`;

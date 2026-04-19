@@ -51,6 +51,13 @@ export default function TripMembersPanel({
 }: TripMembersPanelProps) {
   return (
     <div className="space-y-3">
+      <section className="rounded-xl border border-indigo-100 bg-indigo-50 px-3.5 py-3">
+        <p className="text-sm font-semibold text-indigo-900">Invite and manage your travel crew</p>
+        <p className="mt-1 text-xs leading-relaxed text-indigo-800">
+          Share the invite link to bring people in, track who has joined, and manage member access in one place.
+        </p>
+      </section>
+
       {pageError ? (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{pageError}</p>
       ) : null}

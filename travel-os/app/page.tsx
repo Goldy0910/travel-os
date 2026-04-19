@@ -134,12 +134,6 @@ export default function HomePage() {
                 >
                   Start your trip
                 </LandingLink>
-                <a
-                  href="#preview"
-                  className="inline-flex min-h-[3rem] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-3 text-base font-semibold text-slate-800 shadow-sm transition active:scale-[0.98] touch-manipulation"
-                >
-                  View demo
-                </a>
               </div>
             </div>
           </section>

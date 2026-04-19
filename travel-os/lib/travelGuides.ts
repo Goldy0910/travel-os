@@ -335,7 +335,6 @@ export const GUIDE_CATEGORIES = [
   { id: "food" as const, label: "Food" },
   { id: "essentials" as const, label: "Essentials" },
   { id: "transport" as const, label: "Transport" },
-  { id: "money" as const, label: "Money" },
   { id: "links" as const, label: "Links" },
 ];
 

@@ -143,6 +143,16 @@ function IconDotsVertical({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
+function IconDotsVerticalSmall({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <circle cx="12" cy="6" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="12" cy="18" r="1.8" />
+    </svg>
+  );
+}
+
 function IconPlusSmall({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2.25} aria-hidden>
@@ -198,16 +208,16 @@ function TripManageMenu({
         aria-haspopup="true"
         aria-controls={menuId}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-white/35 bg-transparent px-3 py-2 text-sm font-medium text-white/95 transition hover:bg-white/10"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/30 bg-white/5 text-white/95 transition hover:bg-white/15"
       >
-        Manage trip
-        <ChevronDown className={`h-4 w-4 shrink-0 opacity-90 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        <span className="sr-only">Trip actions</span>
+        <IconDotsVerticalSmall className="h-5 w-5" />
       </button>
       {open ? (
         <div
           id={menuId}
           role="menu"
-          className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-white/10 bg-slate-800 py-1 shadow-lg sm:left-auto sm:right-0 sm:min-w-[12rem]"
+          className="absolute right-0 top-full z-50 mt-2 min-w-[12rem] overflow-hidden rounded-xl border border-white/10 bg-slate-800 py-1 shadow-lg"
         >
           <button
             type="button"
@@ -491,6 +501,13 @@ export default function TripItineraryShell({
             }}
           />
         </div>
+      </section>
+
+      <section className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+        <p className="text-sm font-semibold text-indigo-900">Plan day by day with your group</p>
+        <p className="mt-1 text-xs leading-relaxed text-indigo-800">
+          Use Itinerary to map each day, add activities with time and location, and keep everyone aligned on the plan.
+        </p>
       </section>
 
       {shouldShowDayWiseItinerary && orderedDates.length > 0 ? (

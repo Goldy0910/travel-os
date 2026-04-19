@@ -37,6 +37,11 @@ function AppCategoryIcon({ category }: { category: LocalAppCategory }) {
   return <MapPinned className={common} aria-hidden />;
 }
 
+function categoryLabel(category: LocalAppCategory): string {
+  if (category === "Food") return "Food (for Online Delivery)";
+  return category;
+}
+
 type Props = {
   trips: LocalAppsTripOption[];
   initialTripId: string;
@@ -159,7 +164,7 @@ export default function LocalAppsClient({ trips, initialTripId }: Props) {
               const apps = cityApps.categories[category] ?? [];
               return (
                 <section key={category} className="space-y-2">
-                  <h2 className="text-sm font-semibold text-slate-900">{category}</h2>
+                  <h2 className="text-sm font-semibold text-slate-900">{categoryLabel(category)}</h2>
                   {apps.map((app) => {
                     return (
                       <article
