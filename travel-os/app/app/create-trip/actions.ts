@@ -104,17 +104,32 @@ export async function createTripAction(formData: FormData): Promise<FormActionRe
     redirect("/app/login");
   }
 
-  const location = String(formData.get("location") ?? "").trim();
+  const travelPlaceSlug = String(formData.get("travelPlaceSlug") ?? "").trim();
   const startDate = String(formData.get("startDate") ?? "").trim();
   const endDate = String(formData.get("endDate") ?? "").trim();
 
-  if (!location || !startDate || !endDate) {
-    return actionError("Please fill all fields.");
+  if (!travelPlaceSlug || !startDate || !endDate) {
+    return actionError("Choose a destination from the list and fill all fields.");
   }
+
+  const { data: travelPlace, error: placeLookupError } = await supabase
+    .from("travel_places")
+    .select("canonical_location")
+    .eq("slug", travelPlaceSlug)
+    .maybeSingle();
+
+  if (placeLookupError || !travelPlace?.canonical_location) {
+    return actionError("Invalid destination. Please choose a place from the list.");
+  }
+
+  const location = String(travelPlace.canonical_location).trim();
 
   if (new Date(endDate) < new Date(startDate)) {
     return actionError("End date must be after start date.");
   }
+
+  const normalizedLocation = normalizePlace(location);
+  const seedManaliStarter = normalizedLocation.includes("manali");
 
   const { data: newTrip, error: insertError } = await supabase
     .from("trips")
@@ -124,6 +139,8 @@ export async function createTripAction(formData: FormData): Promise<FormActionRe
       start_date: startDate,
       end_date: endDate,
       title: location,
+      /** Prompt on itinerary tab until user chooses AI / PDF / manual — except Manali starter itinerary. */
+      itinerary_setup_complete: seedManaliStarter,
     })
     .select("id")
     .single();
@@ -151,8 +168,7 @@ export async function createTripAction(formData: FormData): Promise<FormActionRe
     return actionError(memberError.message || "Could not set up trip membership.");
   }
 
-  const normalizedLocation = normalizePlace(location);
-  if (normalizedLocation.includes("manali")) {
+  if (seedManaliStarter) {
     await seedManaliStarterItinerary(supabase, tripId, user.id, startDate, endDate);
   }
 

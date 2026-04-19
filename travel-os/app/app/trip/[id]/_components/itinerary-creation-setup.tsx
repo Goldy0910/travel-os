@@ -11,7 +11,8 @@ type Props = {
   onGenerateAi: (formData: FormData) => Promise<FormActionResult>;
   onImportPdf: (formData: FormData) => Promise<FormActionResult>;
   onChooseManual: () => void;
-  onCreated: () => void;
+  /** Optional; server actions already revalidate — used for extra client cleanup if needed. */
+  onCreated?: () => void;
 };
 
 type SetupMode = "none" | "ai" | "pdf";
@@ -126,7 +127,7 @@ export default function ItineraryCreationSetup({
               },
               () => {
                 setMode("none");
-                onCreated();
+                onCreated?.();
               },
             )
           }
@@ -197,7 +198,7 @@ export default function ItineraryCreationSetup({
               },
               () => {
                 setMode("none");
-                onCreated();
+                onCreated?.();
               },
             )
           }

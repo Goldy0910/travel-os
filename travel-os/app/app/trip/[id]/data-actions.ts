@@ -25,6 +25,18 @@ import { redirect } from "next/navigation";
 
 const DOCS_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCS_BUCKET || "trip-docs";
 
+async function markItinerarySetupComplete(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  tripId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { error } = await supabase
+    .from("trips")
+    .update({ itinerary_setup_complete: true })
+    .eq("id", tripId);
+  if (error) return { ok: false, message: error.message || "Could not save itinerary progress." };
+  return { ok: true };
+}
+
 async function canMutateExpense(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   tripId: string,
@@ -295,6 +307,9 @@ export async function generateAiItineraryAction(
     return actionError("AI generation failed. Please retry.");
   }
 
+  const flagged = await markItinerarySetupComplete(supabase, tripId);
+  if (!flagged.ok) return actionError(flagged.message);
+
   revalidatePath(`/app/trip/${tripId}`);
   revalidatePath("/app/home");
   return actionSuccess("AI itinerary draft created.");
@@ -357,9 +372,30 @@ export async function importPdfItineraryAction(
     return actionError("Couldn't extract itinerary clearly. Please review or add manually.");
   }
 
+  const flagged = await markItinerarySetupComplete(supabase, tripId);
+  if (!flagged.ok) return actionError(flagged.message);
+
   revalidatePath(`/app/trip/${tripId}`);
   revalidatePath("/app/home");
   return actionSuccess("PDF itinerary imported.");
+}
+
+export async function completeItinerarySetupManualAction(tripId: string): Promise<FormActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/app/login");
+
+  const ok = await isTripMember(supabase, tripId, user.id);
+  if (!ok) redirect("/app/home");
+
+  const flagged = await markItinerarySetupComplete(supabase, tripId);
+  if (!flagged.ok) return actionError(flagged.message);
+
+  revalidatePath(`/app/trip/${tripId}`);
+  revalidatePath("/app/home");
+  return actionSuccess("Add your first activity when you're ready.");
 }
 
 export async function updateTripDetailsAction(

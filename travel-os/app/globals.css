@@ -76,8 +76,24 @@ input[type="time"],
 input[type="month"],
 input[type="week"] {
   box-sizing: border-box;
+  display: block;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
+}
+
+/* WebKit: shrink the inner datetime edit so it cannot force the control wider than its box. */
+input[type="date"]::-webkit-datetime-edit,
+input[type="datetime-local"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit {
+  min-width: 0;
+}
+
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper,
+input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+  min-width: 0;
+  max-width: 100%;
 }
 
 input::placeholder,

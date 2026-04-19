@@ -7,6 +7,7 @@ import { useFormActionFeedback } from "@/app/app/_components/use-form-action-fee
 import { useTripActiveTab } from "../_lib/trip-active-tab-context";
 import { useTripFabRegistry } from "../_lib/trip-tab-fab-registry";
 import {
+  completeItinerarySetupManualAction,
   deleteItineraryItemAction,
   generateAiItineraryAction,
   importPdfItineraryAction,
@@ -55,7 +56,8 @@ type TripItineraryShellProps = {
   currentUserId: string;
   memberLabelByUserId: Record<string, string>;
   autoOpenAddActivity?: boolean;
-  showItinerarySetupPrompt?: boolean;
+  /** Server-backed: false until AI / PDF import succeeds or user chooses manual. */
+  itinerarySetupComplete?: boolean;
 };
 
 function formatDateLabel(input: string) {
@@ -327,8 +329,9 @@ export default function TripItineraryShell({
   currentUserId,
   memberLabelByUserId,
   autoOpenAddActivity = false,
-  showItinerarySetupPrompt = false,
+  itinerarySetupComplete = true,
 }: TripItineraryShellProps) {
+  const { runAction } = useFormActionFeedback();
   const activeTripTab = useTripActiveTab();
   const itineraryTabActive = activeTripTab === "itinerary";
   const { setOpenActivity } = useTripFabRegistry();
@@ -346,8 +349,6 @@ export default function TripItineraryShell({
   });
   const [formKey, setFormKey] = useState("new-0");
   const formKeySeq = useRef(0);
-  const [manualSetupSelected, setManualSetupSelected] = useState(false);
-  const [setupDismissed, setSetupDismissed] = useState(false);
 
   useEffect(() => {
     if (!itineraryTabActive) {
@@ -405,19 +406,19 @@ export default function TripItineraryShell({
   }, [setOpenActivity, openAdd]);
 
   useEffect(() => {
-    if (!itineraryTabActive || !autoOpenAddActivity) return;
+    if (!itineraryTabActive || !autoOpenAddActivity || !itinerarySetupComplete) return;
     queueMicrotask(() => openAdd());
-  }, [autoOpenAddActivity, itineraryTabActive, openAdd]);
+  }, [autoOpenAddActivity, itinerarySetupComplete, itineraryTabActive, openAdd]);
 
   useEffect(() => {
     const onQuickAction = (event: Event) => {
-      if (!itineraryTabActive) return;
+      if (!itineraryTabActive || !itinerarySetupComplete) return;
       const detail = (event as CustomEvent<{ action?: string }>).detail;
       if (detail?.action === "activity") openAdd();
     };
     window.addEventListener(QUICK_ACTION_EVENT, onQuickAction as EventListener);
     return () => window.removeEventListener(QUICK_ACTION_EVENT, onQuickAction as EventListener);
-  }, [itineraryTabActive, openAdd]);
+  }, [itinerarySetupComplete, itineraryTabActive, openAdd]);
 
   const openAddForDate = (date: string) => {
     formKeySeq.current += 1;
@@ -466,10 +467,8 @@ export default function TripItineraryShell({
     0,
   );
   const dayCount = orderedDates.length;
-  const shouldShowItinerarySetupPrompt =
-    showItinerarySetupPrompt && !setupDismissed && totalActivities === 0;
-  const shouldShowDayWiseItinerary =
-    !shouldShowItinerarySetupPrompt || manualSetupSelected || totalActivities > 0;
+  const shouldShowItinerarySetupPrompt = !itinerarySetupComplete;
+  const shouldShowDayWiseItinerary = itinerarySetupComplete;
 
   return (
     <>
@@ -518,11 +517,8 @@ export default function TripItineraryShell({
               onGenerateAi={generateAiAction}
               onImportPdf={importPdfAction}
               onChooseManual={() => {
-                setManualSetupSelected(true);
-                setSetupDismissed(true);
-                openAdd();
+                runAction(() => completeItinerarySetupManualAction(tripId), () => openAdd());
               }}
-              onCreated={() => setSetupDismissed(true)}
             />
           </div>
         ) : null}

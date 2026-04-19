@@ -107,6 +107,14 @@ function toItemDTO(item: ItineraryItem): ItineraryItemDTO {
   };
 }
 
+function pickTripBoolean(record: TripRecord, keys: string[], fallback: boolean): boolean {
+  for (const key of keys) {
+    const v = record[key];
+    if (typeof v === "boolean") return v;
+  }
+  return fallback;
+}
+
 function pickFirstQuery(
   query: Record<string, string | string[] | undefined>,
   key: string,
@@ -147,7 +155,6 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     Number.isFinite(parsedPrefillExpenseInr) && parsedPrefillExpenseInr >= 0
       ? parsedPrefillExpenseInr
       : undefined;
-  const setupItinerary = pickFirstQuery(query, "setupItinerary").trim().toLowerCase();
   const foodTab = pickFirstQuery(query, "foodTab").trim().toLowerCase();
   const initialFoodView: "discover" | "saved" | "translate" =
     foodTab === "menu" ? "translate" : foodTab === "saved" ? "saved" : "discover";
@@ -177,6 +184,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   }
 
   const trip = tripData as TripRecord;
+  const itinerarySetupComplete = pickTripBoolean(trip, ["itinerary_setup_complete"], true);
   const startRawEarly = pickFirstString(trip, ["start_date", "startDate", "date_from"], "");
   const endRawEarly = pickFirstString(trip, ["end_date", "endDate", "date_to"], "");
   const ymdStart = extractYMD(startRawEarly);
@@ -426,9 +434,11 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                       currentUserId={user.id}
                       memberLabelByUserId={itineraryData.memberLabelByUserId}
                       autoOpenAddActivity={quickAction === "activity"}
-                      showItinerarySetupPrompt={setupItinerary === "1" || setupItinerary === "true"}
+                      itinerarySetupComplete={itinerarySetupComplete}
                     />
-                    {itineraryData.hasActivities ? <TripActivityFeed tripId={tripId} /> : null}
+                    {itinerarySetupComplete && itineraryData.hasActivities ? (
+                      <TripActivityFeed tripId={tripId} />
+                    ) : null}
                   </div>
                 ) : null
               }
