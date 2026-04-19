@@ -8,17 +8,6 @@ type TravelPlaceRow = {
   place_photo_ref: string | null;
 };
 
-type SupabaseLike = {
-  from: (table: string) => {
-    select: (columns: string) => {
-      in: (column: string, values: string[]) => Promise<{ data: TravelPlaceRow[] | null }>;
-    };
-    update: (values: Record<string, unknown>) => {
-      eq: (column: string, value: string) => Promise<{ error: unknown }>;
-    };
-  };
-};
-
 type PlacePhotoCacheRecord = {
   photoName: string | null;
   photoRef: string | null;
@@ -81,7 +70,7 @@ async function fetchPlacePhotoFromGoogle(location: string): Promise<PlacePhotoCa
  * Returns a map of canonical location -> proxied image URL.
  */
 export async function getOrCacheTravelPlacePhotoUrls(
-  supabase: SupabaseLike,
+  supabase: any,
   locations: string[],
 ): Promise<Map<string, string>> {
   const uniqueLocations = Array.from(
