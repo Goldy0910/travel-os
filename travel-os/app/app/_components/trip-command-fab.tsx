@@ -4,6 +4,22 @@ import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+function FabPlusIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-6 w-6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.6}
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
 export default function TripCommandFab({ tripId }: { tripId: string }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -68,7 +84,7 @@ export default function TripCommandFab({ tripId }: { tripId: string }) {
         onClick={() => setOpen((v) => !v)}
         className="flex h-14 w-14 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/35 transition hover:bg-slate-800 active:scale-95"
       >
-        {open ? "×" : "+"}
+        {open ? "×" : <FabPlusIcon />}
       </button>
     </div>
   );

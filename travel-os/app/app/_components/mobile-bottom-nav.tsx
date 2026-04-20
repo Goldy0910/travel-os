@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import MobileNavTabInner from "./mobile-nav-tab-inner";
 import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
-import { Plus, UserRound } from "lucide-react";
+import { UserRound } from "lucide-react";
 
 const LAST_TRIP_STORAGE_KEY = "travel-os-last-trip-id";
 const QUICK_ACTION_EVENT = "travel-os-open-quick-action";
@@ -58,6 +58,22 @@ function ProfileIcon({ active }: { active: boolean }) {
       strokeWidth={2}
       aria-hidden
     />
+  );
+}
+
+function FabPlusIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.6}
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
   );
 }
 
@@ -315,7 +331,7 @@ export default function MobileBottomNav() {
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
               </span>
             ) : (
-              <Plus className="h-[18px] w-[18px] shrink-0" strokeWidth={2.75} aria-hidden />
+              <FabPlusIcon />
             )}
           </span>
         </button>

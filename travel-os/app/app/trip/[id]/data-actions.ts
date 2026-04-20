@@ -109,6 +109,17 @@ function normalizeTripDateInput(raw: string): string {
   return `${y}-${m}-${day}`;
 }
 
+function simplifyGeneratedActivityTitle(raw: string): string {
+  const normalized = raw.replace(/\s+/g, " ").trim();
+  if (!normalized) return "Activity";
+
+  const [firstClause] = normalized.split(/\s[—\-|]\s|:\s+/);
+  const base = (firstClause || normalized).trim();
+  const compact = base.replace(/[.!,;:]+$/g, "").trim();
+  if (compact.length <= 56) return compact;
+  return `${compact.slice(0, 53).trimEnd()}...`;
+}
+
 async function replaceItineraryWithDraft(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   tripId: string,
@@ -138,7 +149,7 @@ async function replaceItineraryWithDraft(
   await supabase.from("itinerary_items").delete().eq("trip_id", tripId).in("date", uniqueDates);
 
   const payload = rows.map((row) => {
-    const title = row.notes ? `${row.title} — ${row.notes}` : row.title;
+    const title = simplifyGeneratedActivityTitle(row.title);
     return {
       trip_id: tripId,
       user_id: userId,

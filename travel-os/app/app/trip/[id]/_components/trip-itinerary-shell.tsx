@@ -201,14 +201,14 @@ function TripManageMenu({
   if (!canDeleteTrip) return null;
 
   return (
-    <div className="relative shrink-0 self-start" ref={wrapRef}>
+    <div className="relative shrink-0" ref={wrapRef}>
       <button
         type="button"
         aria-expanded={open}
         aria-haspopup="true"
         aria-controls={menuId}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/30 bg-white/5 text-white/95 transition hover:bg-white/15"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
       >
         <span className="sr-only">Trip actions</span>
         <IconDotsVerticalSmall className="h-5 w-5" />
@@ -482,6 +482,18 @@ export default function TripItineraryShell({
 
   return (
     <>
+      <div className="flex justify-end">
+        <TripManageMenu
+          tripId={tripId}
+          canDeleteTrip={canDeleteTrip}
+          onUpdateTrip={() => {
+            tripUpdateKeySeq.current += 1;
+            setTripUpdateFormKey(`trip-edit-${tripUpdateKeySeq.current}`);
+            setTripUpdateOpen(true);
+          }}
+        />
+      </div>
+
       <section className="rounded-xl bg-[#1a2340] p-5 text-white shadow-md">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -491,15 +503,6 @@ export default function TripItineraryShell({
               {memberCount} member{memberCount === 1 ? "" : "s"}
             </p>
           </div>
-          <TripManageMenu
-            tripId={tripId}
-            canDeleteTrip={canDeleteTrip}
-            onUpdateTrip={() => {
-              tripUpdateKeySeq.current += 1;
-              setTripUpdateFormKey(`trip-edit-${tripUpdateKeySeq.current}`);
-              setTripUpdateOpen(true);
-            }}
-          />
         </div>
       </section>
 

@@ -59,6 +59,7 @@ export default function ChecklistTab({
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [userId, setUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"personal" | "shared">("personal");
+  const [isOrganizer, setIsOrganizer] = useState(false);
   const [personalChecklist, setPersonalChecklist] = useState<Checklist | null>(null);
   const [sharedChecklist, setSharedChecklist] = useState<Checklist | null>(null);
   const [newLabel, setNewLabel] = useState("");
@@ -84,6 +85,27 @@ export default function ChecklistTab({
       cancelled = true;
     };
   }, [supabase]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("members")
+        .select("role")
+        .eq("trip_id", tripId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (cancelled) return;
+      const role = String((data as { role?: string } | null)?.role ?? "").trim().toLowerCase();
+      setIsOrganizer(role === "organizer");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, tripId, userId]);
+
+  const canAddToCurrentChecklist = activeTab === "personal" || isOrganizer;
 
   const loadChecklists = useCallback(async () => {
     if (!userId) return;
@@ -187,6 +209,10 @@ export default function ChecklistTab({
       toast.message("Checklist is still loading. Please try again.");
       return;
     }
+    if (activeTab === "shared" && !isOrganizer) {
+      toast.message("Only the organiser can add items to the Group Checklist.");
+      return;
+    }
     if (!newLabel.trim()) {
       toast.message("Enter an item name first.");
       return;
@@ -257,6 +283,10 @@ export default function ChecklistTab({
 
   async function generateWithAI() {
     if (!current) return;
+    if (activeTab === "shared" && !isOrganizer) {
+      toast.message("Only the organiser can add items to the Group Checklist.");
+      return;
+    }
     setIsGenerating(true);
     try {
       const res = await fetch("/api/generate-checklist", {
@@ -353,6 +383,10 @@ export default function ChecklistTab({
     checklist_template_items?: ItemTemplateRow[];
   }) {
     if (!current) return;
+    if (activeTab === "shared" && !isOrganizer) {
+      toast.message("Only the organiser can add items to the Group Checklist.");
+      return;
+    }
     const rows = template.checklist_template_items ?? [];
     if (rows.length === 0) {
       toast.message("This template has no items.");
@@ -459,7 +493,7 @@ export default function ChecklistTab({
         <button
           type="button"
           onClick={() => void generateWithAI()}
-          disabled={isGenerating || !current}
+          disabled={isGenerating || !current || !canAddToCurrentChecklist}
           className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-medium text-white disabled:opacity-50"
         >
           {isGenerating ? "Generating…" : "✨ AI Generate"}
@@ -467,12 +501,17 @@ export default function ChecklistTab({
         <button
           type="button"
           onClick={() => void loadTemplates()}
-          disabled={isLoadingTemplates}
+          disabled={isLoadingTemplates || !canAddToCurrentChecklist}
           className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700"
         >
           {isLoadingTemplates ? "Loading templates..." : "📋 Templates"}
         </button>
       </div>
+      {activeTab === "shared" && !isOrganizer ? (
+        <p className="text-xs text-amber-800">
+          Only the organiser can add items to the Group Checklist.
+        </p>
+      ) : null}
 
       {showTemplates ? (
         <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-4">
@@ -556,58 +595,65 @@ export default function ChecklistTab({
       <button
         type="button"
         aria-label="Add checklist item"
-        onClick={() => setIsAddModalOpen(true)}
-        disabled={!current}
+        onClick={() => {
+          if (!canAddToCurrentChecklist) {
+            toast.message("Only the organiser can add items to the Group Checklist.");
+            return;
+          }
+          setIsAddModalOpen(true);
+        }}
+        disabled={!current || !canAddToCurrentChecklist}
         className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
       >
         +
       </button>
 
       {isAddModalOpen ? (
-        <div className="fixed inset-0 z-[120] flex items-end bg-black/40 sm:items-center sm:justify-center">
+        <div className="fixed inset-0 z-[120] flex items-end bg-black/40 pb-[env(keyboard-inset-height,0px)] sm:items-center sm:justify-center sm:pb-0">
           <button
             type="button"
             aria-label="Close add item modal"
             onClick={() => setIsAddModalOpen(false)}
             className="absolute inset-0 h-full w-full"
           />
-          <div className="relative z-[121] w-full overflow-y-auto rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] [margin-bottom:env(keyboard-inset-height,0px)] max-h-[min(88dvh,calc(100dvh-1rem-env(keyboard-inset-height,0px)))] sm:max-h-[75vh] sm:max-w-md sm:rounded-2xl sm:pb-4">
-            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200 sm:hidden" />
-            <h3 className="text-base font-semibold text-gray-900">Add checklist item</h3>
-            <p className="mt-1 text-xs text-gray-500">
-              Pick a category and save the item to your current checklist.
-            </p>
+          <div className="relative z-[121] flex w-full max-h-[88dvh] flex-col rounded-t-2xl bg-white sm:max-h-[75vh] sm:max-w-md sm:rounded-2xl">
+            <div className="overflow-y-auto px-4 pt-4">
+              <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200 sm:hidden" />
+              <h3 className="text-base font-semibold text-gray-900">Add checklist item</h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Pick a category and save the item to your current checklist.
+              </p>
 
-            <div className="mt-4 flex flex-col gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-gray-600">Category</span>
-                <select
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700"
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {CATEGORY_ICONS[c]} {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="mt-4 flex flex-col gap-3 pb-4">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">Category</span>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700"
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {CATEGORY_ICONS[c]} {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-gray-600">Item</span>
-                <input
-                  value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && void addItem()}
-                  placeholder="e.g. Passport, charger, jacket"
-                  className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
-                  autoFocus
-                />
-              </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">Item</span>
+                  <input
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void addItem()}
+                    placeholder="e.g. Passport, charger, jacket"
+                    className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+                    autoFocus
+                  />
+                </label>
+              </div>
             </div>
-
-            <div className="sticky bottom-0 mt-4 flex gap-2 border-t border-gray-100 bg-white pt-3">
+            <div className="flex gap-2 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
               <button
                 type="button"
                 onClick={() => setIsAddModalOpen(false)}

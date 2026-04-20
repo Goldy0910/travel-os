@@ -9,6 +9,55 @@ export function detectTripLanguage(destination: string): string {
   const d = ` ${raw.replace(/[^\p{L}\p{N}\s,-]/gu, " ").replace(/\s+/g, " ")} `;
 
   const hasAny = (terms: readonly string[]) => terms.some((term) => d.includes(` ${term} `));
+  const matchLanguage = (rules: ReadonlyArray<{ terms: readonly string[]; language: string }>): string | null => {
+    for (const rule of rules) {
+      if (hasAny(rule.terms)) return rule.language;
+    }
+    return null;
+  };
+
+  const preferredByPlace = matchLanguage([
+    { terms: ["dubai", "uae", "united arab emirates"], language: "Arabic" },
+    { terms: ["thailand", "bangkok", "phuket", "chiang mai"], language: "Thai" },
+    { terms: ["singapore"], language: "English" },
+    { terms: ["maldives"], language: "Dhivehi" },
+    { terms: ["malaysia"], language: "Malay" },
+    { terms: ["sri lanka"], language: "Sinhala" },
+    { terms: ["indonesia", "bali", "jakarta"], language: "Indonesian" },
+    { terms: ["nepal"], language: "Nepali" },
+    { terms: ["vietnam"], language: "Vietnamese" },
+    { terms: ["turkey", "istanbul"], language: "Turkish" },
+    { terms: ["switzerland"], language: "German" },
+    { terms: ["france", "paris"], language: "French" },
+    { terms: ["italy", "rome"], language: "Italian" },
+    { terms: ["united kingdom", "uk", "britain", "london"], language: "English" },
+    { terms: ["australia", "sydney"], language: "English" },
+    { terms: ["japan", "tokyo", "osaka"], language: "Japanese" },
+    { terms: ["usa", "united states", "new york"], language: "English" },
+    { terms: ["canada", "toronto"], language: "English" },
+    { terms: ["new zealand", "auckland"], language: "English" },
+    { terms: ["greece", "athens"], language: "Greek" },
+    { terms: ["goa"], language: "Konkani" },
+    { terms: ["manali", "shimla"], language: "Hindi" },
+    { terms: ["rajasthan", "jaipur", "udaipur", "jodhpur"], language: "Hindi" },
+    { terms: ["ladakh", "leh"], language: "Ladakhi" },
+    { terms: ["kerala", "kochi", "ernakulam", "thiruvananthapuram", "trivandrum"], language: "Malayalam" },
+    { terms: ["rishikesh", "uttarakhand"], language: "Hindi" },
+    { terms: ["andaman"], language: "Hindi" },
+    { terms: ["coorg", "kodagu"], language: "Kannada" },
+    { terms: ["varanasi", "kashi"], language: "Hindi" },
+    { terms: ["spiti", "spiti valley"], language: "Hindi" },
+    { terms: ["hampi"], language: "Kannada" },
+    { terms: ["mussoorie"], language: "Hindi" },
+    { terms: ["pondicherry", "puducherry"], language: "Tamil" },
+    { terms: ["meghalaya", "shillong"], language: "Khasi" },
+    { terms: ["ooty"], language: "Tamil" },
+    { terms: ["agra"], language: "Hindi" },
+    { terms: ["mumbai"], language: "Marathi" },
+    { terms: ["darjeeling"], language: "Nepali" },
+    { terms: ["lakshadweep"], language: "Malayalam" },
+  ]);
+  if (preferredByPlace) return preferredByPlace;
 
   if (
     hasAny([
@@ -30,8 +79,6 @@ export function detectTripLanguage(destination: string): string {
       "udaipur",
       "jodhpur",
       "amritsar",
-      "india",
-      "bharat",
     ])
   ) {
     return "Hindi";
@@ -47,6 +94,7 @@ export function detectTripLanguage(destination: string): string {
   if (hasAny(["gujarat", "ahmedabad", "surat", "vadodara", "rajkot"])) return "Gujarati";
   if (hasAny(["punjab", "ludhiana", "jalandhar", "patiala"])) return "Punjabi";
   if (hasAny(["odisha", "orissa", "bhubaneswar", "puri", "cuttack"])) return "Odia";
+  if (hasAny(["india", "bharat"])) return "Hindi";
 
   if (inferredLanguage && inferredLanguage !== "English") return inferredLanguage;
 
