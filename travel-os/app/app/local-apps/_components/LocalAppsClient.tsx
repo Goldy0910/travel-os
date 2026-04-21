@@ -65,11 +65,15 @@ export default function LocalAppsClient({ trips, initialTripId }: Props) {
 
   useEffect(() => {
     if (!selectedTrip) return;
-    setLoading(true);
-    setCityApps(null);
-    setSwitchingTrip(true);
 
     let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setCityApps(null);
+      setSwitchingTrip(true);
+    });
+    const controller = new AbortController();
     const timer = setTimeout(() => {
       if (cancelled) return;
 
@@ -80,15 +84,37 @@ export default function LocalAppsClient({ trips, initialTripId }: Props) {
         setLoading(false);
       }
 
-      const next = resolveCityApps(selectedTrip.destination);
-      setCityApps(next);
-      saveCityCache(destinationCacheKey, next);
-      setLoading(false);
-      setSwitchingTrip(false);
+      void (async () => {
+        let next: LocalCityApps | null = null;
+        try {
+          const response = await fetch(
+            `/app/local-apps/api/resolve?destination=${encodeURIComponent(selectedTrip.destination)}`,
+            { method: "GET", signal: controller.signal, cache: "no-store" },
+          );
+          const payload = (await response.json()) as {
+            ok?: boolean;
+            data?: LocalCityApps;
+          };
+          if (response.ok && payload.ok && payload.data) {
+            next = payload.data;
+          }
+        } catch {
+          // fall back to bundled source below
+        }
+        if (!next) {
+          next = resolveCityApps(selectedTrip.destination);
+        }
+        if (cancelled) return;
+        setCityApps(next);
+        saveCityCache(destinationCacheKey, next);
+        setLoading(false);
+        setSwitchingTrip(false);
+      })();
     }, 140);
 
     return () => {
       cancelled = true;
+      controller.abort();
       clearTimeout(timer);
       setSwitchingTrip(false);
     };
