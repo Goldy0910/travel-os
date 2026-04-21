@@ -59,8 +59,6 @@ export default function CreateTripForm({
     ? "border-slate-900 ring-2 ring-slate-200"
     : "border-slate-300 focus:border-slate-500";
 
-  const dateDisplayClass =
-    "flex h-12 w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-base font-medium text-slate-900";
   const now = new Date();
   const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
@@ -150,57 +148,53 @@ export default function CreateTripForm({
         <label htmlFor="startDate" className="mb-1 block text-sm font-medium text-slate-700">
           Start date
         </label>
-        <div className="relative w-full">
-          <input
-            id="startDate"
-            name="startDate"
-            type="date"
-            value={startDateValue}
-            min={todayYmd}
-            onChange={(e) => {
-              const nextStart = e.target.value;
-              setStartDateValue(nextStart);
-              if (endDateValue && nextStart && endDateValue < nextStart) {
-                setEndDateValue(nextStart);
-              }
-            }}
-            className="absolute inset-0 z-10 h-12 w-full cursor-pointer opacity-0"
-            required
-            disabled={pending}
-          />
-          <div className={dateDisplayClass}>
-            {startDateValue ? friendlyDate(startDateValue) : "Select start date"}
-          </div>
-        </div>
+        <input
+          id="startDate"
+          name="startDate"
+          type="date"
+          value={startDateValue}
+          min={todayYmd}
+          onChange={(e) => {
+            const nextStart = e.target.value;
+            setStartDateValue(nextStart);
+            if (endDateValue && nextStart && endDateValue < nextStart) {
+              setEndDateValue(nextStart);
+            }
+          }}
+          className={`${fieldClass} h-12 w-full border-slate-300 bg-white text-left focus:border-slate-500 disabled:opacity-60`}
+          required
+          disabled={pending}
+        />
+        {startDateValue ? (
+          <p className="mt-1 text-xs text-slate-500">{friendlyDate(startDateValue)}</p>
+        ) : null}
       </div>
 
       <div className="min-w-0 max-w-full overflow-x-clip">
         <label htmlFor="endDate" className="mb-1 block text-sm font-medium text-slate-700">
           End date
         </label>
-        <div className="relative w-full">
-          <input
-            id="endDate"
-            name="endDate"
-            type="date"
-            value={endDateValue}
-            min={startDateValue || todayYmd}
-            onChange={(e) => {
-              const nextEnd = e.target.value;
-              if (startDateValue && nextEnd && nextEnd < startDateValue) {
-                setEndDateValue(startDateValue);
-                return;
-              }
-              setEndDateValue(nextEnd);
-            }}
-            className="absolute inset-0 z-10 h-12 w-full cursor-pointer opacity-0"
-            required
-            disabled={pending}
-          />
-          <div className={dateDisplayClass}>
-            {endDateValue ? friendlyDate(endDateValue) : "Select end date"}
-          </div>
-        </div>
+        <input
+          id="endDate"
+          name="endDate"
+          type="date"
+          value={endDateValue}
+          min={startDateValue || todayYmd}
+          onChange={(e) => {
+            const nextEnd = e.target.value;
+            if (startDateValue && nextEnd && nextEnd < startDateValue) {
+              setEndDateValue(startDateValue);
+              return;
+            }
+            setEndDateValue(nextEnd);
+          }}
+          className={`${fieldClass} h-12 w-full border-slate-300 bg-white text-left focus:border-slate-500 disabled:opacity-60`}
+          required
+          disabled={pending}
+        />
+        {endDateValue ? (
+          <p className="mt-1 text-xs text-slate-500">{friendlyDate(endDateValue)}</p>
+        ) : null}
       </div>
 
       <div className="pt-2 text-sm">

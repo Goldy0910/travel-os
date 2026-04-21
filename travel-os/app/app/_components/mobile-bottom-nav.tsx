@@ -173,6 +173,7 @@ export default function MobileBottomNav() {
     normalizedPath === "/local-apps" || normalizedPath.startsWith("/local-apps/");
   const hideFabOnForex =
     normalizedPath === "/forex" || normalizedPath.startsWith("/forex/");
+  const hideFabOnHome = normalizedPath === "/home";
   /** FAB navigates here; fixed primary CTA already fills the thumb zone — overlap breaks mobile layout. */
   const hideFabOnCreateTrip =
     normalizedPath === "/create-trip" || normalizedPath.startsWith("/create-trip/");
@@ -181,6 +182,7 @@ export default function MobileBottomNav() {
     !hideFabOnGlobalMembers &&
     !hideFabOnLocalApps &&
     !hideFabOnForex &&
+    !hideFabOnHome &&
     !hideFabOnCreateTrip;
 
   const fabAriaLabel =

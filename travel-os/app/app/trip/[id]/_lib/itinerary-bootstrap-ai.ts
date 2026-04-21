@@ -6,6 +6,12 @@ type AiActivity = {
   notes: string | null;
 };
 
+const GEMINI_MODELS = [
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-1.5-flash",
+] as const;
+
 type ExtractedPdfActivity = {
   date?: string | null;
   day?: string | null;
@@ -183,23 +189,42 @@ async function callGeminiText(prompt: string, inlinePdfBase64?: string): Promise
     });
   }
 
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": key.trim(),
-    },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 3000 },
-    }),
-  });
-  const data = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!response.ok || !raw) throw new Error("Gemini response unavailable");
-  return raw.replace(/```json|```/g, "").trim();
+  let lastError = "Gemini response unavailable";
+  let lastModel = "";
+  for (const model of GEMINI_MODELS) {
+    lastModel = model;
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": key.trim(),
+        },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 3000 },
+        }),
+      },
+    );
+    const data = (await response.json().catch(() => null)) as
+      | {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          error?: { message?: string };
+        }
+      | null;
+    if (!response.ok) {
+      lastError = data?.error?.message?.trim() || `HTTP ${response.status}`;
+      continue;
+    }
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!raw?.trim()) {
+      lastError = "Empty response from Gemini model";
+      continue;
+    }
+    return raw.replace(/```json|```/g, "").trim();
+  }
+  throw new Error(`${lastError} (last attempt: ${lastModel || "unknown"})`);
 }
 
 export async function generateAiItineraryDraft(input: {

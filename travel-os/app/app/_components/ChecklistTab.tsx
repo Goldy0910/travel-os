@@ -617,7 +617,7 @@ export default function ChecklistTab({
             className="absolute inset-0 h-full w-full"
           />
           <div className="relative z-[121] flex w-full max-h-[88dvh] flex-col rounded-t-2xl bg-white sm:max-h-[75vh] sm:max-w-md sm:rounded-2xl">
-            <div className="overflow-y-auto px-4 pt-4">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4">
               <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200 sm:hidden" />
               <h3 className="text-base font-semibold text-gray-900">Add checklist item</h3>
               <p className="mt-1 text-xs text-gray-500">
@@ -653,7 +653,7 @@ export default function ChecklistTab({
                 </label>
               </div>
             </div>
-            <div className="flex gap-2 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
+            <div className="sticky bottom-0 flex gap-2 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
               <button
                 type="button"
                 onClick={() => setIsAddModalOpen(false)}

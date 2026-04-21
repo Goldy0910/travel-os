@@ -6,7 +6,6 @@ import { fetchTripsViaMembership } from "@/lib/trip-membership";
 import { SetAppHeader } from "@/components/AppHeader";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import TripCommandFab from "./trip-command-fab";
 import { Globe2 } from "lucide-react";
 
 type ItineraryItem = {
@@ -359,7 +358,24 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
             </div>
           </section>
         </div>
-        <TripCommandFab tripId={primaryTripId} />
+        <Link
+          href="/app/create-trip"
+          prefetch
+          aria-label="Create new trip"
+          className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[122] flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg shadow-slate-900/25"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.6}
+            strokeLinecap="round"
+            aria-hidden
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </Link>
       </main>
     </>
   );

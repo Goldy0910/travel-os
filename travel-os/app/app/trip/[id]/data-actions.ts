@@ -314,8 +314,9 @@ export async function generateAiItineraryAction(
       return actionError("AI generation failed. Please retry.");
     }
     await replaceItineraryWithDraft(supabase, tripId, user.id, draft);
-  } catch {
-    return actionError("AI generation failed. Please retry.");
+  } catch (e) {
+    const reason = e instanceof Error ? e.message.trim() : "";
+    return actionError(reason ? `AI generation failed: ${reason}` : "AI generation failed. Please retry.");
   }
 
   const flagged = await markItinerarySetupComplete(supabase, tripId);

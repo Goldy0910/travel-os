@@ -201,7 +201,10 @@ function TripManageMenu({
   if (!canDeleteTrip) return null;
 
   return (
-    <div className="relative shrink-0" ref={wrapRef}>
+    <div
+      className="fixed right-[max(0.75rem,env(safe-area-inset-right,0px))] top-[calc(env(safe-area-inset-top,0px)+0.5rem)] z-[130] shrink-0"
+      ref={wrapRef}
+    >
       <button
         type="button"
         aria-expanded={open}

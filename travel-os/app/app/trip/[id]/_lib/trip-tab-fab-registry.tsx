@@ -74,7 +74,7 @@ export function TripFabRegistryProvider({
     activeTab === "connect" && (connectSection ?? "chat") === "docs";
 
   const showFab =
-    activeTab === "itinerary" || activeTab === "expenses" || docsFab;
+    activeTab === "expenses" || docsFab;
 
   const fabLabel =
     activeTab === "itinerary"
