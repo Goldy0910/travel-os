@@ -1,5 +1,6 @@
 "use client";
 
+import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -609,69 +610,64 @@ export default function ChecklistTab({
       </button>
 
       {isAddModalOpen ? (
-        <div className="fixed inset-0 z-[120] flex items-end bg-black/40 pb-[env(keyboard-inset-height,0px)] sm:items-center sm:justify-center sm:pb-0">
-          <button
-            type="button"
-            aria-label="Close add item modal"
-            onClick={() => setIsAddModalOpen(false)}
-            className="absolute inset-0 h-full w-full"
-          />
-          <div className="relative z-[121] flex w-full max-h-[88dvh] flex-col rounded-t-2xl bg-white sm:max-h-[75vh] sm:max-w-md sm:rounded-2xl">
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-4">
-              <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200 sm:hidden" />
-              <h3 className="text-base font-semibold text-gray-900">Add checklist item</h3>
-              <p className="mt-1 text-xs text-gray-500">
-                Pick a category and save the item to your current checklist.
-              </p>
-
-              <div className="mt-4 flex flex-col gap-3 pb-4">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-gray-600">Category</span>
-                  <select
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700"
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {CATEGORY_ICONS[c]} {c}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-gray-600">Item</span>
-                  <input
-                    value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && void addItem()}
-                    placeholder="e.g. Passport, charger, jacket"
-                    className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
-                    autoFocus
-                  />
-                </label>
-              </div>
-            </div>
-            <div className="shrink-0 flex gap-2 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
-              <button
-                type="button"
-                onClick={() => setIsAddModalOpen(false)}
-                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700"
+        <BottomSheetModal
+          open
+          onClose={() => setIsAddModalOpen(false)}
+          title="Add checklist item"
+          description="Pick a category and save the item to your current checklist."
+          panelClassName="max-h-[80vh]"
+        >
+          <form
+            className="space-y-3 pb-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void addItem();
+            }}
+          >
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-gray-600">Category</span>
+              <select
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700"
               >
-                Cancel
-              </button>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {CATEGORY_ICONS[c]} {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-gray-600">Item</span>
+              <input
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="e.g. Passport, charger, jacket"
+                className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+                autoFocus
+              />
+            </label>
+
+            <div className="sticky bottom-0 z-10 -mx-1 mt-2 flex gap-3 border-t border-slate-100 bg-white/95 px-1 pt-3 backdrop-blur">
               <button
-                type="button"
-                onClick={() => void addItem()}
+                type="submit"
                 disabled={!current || !newLabel.trim()}
-                className="flex-1 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-slate-900 py-3 text-base font-medium text-white shadow-md shadow-slate-900/20 disabled:opacity-60"
               >
                 Save
               </button>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-white py-3 text-base font-medium text-slate-800 shadow-sm active:bg-slate-50"
+              >
+                Cancel
+              </button>
             </div>
-          </div>
-        </div>
+          </form>
+        </BottomSheetModal>
       ) : null}
     </div>
   );
