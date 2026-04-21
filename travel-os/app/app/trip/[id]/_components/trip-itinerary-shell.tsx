@@ -201,10 +201,7 @@ function TripManageMenu({
   if (!canDeleteTrip) return null;
 
   return (
-    <div
-      className="fixed right-[max(0.75rem,env(safe-area-inset-right,0px))] top-[calc(env(safe-area-inset-top,0px)+0.5rem)] z-[130] shrink-0"
-      ref={wrapRef}
-    >
+    <div className="relative shrink-0" ref={wrapRef}>
       <button
         type="button"
         aria-expanded={open}
@@ -485,18 +482,6 @@ export default function TripItineraryShell({
 
   return (
     <>
-      <div className="flex justify-end">
-        <TripManageMenu
-          tripId={tripId}
-          canDeleteTrip={canDeleteTrip}
-          onUpdateTrip={() => {
-            tripUpdateKeySeq.current += 1;
-            setTripUpdateFormKey(`trip-edit-${tripUpdateKeySeq.current}`);
-            setTripUpdateOpen(true);
-          }}
-        />
-      </div>
-
       <section className="rounded-xl bg-[#1a2340] p-5 text-white shadow-md">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -506,6 +491,15 @@ export default function TripItineraryShell({
               {memberCount} member{memberCount === 1 ? "" : "s"}
             </p>
           </div>
+          <TripManageMenu
+            tripId={tripId}
+            canDeleteTrip={canDeleteTrip}
+            onUpdateTrip={() => {
+              tripUpdateKeySeq.current += 1;
+              setTripUpdateFormKey(`trip-edit-${tripUpdateKeySeq.current}`);
+              setTripUpdateOpen(true);
+            }}
+          />
         </div>
       </section>
 

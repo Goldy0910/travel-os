@@ -161,7 +161,7 @@ export default function CreateTripForm({
               setEndDateValue(nextStart);
             }
           }}
-          className={`${fieldClass} h-12 w-full border-slate-300 bg-white text-left focus:border-slate-500 disabled:opacity-60`}
+          className={`${fieldClass} h-12 w-full border-slate-300 bg-white text-left leading-[3rem] focus:border-slate-500 disabled:opacity-60`}
           required
           disabled={pending}
         />
@@ -188,7 +188,7 @@ export default function CreateTripForm({
             }
             setEndDateValue(nextEnd);
           }}
-          className={`${fieldClass} h-12 w-full border-slate-300 bg-white text-left focus:border-slate-500 disabled:opacity-60`}
+          className={`${fieldClass} h-12 w-full border-slate-300 bg-white text-left leading-[3rem] focus:border-slate-500 disabled:opacity-60`}
           required
           disabled={pending}
         />
