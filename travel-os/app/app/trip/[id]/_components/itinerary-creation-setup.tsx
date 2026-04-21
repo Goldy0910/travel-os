@@ -116,7 +116,7 @@ export default function ItineraryCreationSetup({
                 fd.set("tripId", tripId);
                 const result = await onGenerateAi(fd);
                 if (!result.ok) {
-                  setInlineError(result.message || "AI generation failed. Please retry.");
+                  setInlineError(result.error || "AI generation failed. Please retry.");
                 }
                 else {
                   localStorage.setItem(
