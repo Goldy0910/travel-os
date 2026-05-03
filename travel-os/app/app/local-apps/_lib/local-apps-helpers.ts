@@ -10,6 +10,7 @@ export function normalizeCityFromDestination(destination: string): string {
 }
 
 const CITY_DATA_KEY_OVERRIDES: Record<string, keyof typeof LOCAL_APPS_DATA> = {
+  hyderabad: "hyderabad",
   bangkok: "thailand",
   dubai: "uae",
   singapore: "singapore",
@@ -80,6 +81,8 @@ const COUNTRY_PLACE_KEYWORDS: Record<string, string[]> = {
     "kochi",
     "munnar",
     "hyderabad",
+    "secunderabad",
+    "telangana",
     "chennai",
     "kolkata",
     "pune",

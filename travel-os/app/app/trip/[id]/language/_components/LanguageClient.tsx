@@ -145,8 +145,9 @@ const CULTURAL_TIPS: Record<string, string[]> = {
     "Ask before photographing people at festivals or ceremonies.",
   ],
   Telugu: [
+    "In Hyderabad many day-to-day conversations mix Telugu, Hindi, and Urdu — follow what locals lead with.",
     "Remove shoes at temples and some homes.",
-    "Cover shoulders and legs at major temples.",
+    "Cover shoulders and legs at major temples (including near Charminar and Old City lanes).",
     "“Namaskaram” is a respectful greeting.",
     "Vegetarian norms are strong in many areas — check before offering food.",
     "Bargaining is common in local markets — stay respectful.",

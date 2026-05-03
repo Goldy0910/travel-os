@@ -2,6 +2,7 @@ import { SetAppHeader } from "@/components/AppHeader";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { redirect } from "next/navigation";
 import CreateTripForm from "./create-trip-form";
+import { mergeTravelPlacesFromDb } from "./travel-places-fallback";
 import type { TravelPlaceDTO } from "./travel-place-types";
 
 type CreateTripPageProps = {
@@ -29,16 +30,18 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
     .select("slug, primary_label, subtitle, visa_note, tags, icon_key, sort_order, canonical_location")
     .order("sort_order", { ascending: true });
 
-  const travelPlaces: TravelPlaceDTO[] = (placeRows ?? []).map((row) => ({
-    slug: String(row.slug),
-    primary_label: String(row.primary_label),
-    subtitle: row.subtitle == null ? null : String(row.subtitle),
-    visa_note: row.visa_note == null ? null : String(row.visa_note),
-    tags: Array.isArray(row.tags) ? row.tags.map((t) => String(t)) : [],
-    icon_key: String(row.icon_key),
-    sort_order: Number(row.sort_order),
-    canonical_location: String(row.canonical_location),
-  }));
+  const travelPlaces: TravelPlaceDTO[] = mergeTravelPlacesFromDb(
+    (placeRows ?? []).map((row) => ({
+      slug: String(row.slug),
+      primary_label: String(row.primary_label),
+      subtitle: row.subtitle == null ? null : String(row.subtitle),
+      visa_note: row.visa_note == null ? null : String(row.visa_note),
+      tags: Array.isArray(row.tags) ? row.tags.map((t) => String(t)) : [],
+      icon_key: String(row.icon_key),
+      sort_order: Number(row.sort_order),
+      canonical_location: String(row.canonical_location),
+    })),
+  );
 
   return (
     <>

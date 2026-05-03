@@ -1,5 +1,6 @@
 "use server";
 
+import { getFallbackTravelPlaceBySlug } from "@/app/app/create-trip/travel-places-fallback";
 import { actionError, actionSuccess, type FormActionResult } from "@/lib/form-action-result";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
@@ -118,11 +119,16 @@ export async function createTripAction(formData: FormData): Promise<FormActionRe
     .eq("slug", travelPlaceSlug)
     .maybeSingle();
 
-  if (placeLookupError || !travelPlace?.canonical_location) {
+  const fromDb =
+    !placeLookupError && travelPlace?.canonical_location
+      ? String(travelPlace.canonical_location).trim()
+      : "";
+  const fromFallback = getFallbackTravelPlaceBySlug(travelPlaceSlug)?.canonical_location.trim() ?? "";
+  const location = fromDb || fromFallback;
+
+  if (!location) {
     return actionError("Invalid destination. Please choose a place from the list.");
   }
-
-  const location = String(travelPlace.canonical_location).trim();
 
   if (new Date(endDate) < new Date(startDate)) {
     return actionError("End date must be after start date.");

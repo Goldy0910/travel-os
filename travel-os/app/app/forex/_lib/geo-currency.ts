@@ -26,6 +26,8 @@ const COUNTRY_PLACE_KEYWORDS: Record<string, string[]> = {
     "munnar",
     "andaman",
     "hyderabad",
+    "telangana",
+    "secunderabad",
     "chennai",
     "kolkata",
     "pune",

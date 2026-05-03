@@ -373,6 +373,71 @@ export const LOCAL_APPS_DATA: Record<string, LocalCityApps> = {
       ],
     },
   },
+  hyderabad: {
+    city: "Hyderabad",
+    country: "India",
+    mustHave: ["Google Maps", "Uber / Rapido", "HMRL Metro"],
+    lastUpdatedIso: UPDATED_ISO,
+    categories: {
+      Transport: [
+        mkItem(
+          "hyd-uber",
+          "Uber",
+          "Transport",
+          ["Works across Hyderabad and Cyberabad", "Use pinned pickup zones at malls and metro exits"],
+          ["Works across Hyderabad and Cyberabad.", "Use pinned pickup zones at malls and metro exits."],
+          { play: "https://www.uber.com", app: "https://www.uber.com" },
+          true,
+        ),
+        mkItem(
+          "hyd-rapido",
+          "Rapido",
+          "Transport",
+          ["Popular bike taxis for short hops", "Confirm helmet availability before starting ride"],
+          ["Popular bike taxis for short hops.", "Confirm helmet availability before starting ride."],
+          { play: "https://www.rapido.bike", app: "https://www.rapido.bike" },
+        ),
+        mkItem(
+          "hyd-metro",
+          "Hyderabad Metro (HMRL)",
+          "Transport",
+          ["Fast corridor across core areas", "Buy QR ticket via TSavaari or counters"],
+          ["Fast corridor across core areas.", "Buy QR ticket via TSavaari app or station counters."],
+          { play: "https://www.ltmetro.com", app: "https://www.ltmetro.com" },
+        ),
+      ],
+      Food: [
+        mkItem(
+          "hyd-zomato-swiggy",
+          "Zomato / Swiggy",
+          "Food",
+          ["Strong restaurant coverage including Old City biryanis", "Late-night delivery varies by zone"],
+          ["Strong restaurant coverage including Old City biryanis.", "Late-night delivery varies by zone."],
+          { play: "https://www.zomato.com", app: "https://www.zomato.com" },
+        ),
+      ],
+      Payments: [
+        mkItem(
+          "hyd-upi",
+          "UPI (Google Pay / PhonePe)",
+          "Payments",
+          ["UPI widely accepted", "Keep ₹ cash for street food and autos without QR"],
+          ["UPI widely accepted.", "Keep rupee cash for street food and autos without QR."],
+          { play: "https://pay.google.com", app: "https://www.apple.com/wallet/" },
+        ),
+      ],
+      Navigation: [
+        mkItem(
+          "hyd-google-maps",
+          "Google Maps",
+          "Navigation",
+          ["Good for ORR and metro walks", "Traffic spikes near IT corridors weekday evenings"],
+          ["Good for ORR and metro walks.", "Traffic spikes near IT corridors on weekday evenings."],
+          { play: "https://maps.google.com", app: "https://maps.google.com" },
+        ),
+      ],
+    },
+  },
   india: {
     city: "India",
     country: "India",

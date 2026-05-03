@@ -6,7 +6,11 @@ export function detectTripLanguage(destination: string): string {
   const inferredLanguage = intel.language;
   const raw = destination.toLowerCase().trim();
   if (!raw) return "English";
-  const d = ` ${raw.replace(/[^\p{L}\p{N}\s,-]/gu, " ").replace(/\s+/g, " ")} `;
+  // Commas/punctuation glue words ("Hyderabad, India") — split so `hasAny` sees ` hyderabad ` not `hyderabad,`.
+  const d = ` ${raw
+    .replace(/[^\p{L}\p{N}\s,-]/gu, " ")
+    .replace(/,/g, " ")
+    .replace(/\s+/g, " ")} `;
 
   const hasAny = (terms: readonly string[]) => terms.some((term) => d.includes(` ${term} `));
   const matchLanguage = (rules: ReadonlyArray<{ terms: readonly string[]; language: string }>): string | null => {
@@ -54,6 +58,7 @@ export function detectTripLanguage(destination: string): string {
     { terms: ["ooty"], language: "Tamil" },
     { terms: ["agra"], language: "Hindi" },
     { terms: ["mumbai"], language: "Marathi" },
+    { terms: ["hyderabad", "secunderabad", "telangana"], language: "Telugu" },
     { terms: ["darjeeling"], language: "Nepali" },
     { terms: ["lakshadweep"], language: "Malayalam" },
   ]);

@@ -86,6 +86,11 @@ const CITY_PROFILES: CityProfile[] = [
   { city: "Ooty", country: "India", aliases: ["ooty india", "udhagamandalam"] },
   { city: "Agra", country: "India", aliases: ["agra india"] },
   { city: "Mumbai", country: "India", aliases: ["mumbai india", "bombay"] },
+  {
+    city: "Hyderabad",
+    country: "India",
+    aliases: ["hyderabad india", "telangana", "secunderabad", "hitech city", "cyberabad"],
+  },
   { city: "Darjeeling", country: "India", aliases: ["darjeeling india"] },
   { city: "Lakshadweep", country: "India", aliases: ["lakshadweep india"] },
 ];

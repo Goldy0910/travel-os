@@ -833,7 +833,27 @@ function resolvePlaceKeyForSheet(place: string, available: string[]): string | n
   const compact = normalizePlaceKey(place);
   if (!compact) return null;
   if (available.includes(compact)) return compact;
-  for (const key of available) {
+
+  // Prefer whole-place tokens ("Hyderabad, India" → hyderabad, india) before substring checks.
+  // Otherwise compact becomes "hyderabadindia", which incorrectly matches sheet key "india" first.
+  const raw = place.trim().toLowerCase();
+  const tokens = raw
+    .split(/[\s,|/&]+/)
+    .map((t) => normalizePlaceKey(t))
+    .filter((t) => t.length >= 3);
+  const tokenSet = new Set(tokens);
+  for (const t of tokens) {
+    if (available.includes(t)) return t;
+  }
+
+  const sortedByLength = [...available].sort((a, b) => b.length - a.length);
+  for (const key of sortedByLength) {
+    if (compact.startsWith(key)) return key;
+  }
+  for (const key of sortedByLength) {
+    if (tokenSet.has(key)) return key;
+  }
+  for (const key of sortedByLength) {
     if (compact.includes(key) || key.includes(compact)) return key;
   }
   return null;
@@ -848,7 +868,7 @@ async function loadGuideVideosFromSheet(): Promise<SheetVideosByPlace> {
 
   let text = "";
   for (const target of targets) {
-    const res = await fetch(target.url, { next: { revalidate: 60 * 10 } });
+    const res = await fetch(target.url, { next: { revalidate: 120 } });
     if (!res.ok) continue;
     const body = await res.text();
     // Skip HTML responses from invalid/unpublished share links.
@@ -888,8 +908,8 @@ async function loadGuideVideosFromSheet(): Promise<SheetVideosByPlace> {
   return out;
 }
 
-const getCachedSheetGuides = unstable_cache(loadGuideVideosFromSheet, ["travel-os-sheet-guides-v1"], {
-  revalidate: 60 * 10,
+const getCachedSheetGuides = unstable_cache(loadGuideVideosFromSheet, ["travel-os-sheet-guides-v2"], {
+  revalidate: 120,
 });
 
 export async function getTravelGuidesForPlaceScalable(place: string): Promise<TravelGuidesBundle | null> {
