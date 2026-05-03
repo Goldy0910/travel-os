@@ -334,7 +334,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
                 { href: emergencyHref, icon: "🆘", label: "Emergency" },
                 { href: restaurantsHref, icon: "🍽️", label: "Restaurants" },
                 { href: menuHref, icon: "📋", label: "Menu Translator" },
-                { href: "/app/tools/visa2", icon: "", label: "Visa", Icon: Globe2 },
+                { href: "/app/tools/visa3", icon: "", label: "Visa", Icon: Globe2 },
                 { href: "/app/esim", icon: "📶", label: "eSIM" },
                 { href: "/app/local-apps", icon: "📱", label: "Local Apps" },
                 { href: "/app/forex", icon: "💱", label: "Forex" },

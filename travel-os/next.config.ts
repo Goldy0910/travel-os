@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: turbopackRoot,
   },
+  async redirects() {
+    return [{ source: "/app/tools/visa2", destination: "/app/tools/visa3", permanent: true }];
+  },
 };
 
 export default nextConfig;

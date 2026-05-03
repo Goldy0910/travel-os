@@ -1,6 +1,6 @@
-import Visa2Client from "@/app/app/tools/visa2/_components/Visa2Client";
-import { inferCountryFromDestination, flagFromCountryName } from "@/app/app/tools/visa2/_lib/geo";
-import type { TripVisa2Option } from "@/app/app/tools/visa2/_lib/types";
+import Visa3Client from "@/app/app/tools/visa3/_components/Visa3Client";
+import { inferCountryFromDestination, flagFromCountryName } from "@/app/app/tools/_lib/geo";
+import type { TripVisa3Option } from "@/app/app/tools/visa3/_lib/types";
 import { selectPrimaryTrip } from "@/app/app/_lib/use-primary-trip";
 import { pickFirstString, type TripRecord } from "@/app/app/_lib/trip-formatters";
 import { SetAppHeader } from "@/components/AppHeader";
@@ -22,33 +22,25 @@ function pickPassportDefault(
     (typeof profile?.nationality === "string" && profile.nationality.trim()) ||
     "";
   if (fromProfile) return fromProfile;
-
-  const fromMetaKeys = ["passport_country", "passportCountry", "nationality", "citizenship"];
-  for (const key of fromMetaKeys) {
+  for (const key of ["passport_country", "passportCountry", "nationality", "citizenship"]) {
     const value = metadata?.[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
+    if (typeof value === "string" && value.trim()) return value.trim();
   }
   return "India";
 }
 
-function selectUpcomingTripId(trips: TripVisa2Option[]): string | null {
+function selectUpcomingTripId(trips: TripVisa3Option[]): string | null {
   const now = new Date();
   const upcoming = trips
-    .filter((trip) => {
-      const start = new Date(`${trip.startDate}T12:00:00`);
-      return !Number.isNaN(start.getTime()) && start >= now;
-    })
-    .sort((a, b) => {
-      const aTime = new Date(`${a.startDate}T12:00:00`).getTime();
-      const bTime = new Date(`${b.startDate}T12:00:00`).getTime();
-      return aTime - bTime;
-    })[0];
+    .filter((trip) => new Date(`${trip.startDate}T12:00:00`) >= now)
+    .sort(
+      (a, b) =>
+        new Date(`${a.startDate}T12:00:00`).getTime() - new Date(`${b.startDate}T12:00:00`).getTime(),
+    )[0];
   return upcoming?.id ?? null;
 }
 
-export default async function Visa2Page() {
+export default async function Visa3Page() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -57,11 +49,9 @@ export default async function Visa2Page() {
 
   const { trips: tripsRaw } = await fetchTripsViaMembership(supabase, user.id);
   const trips = (tripsRaw ?? []) as TripRecord[];
-
   const tripOptions = trips
-    .map((trip, index): TripVisa2Option | null => {
-      const id =
-        typeof trip.id === "string" || typeof trip.id === "number" ? String(trip.id) : null;
+    .map((trip, index): TripVisa3Option | null => {
+      const id = typeof trip.id === "string" || typeof trip.id === "number" ? String(trip.id) : null;
       if (!id) return null;
       const title = pickFirstString(trip, ["title", "name", "trip_name"], `Trip ${index + 1}`);
       const destination = pickFirstString(trip, ["destination", "location", "city", "place"], "");
@@ -76,7 +66,7 @@ export default async function Visa2Page() {
         endDate: extractYmd(pickFirstString(trip, ["end_date", "endDate", "date_to"], "")),
       };
     })
-    .filter((trip): trip is TripVisa2Option => trip != null);
+    .filter((trip): trip is TripVisa3Option => trip != null);
 
   const profileRes = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
   const profile = profileRes.error
@@ -101,7 +91,7 @@ export default async function Visa2Page() {
   return (
     <>
       <SetAppHeader title="Visa" showBack />
-      <Visa2Client
+      <Visa3Client
         trips={tripOptions}
         defaultTripId={defaultTripId}
         defaultPassportCountry={pickPassportDefault(profile, user.user_metadata)}

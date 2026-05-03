@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const MODEL = "gemini-2.5-flash";
+const MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-flash"] as const;
+const TRANSIENT_ERROR_TEXT =
+  "Translation service is busy right now. Please try again in a few seconds.";
 
 function geminiErrorMessage(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
@@ -107,50 +109,83 @@ Return ONLY a single JSON object (no markdown fences, no commentary) with exactl
 Text to translate (as a JSON string for safety):
 ${JSON.stringify(text)}`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": key,
+  let sawBusyError = false;
+  let lastHttpStatus = 502;
+  let lastErrorMessage = "Translation failed";
+
+  for (const model of MODELS) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": key,
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 1024,
+            responseMimeType: "application/json",
+          },
+        }),
+      });
+
+      const data: unknown = await response.json().catch(() => null);
+      const apiErr = geminiErrorMessage(data);
+      const combinedErr = (apiErr || `HTTP ${response.status}`).toLowerCase();
+      const isBusy = response.status === 429 || response.status >= 500 || combinedErr.includes("high demand");
+
+      if (!response.ok || apiErr) {
+        lastHttpStatus =
+          response.status >= 400 && response.status < 600 ? response.status : 502;
+        lastErrorMessage = apiErr || `HTTP ${response.status}`;
+        if (isBusy) {
+          sawBusyError = true;
+          if (attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 350));
+            continue;
+          }
+          break;
+        }
+        break;
+      }
+
+      const rawText = extractText(data);
+      if (!rawText) {
+        lastHttpStatus = 502;
+        lastErrorMessage = "Empty response from model";
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          continue;
+        }
+        break;
+      }
+
+      const result = parseTranslationJson(rawText);
+      if (!result) {
+        lastHttpStatus = 502;
+        lastErrorMessage = "Could not parse translation JSON from model";
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          continue;
+        }
+        break;
+      }
+
+      return NextResponse.json(result);
+    }
+  }
+
+  if (sawBusyError) {
+    return NextResponse.json({ error: TRANSIENT_ERROR_TEXT }, { status: 503 });
+  }
+
+  return NextResponse.json(
+    {
+      error: lastErrorMessage,
     },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 1024,
-        responseMimeType: "application/json",
-      },
-    }),
-  });
-
-  const data: unknown = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    const msg = geminiErrorMessage(data) || `HTTP ${response.status}`;
-    return NextResponse.json({ error: msg }, { status: response.status >= 400 && response.status < 600 ? response.status : 502 });
-  }
-
-  const apiErr = geminiErrorMessage(data);
-  if (apiErr) {
-    return NextResponse.json({ error: apiErr }, { status: 502 });
-  }
-
-  const rawText = extractText(data);
-  if (!rawText) {
-    return NextResponse.json({ error: "Empty response from model" }, { status: 502 });
-  }
-
-  const result = parseTranslationJson(rawText);
-  if (!result) {
-    return NextResponse.json(
-      {
-        error: "Could not parse translation JSON from model",
-        ...(process.env.NODE_ENV === "development" ? { raw: rawText } : {}),
-      },
-      { status: 502 },
-    );
-  }
-
-  return NextResponse.json(result);
+    { status: lastHttpStatus },
+  );
 }
