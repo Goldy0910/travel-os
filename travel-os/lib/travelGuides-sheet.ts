@@ -750,12 +750,48 @@ function buildGoogleCsvTargets(rawUrl: string): CsvTarget[] {
       const targets: CsvTarget[] = [];
       if (gid) targets.push({ url: `${base}&gid=${encodeURIComponent(gid)}`, gid });
       targets.push({ url: base, gid: null });
+      // gviz CSV often succeeds when /export returns an HTML login/walled response from cloud IPs (e.g. Vercel).
+      const gvizGid = gid && /^\d+$/.test(gid) ? gid : "0";
+      targets.push({
+        url: `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${encodeURIComponent(gvizGid)}`,
+        gid,
+      });
       return targets;
     }
   } catch {
     return [];
   }
   return [{ url: clean, gid: null }];
+}
+
+/** Server-side fetch: Google frequently serves HTML to anonymous/data-center clients unless headers mimic a browser. */
+async function fetchGoogleSheetCsv(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      cache: "no-store",
+      redirect: "follow",
+      headers: {
+        Accept: "text/csv,text/plain;q=0.9,*/*;q=0.5",
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      },
+    });
+    if (!res.ok) return null;
+    const body = await res.text();
+    const trimmed = body.trim();
+    if (!trimmed) return null;
+    if (/^\s*<!doctype html/i.test(body) || /^\s*<html/i.test(body)) return null;
+    if (trimmed.startsWith("<")) return null;
+    return body;
+  } catch {
+    return null;
+  }
+}
+
+function resolveGuidesSheetEnvUrl(): string {
+  const primary = normalizeSheetEnvUrl(process.env.GOOGLE_SHEETS_GUIDES_CSV_URL ?? "");
+  if (primary) return primary;
+  return normalizeSheetEnvUrl(process.env.TRAVEL_GUIDES_GOOGLE_SHEET_URL ?? "");
 }
 
 function parseCsvLine(line: string): string[] {
@@ -860,7 +896,7 @@ function resolvePlaceKeyForSheet(place: string, available: string[]): string | n
 }
 
 async function loadGuideVideosFromSheet(): Promise<SheetVideosByPlace> {
-  const csvUrlRaw = process.env.GOOGLE_SHEETS_GUIDES_CSV_URL?.trim() ?? "";
+  const csvUrlRaw = resolveGuidesSheetEnvUrl();
   if (!csvUrlRaw) return {};
 
   const targets = buildGoogleCsvTargets(csvUrlRaw);
@@ -868,13 +904,11 @@ async function loadGuideVideosFromSheet(): Promise<SheetVideosByPlace> {
 
   let text = "";
   for (const target of targets) {
-    const res = await fetch(target.url, { next: { revalidate: 120 } });
-    if (!res.ok) continue;
-    const body = await res.text();
-    // Skip HTML responses from invalid/unpublished share links.
-    if (/^\s*<!doctype html/i.test(body) || /^\s*<html/i.test(body)) continue;
-    text = body;
-    break;
+    const body = await fetchGoogleSheetCsv(target.url);
+    if (body) {
+      text = body;
+      break;
+    }
   }
   if (!text) return {};
 
@@ -908,7 +942,7 @@ async function loadGuideVideosFromSheet(): Promise<SheetVideosByPlace> {
   return out;
 }
 
-const getCachedSheetGuides = unstable_cache(loadGuideVideosFromSheet, ["travel-os-sheet-guides-v2"], {
+const getCachedSheetGuides = unstable_cache(loadGuideVideosFromSheet, ["travel-os-sheet-guides-v4"], {
   revalidate: 120,
 });
 

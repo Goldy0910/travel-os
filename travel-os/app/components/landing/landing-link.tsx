@@ -15,9 +15,12 @@ export default function LandingLink({
 }) {
   return (
     <Link href={href} className={className}>
-      <span className="inline-flex items-center justify-center gap-2 text-inherit">
+      <span className="inline-flex min-w-0 w-full items-center justify-center gap-2 text-inherit">
         {children}
-        <LinkLoadingIndicator spinnerClassName="h-4 w-4 text-current" />
+        <LinkLoadingIndicator
+          reserveSpace={false}
+          spinnerClassName="h-4 w-4 text-current"
+        />
       </span>
     </Link>
   );

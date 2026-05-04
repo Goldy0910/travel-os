@@ -197,8 +197,9 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     ["place", "location", "destination", "city"],
     "",
   );
-  const guidesBundle =
-    activeTab === "guides" ? await getTravelGuidesForPlaceScalable(tripPlace) : null;
+  // Always load Explore guides on the server (sheet + fallbacks). Passing `null` for inactive tabs
+  // lets TripSwipeTabs cache an empty Explore panel; tab switches then reuse stale UI without refetch.
+  const guidesBundle = await getTravelGuidesForPlaceScalable(tripPlace);
   const tripEditDefaults = {
     title,
     location: location || title,
@@ -471,11 +472,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                     }
                   : null
               }
-              guides={
-                activeTab === "guides" ? (
-                  <TripGuidesPanel bundle={guidesBundle} destinationLabel={tripPlace || location} />
-                ) : null
-              }
+              guides={<TripGuidesPanel bundle={guidesBundle} destinationLabel={tripPlace || location} />}
               connectMembers={
                 activeTab === "connect" ? <TripMembersPanel {...panels.members} /> : null
               }

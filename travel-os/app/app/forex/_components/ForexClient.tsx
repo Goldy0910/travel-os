@@ -69,7 +69,7 @@ export default function ForexClient({ trips, initialTripId }: Props) {
   const [placesKind, setPlacesKind] = useState<"atm" | "exchange">("atm");
   const [placesLoading, setPlacesLoading] = useState(false);
   const [places, setPlaces] = useState<ForexPlace[]>([]);
-  const [placesView, setPlacesView] = useState<"list" | "map">("list");
+  const [placesView, setPlacesView] = useState<"list" | "map">("map");
   const [mapIframeLoading, setMapIframeLoading] = useState(false);
   const [saveAsExpenseOpening, setSaveAsExpenseOpening] = useState(false);
 
@@ -214,6 +214,8 @@ export default function ForexClient({ trips, initialTripId }: Props) {
   const switchPlacesKind = (kind: "atm" | "exchange") => {
     if (kind === placesKind) return;
     setPlacesKind(kind);
+    setPlacesView("map");
+    setMapIframeLoading(true);
     setPlacesLoading(true);
     setPlaces([]);
   };
