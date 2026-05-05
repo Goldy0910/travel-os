@@ -306,7 +306,10 @@ export default function TripSwipeTabs({
                 aria-live="polite"
                 aria-busy="true"
               >
-                <PageLoader message="Loading…" className="flex-1 py-16" />
+                <PageLoader
+                  message={activeTabKey === "connect" ? "Loading Connect…" : "Loading…"}
+                  className="flex-1 py-16"
+                />
               </div>
             ) : null}
             {panels.map((panel, i) => {

@@ -27,11 +27,19 @@ export default async function TripsPage() {
     await fetchTripsViaMembership(supabase, user.id);
   const tripsError = membershipTripsError;
   const trips = (tripsRaw ?? []) as TripRecord[];
-  const { data: allPlacesRows } = await supabase.from("travel_places").select("canonical_location");
-  const allKnownLocations = (allPlacesRows ?? [])
-    .map((row) => String((row as { canonical_location?: string }).canonical_location ?? "").trim())
-    .filter((value) => value.length > 0);
-  const photoByLocation = await getOrCacheTravelPlacePhotoUrls(supabase, allKnownLocations);
+
+  // Only load photos for places the current user actually has trips for,
+  // instead of scanning all known travel places.
+  const tripLocations = Array.from(
+    new Set(
+      trips
+        .map((trip) =>
+          pickFirstString(trip, ["location", "destination", "city", "place"], "").trim(),
+        )
+        .filter((value) => value.length > 0),
+    ),
+  );
+  const photoByLocation = await getOrCacheTravelPlacePhotoUrls(supabase, tripLocations);
 
   const { data: expensesData } =
     tripIds.length > 0
