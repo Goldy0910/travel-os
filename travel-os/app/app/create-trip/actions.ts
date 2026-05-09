@@ -98,11 +98,18 @@ async function seedManaliStarterItinerary(
 export async function createTripAction(formData: FormData): Promise<FormActionResult> {
   const supabase = await createSupabaseServerClient();
   const {
-    data: { user },
+    data: { user: authUser },
   } = await supabase.auth.getUser();
+  let user = authUser;
+  if (!user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    user = session?.user ?? null;
+  }
 
   if (!user) {
-    redirect("/app/login");
+    redirect("/app/login?next=/app/create-trip");
   }
 
   const travelPlaceSlug = String(formData.get("travelPlaceSlug") ?? "").trim();

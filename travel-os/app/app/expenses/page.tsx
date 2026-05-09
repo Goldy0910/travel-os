@@ -220,6 +220,7 @@ export default async function ExpensesHubPage() {
             <div className="mt-3 flex gap-3">
               <Link
                 href="/app/create-trip"
+                prefetch={false}
                 className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white"
               >
                 Create trip

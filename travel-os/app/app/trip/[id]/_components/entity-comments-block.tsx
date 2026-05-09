@@ -27,6 +27,12 @@ type EntityCommentsBlockProps = {
   memberLabelByUserId: Record<string, string>;
   /** Itinerary cards: collapsible thread + design-token styling. Expenses keep the default block. */
   collapsible?: boolean;
+  /**
+   * When provided in `collapsible` mode, the parent controls open/closed and the internal
+   * toggle row is hidden. Used by the redesigned itinerary card where the row chevron toggles
+   * the inline comment panel.
+   */
+  externalOpen?: boolean;
 };
 
 function formatCommentTime(iso: string) {
@@ -75,6 +81,7 @@ export default function EntityCommentsBlock({
   initialComments,
   memberLabelByUserId,
   collapsible = false,
+  externalOpen,
 }: EntityCommentsBlockProps) {
   const [comments, setComments] = useState<EntityCommentDTO[]>(() =>
     sortCommentsNewestFirst(initialComments),
@@ -82,7 +89,12 @@ export default function EntityCommentsBlock({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [threadOpen, setThreadOpen] = useState(false);
+  const [internalThreadOpen, setInternalThreadOpen] = useState(false);
+  const isControlled = typeof externalOpen === "boolean";
+  const threadOpen = isControlled ? (externalOpen as boolean) : internalThreadOpen;
+  const setThreadOpen = (next: boolean) => {
+    if (!isControlled) setInternalThreadOpen(next);
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -145,24 +157,32 @@ export default function EntityCommentsBlock({
   if (collapsible) {
     const count = comments.length;
     return (
-      <div className="mt-0 border-t border-black/[0.08] pt-2">
-        <button
-          type="button"
-          onClick={() => setThreadOpen((o) => !o)}
-          className="flex w-full min-h-9 touch-manipulation items-center gap-1.5 rounded-lg px-0.5 py-0.5 text-left transition-colors hover:bg-black/[0.03]"
-          aria-expanded={threadOpen}
-        >
-          <MessageCircle className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
-          <span className="min-w-0 flex-1 text-[13px] text-slate-700">
-            {count === 0 ? "Comments" : `${count} comment${count === 1 ? "" : "s"}`}
-          </span>
-          <ChevronDown
-            className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-200 ${
-              threadOpen ? "rotate-180" : ""
-            }`}
-            aria-hidden
-          />
-        </button>
+      <div
+        className={
+          isControlled
+            ? "border-t border-black/[0.08] bg-[#f8f8f6]"
+            : "mt-0 border-t border-black/[0.08] pt-2"
+        }
+      >
+        {isControlled ? null : (
+          <button
+            type="button"
+            onClick={() => setThreadOpen(!threadOpen)}
+            className="flex w-full min-h-9 touch-manipulation items-center gap-1.5 rounded-lg px-0.5 py-0.5 text-left transition-colors hover:bg-black/[0.03]"
+            aria-expanded={threadOpen}
+          >
+            <MessageCircle className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
+            <span className="min-w-0 flex-1 text-[13px] text-slate-700">
+              {count === 0 ? "Comments" : `${count} comment${count === 1 ? "" : "s"}`}
+            </span>
+            <ChevronDown
+              className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-200 ${
+                threadOpen ? "rotate-180" : ""
+              }`}
+              aria-hidden
+            />
+          </button>
+        )}
 
         <div
           className={`grid transition-[grid-template-rows] duration-200 ease-out ${
@@ -170,7 +190,13 @@ export default function EntityCommentsBlock({
           }`}
         >
           <div className="min-h-0 overflow-hidden">
-            <div className="mt-1.5 rounded-lg bg-[#f8f8f6] p-2">
+            <div
+              className={
+                isControlled
+                  ? "px-3 py-2.5"
+                  : "mt-1.5 rounded-lg bg-[#f8f8f6] p-2"
+              }
+            >
               {comments.length > 0 ? (
                 <ul className="mb-2 max-h-[7.5rem] space-y-2 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
                   {comments.map((c) => {

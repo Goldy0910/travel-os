@@ -45,6 +45,11 @@ type ItineraryItem = {
   location: string | null;
   time: string | null;
   created_at?: string | null;
+  priority_score?: number | null;
+  sunset_sensitive?: boolean | null;
+  booking_required?: boolean | null;
+  ai_generated?: boolean | null;
+  user_modified?: boolean | null;
 };
 
 function pickFirstString(record: TripRecord, keys: string[], fallback: string) {
@@ -104,6 +109,11 @@ function toItemDTO(item: ItineraryItem): ItineraryItemDTO {
     location: item.location,
     time: item.time,
     date: item.date,
+    priority_score: typeof item.priority_score === "number" ? item.priority_score : null,
+    sunset_sensitive: item.sunset_sensitive === true,
+    booking_required: item.booking_required === true,
+    ai_generated: item.ai_generated === true,
+    user_modified: item.user_modified === true,
   };
 }
 
@@ -224,6 +234,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     grouped: {} as Record<string, ItineraryItemDTO[]>,
     hasActivities: false,
     activityCommentsByItemId: {} as Record<string, EntityCommentDTO[]>,
+    activityStateByItemId: {} as Record<string, { status: string; delayMinutes: number | null }>,
     memberLabelByUserId: {} as Record<string, string>,
     defaultDateForAdd: todayYmd,
   };
@@ -250,7 +261,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                 .order("date", { ascending: true }),
               supabase
                 .from("itinerary_items")
-                .select("id, itinerary_day_id, date, activity_name, title, location, time, created_at")
+                .select("*")
                 .eq("trip_id", tripId)
                 .order("time", { ascending: true }),
               supabase
@@ -310,6 +321,30 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
           const activityCommentsByItemId = groupCommentsByEntityId(
             (activityCommentsData ?? []) as EntityCommentDTO[],
           );
+          const activityStateByItemId: Record<string, { status: string; delayMinutes: number | null }> = {};
+          const itemIds = Array.from(new Set(items.map((item) => String(item.id))));
+          if (itemIds.length > 0) {
+            const activityStateResult = await supabase
+              .from("itinerary_activity_state")
+              .select("activity_id, status, delay_minutes, created_at")
+              .in("activity_id", itemIds)
+              .order("created_at", { ascending: false });
+            if (!activityStateResult.error) {
+              const stateRows = (activityStateResult.data ??
+                []) as Array<Record<string, unknown>>;
+              for (const row of stateRows) {
+                const activityId = typeof row.activity_id === "string" ? row.activity_id : "";
+                if (!activityId || activityStateByItemId[activityId]) continue;
+                activityStateByItemId[activityId] = {
+                  status: typeof row.status === "string" ? row.status : "pending",
+                  delayMinutes:
+                    typeof row.delay_minutes === "number" && Number.isFinite(row.delay_minutes)
+                      ? row.delay_minutes
+                      : null,
+                };
+              }
+            }
+          }
           const memberUserIds = Array.from(
             new Set(
               (membersForLabels ?? [])
@@ -354,6 +389,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
             grouped,
             hasActivities,
             activityCommentsByItemId,
+            activityStateByItemId,
             memberLabelByUserId,
             defaultDateForAdd: orderedDates[0] ?? todayYmd,
           };
@@ -432,6 +468,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                       initialError={itineraryError}
                       defaultDateForAdd={itineraryData.defaultDateForAdd}
                       activityCommentsByItemId={itineraryData.activityCommentsByItemId}
+                      activityStateByItemId={itineraryData.activityStateByItemId}
                       currentUserId={user.id}
                       memberLabelByUserId={itineraryData.memberLabelByUserId}
                       autoOpenAddActivity={quickAction === "activity"}

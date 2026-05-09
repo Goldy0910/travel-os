@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronDown, MapPin } from "lucide-react";
+import { ChevronDown, Clock3, MapPin, MessageCircle, Sparkles } from "lucide-react";
 import type { RefObject } from "react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import { useTripActiveTab } from "../_lib/trip-active-tab-context";
 import { useTripFabRegistry } from "../_lib/trip-tab-fab-registry";
@@ -23,6 +23,10 @@ import TripUpdateBottomSheet, {
 } from "./trip-update-bottom-sheet";
 import ItineraryCreationSetup from "./itinerary-creation-setup";
 import ActivityDetailsNavLink from "./activity-details-nav-link";
+import ItineraryAiAssistant, {
+  type AiSuggestionCard,
+  type AssistantDayActivity,
+} from "./itinerary-ai-assistant";
 
 const FALLBACK_TRIP_EDIT_DEFAULTS: TripEditDefaults = {
   title: "",
@@ -39,6 +43,11 @@ export type ItineraryItemDTO = {
   location: string | null;
   time: string | null;
   date: string | null;
+  priority_score?: number | null;
+  sunset_sensitive?: boolean;
+  booking_required?: boolean;
+  ai_generated?: boolean;
+  user_modified?: boolean;
 };
 
 type TripItineraryShellProps = {
@@ -53,6 +62,7 @@ type TripItineraryShellProps = {
   initialError: string;
   defaultDateForAdd: string;
   activityCommentsByItemId: Record<string, EntityCommentDTO[]>;
+  activityStateByItemId: Record<string, { status: string; delayMinutes: number | null }>;
   currentUserId: string;
   memberLabelByUserId: Record<string, string>;
   autoOpenAddActivity?: boolean;
@@ -75,62 +85,10 @@ function formatDateLabelUpper(input: string) {
   return formatDateLabel(input).toUpperCase();
 }
 
-type ActivityVisual = {
-  emoji: string;
-  tags: string[];
-  tileClass: string;
-  tagClass: string;
-};
-
 function compactActivityTitle(activityName: string | null, title: string | null): string {
   const raw = (activityName || title || "Activity").trim();
   if (raw.length <= 60) return raw;
   return `${raw.slice(0, 57).trimEnd()}...`;
-}
-
-/** Display-only “type” from title/location — no DB field; avoids migrations. */
-function inferActivityVisual(activityName: string | null, title: string | null, location: string | null): ActivityVisual {
-  const raw = `${activityName ?? ""} ${title ?? ""} ${location ?? ""}`.toLowerCase();
-  const food = /\b(dinner|lunch|breakfast|cafe|restaurant|food|eat|ivy|dining)\b/.test(raw);
-  const sight = /\b(nature|view|sight|museum|hill|walk|explore|temple|park)\b/.test(raw);
-  const adv = /\b(outdoor|outside|trek|bike|rental|adventure|zip|ski)\b/.test(raw);
-
-  if (food) {
-    const tags = ["Food"];
-    if (/\b(group|family|friends|together)\b/.test(raw)) tags.push("Group");
-    return {
-      emoji: "🍽",
-      tags: tags.slice(0, 3),
-      tileClass: "bg-[#FAEEDA] text-[#633806]",
-      tagClass: "bg-[#FAEEDA] text-[#633806]",
-    };
-  }
-  if (sight) {
-    const tags = ["Sightseeing"];
-    if (/\b(nature|park|hill|view|trail)\b/.test(raw)) tags.push("Nature");
-    return {
-      emoji: "🧭",
-      tags: tags.slice(0, 3),
-      tileClass: "bg-[#EAF3DE] text-[#27500A]",
-      tagClass: "bg-[#EAF3DE] text-[#27500A]",
-    };
-  }
-  if (adv) {
-    const tags = ["Adventure"];
-    if (/\b(outdoor|outside|trek|trail)\b/.test(raw)) tags.push("Outdoor");
-    return {
-      emoji: "🚴",
-      tags: tags.slice(0, 3),
-      tileClass: "bg-[#E6F1FB] text-[#0C447C]",
-      tagClass: "bg-[#E6F1FB] text-[#0C447C]",
-    };
-  }
-  return {
-    emoji: "📍",
-    tags: ["Plan"],
-    tileClass: "bg-slate-100 text-slate-700",
-    tagClass: "bg-slate-200/80 text-slate-700",
-  };
 }
 
 function IconDotsVertical({ className = "h-5 w-5" }: { className?: string }) {
@@ -159,6 +117,49 @@ function IconPlusSmall({ className = "h-4 w-4" }: { className?: string }) {
       <path d="M12 5v14M5 12h14" strokeLinecap="round" />
     </svg>
   );
+}
+
+function statusBadge(status: string | undefined, delayMinutes: number | null) {
+  if (status === "completed") {
+    return {
+      label: "Completed",
+      className: "bg-[#E8F5E9] text-[#2E7D32]",
+      isDelayed: false,
+    };
+  }
+  if (status === "skipped") {
+    return {
+      label: "Skipped",
+      className: "bg-rose-50 text-rose-700",
+      isDelayed: false,
+    };
+  }
+  if (status === "delayed") {
+    return {
+      label: `Delayed${delayMinutes != null ? ` ${delayMinutes}m` : ""}`,
+      className: "bg-[#FFF3E0] text-[#E65100]",
+      isDelayed: true,
+    };
+  }
+  if (status === "replaced") {
+    return {
+      label: "Replaced",
+      className: "bg-violet-50 text-violet-700",
+      isDelayed: false,
+    };
+  }
+  return {
+    label: "Planned",
+    className: "bg-[#E8F5E9] text-[#2E7D32]",
+    isDelayed: false,
+  };
+}
+
+function estimateTravelMinutes(current: ItineraryItemDTO, next: ItineraryItemDTO | undefined): number | null {
+  if (!next) return null;
+  if (!current.location || !next.location) return 20;
+  if (current.location.trim().toLowerCase() === next.location.trim().toLowerCase()) return 8;
+  return 20;
 }
 
 function useDismissOnOutsideClick(
@@ -324,6 +325,155 @@ function ActivityRowMenu({
   );
 }
 
+type ItineraryActivityCardProps = {
+  tripId: string;
+  item: ItineraryItemDTO;
+  status: ReturnType<typeof statusBadge>;
+  commentCount: number;
+  currentUserId: string;
+  initialComments: EntityCommentDTO[];
+  memberLabelByUserId: Record<string, string>;
+  onEdit: () => void;
+};
+
+function ItineraryActivityCard({
+  tripId,
+  item,
+  status,
+  commentCount,
+  currentUserId,
+  initialComments,
+  memberLabelByUserId,
+  onEdit,
+}: ItineraryActivityCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const fullTitleText = item.activity_name || item.title || "Activity";
+  const titleText = compactActivityTitle(item.activity_name, item.title);
+  const locationText = item.location?.trim() ? item.location : "Location TBD";
+  const pinTileClass = status.isDelayed
+    ? "bg-[#FFF7ED] text-[#d97706]"
+    : "bg-[#EEF2FF] text-indigo-600";
+  const panelId = `activity-panel-${item.id}`;
+
+  return (
+    <article className="rounded-xl border border-black/[0.08] bg-white shadow-sm transition-colors hover:border-black/[0.16]">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <ActivityDetailsNavLink
+          href={`/app/trip/${encodeURIComponent(tripId)}/activity/${encodeURIComponent(item.id)}?from=itinerary`}
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        >
+          <div
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${pinTileClass}`}
+            aria-hidden
+          >
+            <MapPin className="h-3.5 w-3.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p
+              className="truncate text-[13px] font-medium leading-tight text-slate-900"
+              title={fullTitleText}
+            >
+              {titleText}
+            </p>
+            <p className="truncate text-[11px] leading-tight text-slate-500" title={locationText}>
+              {locationText}
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              <span className={`rounded-full px-1.5 py-px text-[10px] font-medium ${status.className}`}>
+                {status.label}
+              </span>
+              {item.ai_generated ? (
+                <span className="rounded-full bg-[#EDE9FE] px-1.5 py-px text-[10px] font-medium text-[#6D28D9]">
+                  AI
+                </span>
+              ) : null}
+              {item.booking_required ? (
+                <span className="rounded-full bg-violet-50 px-1.5 py-px text-[10px] font-medium text-violet-700">
+                  Reservation
+                </span>
+              ) : null}
+              {item.sunset_sensitive ? (
+                <span className="rounded-full bg-orange-50 px-1.5 py-px text-[10px] font-medium text-orange-700">
+                  Sunset
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </ActivityDetailsNavLink>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          {commentCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setIsExpanded((v) => !v)}
+              aria-expanded={isExpanded}
+              aria-controls={panelId}
+              className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 transition hover:bg-slate-200"
+              title={`${commentCount} comment${commentCount === 1 ? "" : "s"}`}
+            >
+              <MessageCircle className="h-3 w-3" aria-hidden />
+              <span className="tabular-nums">{commentCount}</span>
+            </button>
+          ) : null}
+          {item.time ? (
+            <span className="text-[12px] font-medium tabular-nums text-slate-700">
+              {item.time}
+            </span>
+          ) : (
+            <span className="text-[11px] font-medium tabular-nums text-slate-400">
+              —
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsExpanded((v) => !v)}
+            aria-expanded={isExpanded}
+            aria-controls={panelId}
+            aria-label={isExpanded ? "Collapse comments" : "Expand comments"}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            <ChevronDown
+              className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+              aria-hidden
+            />
+          </button>
+          <ActivityRowMenu tripId={tripId} item={item} onEdit={onEdit} />
+        </div>
+      </div>
+
+      <div
+        id={panelId}
+        hidden={!isExpanded}
+        className="overflow-hidden rounded-b-xl"
+      >
+        <EntityCommentsBlock
+          tripId={tripId}
+          entityType="activity"
+          entityId={item.id}
+          currentUserId={currentUserId}
+          initialComments={initialComments}
+          memberLabelByUserId={memberLabelByUserId}
+          collapsible
+          externalOpen={isExpanded}
+        />
+      </div>
+    </article>
+  );
+}
+
+function TravelConnector({ minutes }: { minutes: number }) {
+  return (
+    <div
+      className="flex items-center gap-1.5 pl-3.5 text-[10px] text-slate-500"
+      aria-label={`${minutes} minute travel to next stop`}
+    >
+      <span className="block h-3 w-px bg-slate-300" aria-hidden />
+      <Clock3 className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+      <span>{minutes} min travel to next stop</span>
+    </div>
+  );
+}
+
 export default function TripItineraryShell({
   tripId,
   tripTitle,
@@ -336,6 +486,7 @@ export default function TripItineraryShell({
   initialError,
   defaultDateForAdd,
   activityCommentsByItemId,
+  activityStateByItemId,
   currentUserId,
   memberLabelByUserId,
   autoOpenAddActivity = false,
@@ -358,6 +509,7 @@ export default function TripItineraryShell({
     date: defaultDateForAdd,
   });
   const [formKey, setFormKey] = useState("new-0");
+  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestionCard[]>([]);
   const formKeySeq = useRef(0);
 
   useEffect(() => {
@@ -479,6 +631,44 @@ export default function TripItineraryShell({
   const dayCount = orderedDates.length;
   const shouldShowItinerarySetupPrompt = !itinerarySetupComplete;
   const shouldShowDayWiseItinerary = itinerarySetupComplete;
+  const today = new Date();
+  const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+    today.getDate(),
+  ).padStart(2, "0")}`;
+  const assistantDate =
+    (grouped[todayYmd]?.length ?? 0) > 0
+      ? todayYmd
+      : orderedDates.find((d) => (grouped[d]?.length ?? 0) > 0) ?? defaultDateForAdd;
+  const assistantItems = grouped[assistantDate] ?? [];
+  const assistantDayActivities: AssistantDayActivity[] = assistantItems.map((item) => ({
+    id: item.id,
+    title: item.activity_name || item.title || "Activity",
+    time: item.time,
+    sunsetSensitive: item.sunset_sensitive === true,
+    status: activityStateByItemId[item.id]?.status ?? "pending",
+  }));
+  const skippedActivities = assistantDayActivities.filter((activity) => activity.status === "skipped").length;
+  const completedActivities = assistantDayActivities.filter((activity) => activity.status === "completed").length;
+  const remainingActivities = assistantDayActivities.length - completedActivities - skippedActivities;
+  const averagePerDay = dayCount > 0 ? totalActivities / dayCount : totalActivities;
+  const tripPace: "relaxed" | "balanced" | "packed" =
+    averagePerDay >= 5 ? "packed" : averagePerDay >= 3 ? "balanced" : "relaxed";
+  const delayedCount = assistantDayActivities.filter((activity) => activity.status === "delayed").length;
+  const energyLevel: "low" | "medium" | "high" =
+    delayedCount >= 2 || skippedActivities >= 2 ? "low" : delayedCount >= 1 ? "medium" : "high";
+  const travelerPreferences = Array.from(
+    new Set(
+      assistantDayActivities.flatMap((activity) => {
+        const text = activity.title.toLowerCase();
+        const prefs: string[] = [];
+        if (/food|restaurant|cafe|dining/.test(text)) prefs.push("foodie");
+        if (/museum|culture|temple|heritage/.test(text)) prefs.push("culture");
+        if (/night|bar|club/.test(text)) prefs.push("nightlife");
+        if (/park|walk|trail|hike|view/.test(text)) prefs.push("explore");
+        return prefs;
+      }),
+    ),
+  );
 
   return (
     <>
@@ -509,6 +699,22 @@ export default function TripItineraryShell({
           Use Itinerary to map each day, add activities with time and location, and keep everyone aligned on the plan.
         </p>
       </section>
+
+      {aiSuggestions.length > 0 ? (
+        <section className="space-y-2">
+          {aiSuggestions.slice(0, 3).map((suggestion) => (
+            <article
+              key={suggestion.id}
+              className="rounded-2xl border border-indigo-100 bg-white px-3 py-2.5 shadow-sm transition-all duration-300"
+            >
+              <p className="flex items-start gap-2 text-sm text-slate-700">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" aria-hidden />
+                <span>{suggestion.text}</span>
+              </p>
+            </article>
+          ))}
+        </section>
+      ) : null}
 
       {shouldShowDayWiseItinerary && orderedDates.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -559,101 +765,50 @@ export default function TripItineraryShell({
                     </span>
                     <span className="h-px min-w-0 flex-1 bg-slate-200" aria-hidden />
                   </div>
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-3 space-y-1.5">
                     {dateItems.length === 0 ? (
                       <button
                         type="button"
                         onClick={() => openAddForDate(date)}
-                        className="flex w-full min-h-12 touch-manipulation items-center justify-center gap-2 rounded-xl border border-dashed border-black/[0.15] bg-white py-3 text-sm text-slate-500 transition active:bg-slate-50"
+                        className="flex w-full min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-black/[0.18] bg-white py-2.5 text-[11px] font-medium text-slate-500 transition active:bg-slate-50"
+                        style={{ borderRadius: "10px" }}
                       >
-                        <IconPlusSmall className="h-4 w-4" aria-hidden />
-                        Add activity
+                        <IconPlusSmall className="h-3.5 w-3.5" aria-hidden />
+                        Add stop
                       </button>
                     ) : (
                       <>
-                        {dateItems.map((item) => {
-                          const vis = inferActivityVisual(
-                            item.activity_name,
-                            item.title,
-                            item.location,
-                          );
-                          const fullTitleText = item.activity_name || item.title || "Activity";
-                          const titleText = compactActivityTitle(item.activity_name, item.title);
+                        {dateItems.map((item, idx) => {
+                          const state = activityStateByItemId[item.id];
+                          const status = statusBadge(state?.status, state?.delayMinutes ?? null);
+                          const itemComments = activityCommentsByItemId[item.id] ?? [];
+                          const travelMinutes = estimateTravelMinutes(item, dateItems[idx + 1]);
                           return (
-                            <article
-                              key={item.id}
-                              className="rounded-2xl border border-black/[0.08] bg-white p-3.5 shadow-sm"
-                            >
-                              <div className="flex items-start gap-3">
-                                <ActivityDetailsNavLink
-                                  href={`/app/trip/${encodeURIComponent(tripId)}/activity/${encodeURIComponent(item.id)}?from=itinerary`}
-                                  className="flex min-w-0 flex-1 items-start gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                                >
-                                  <div
-                                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg leading-none ${vis.tileClass}`}
-                                    aria-hidden
-                                  >
-                                    {vis.emoji}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p
-                                      className="line-clamp-2 text-[14px] font-semibold leading-5 text-slate-900"
-                                      title={fullTitleText}
-                                    >
-                                      {titleText}
-                                    </p>
-                                    <p className="mt-1.5 flex items-start gap-1 text-xs text-slate-500">
-                                      <MapPin className="mt-0.5 h-3 w-3 shrink-0 opacity-70" aria-hidden />
-                                      <span className="truncate">
-                                        {item.location?.trim() ? item.location : "Location TBD"}
-                                      </span>
-                                    </p>
-                                  </div>
-                                </ActivityDetailsNavLink>
-                                <div className="flex shrink-0 items-start gap-1">
-                                  {item.time ? (
-                                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                                      {item.time}
-                                    </span>
-                                  ) : (
-                                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
-                                      Time TBD
-                                    </span>
-                                  )}
-                                  <ActivityRowMenu tripId={tripId} item={item} onEdit={() => openEdit(item)} />
-                                </div>
-                              </div>
-                              {vis.tags.length > 0 ? (
-                                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                                  {vis.tags.slice(0, 2).map((tag) => (
-                                    <span
-                                      key={tag}
-                                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${vis.tagClass}`}
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : null}
-                              <EntityCommentsBlock
+                            <Fragment key={item.id}>
+                              <ItineraryActivityCard
                                 tripId={tripId}
-                                entityType="activity"
-                                entityId={item.id}
+                                item={item}
+                                status={status}
+                                commentCount={itemComments.length}
                                 currentUserId={currentUserId}
-                                initialComments={activityCommentsByItemId[item.id] ?? []}
+                                initialComments={itemComments}
                                 memberLabelByUserId={memberLabelByUserId}
-                                collapsible
+                                onEdit={() => openEdit(item)}
                               />
-                            </article>
+                              {idx < dateItems.length - 1 && travelMinutes != null ? (
+                                <TravelConnector minutes={travelMinutes} />
+                              ) : null}
+                            </Fragment>
                           );
                         })}
                         <button
                           type="button"
                           onClick={() => openAddForDate(date)}
-                          className="flex w-full min-h-12 touch-manipulation items-center justify-center gap-2 rounded-xl border border-dashed border-black/[0.15] bg-white py-3 text-sm text-slate-500 transition active:bg-slate-50"
+                          className="mt-1.5 flex w-full min-h-11 touch-manipulation items-center justify-center gap-1.5 border border-dashed border-black/[0.18] bg-white py-2.5 text-[11px] font-medium text-slate-500 transition active:bg-slate-50"
+                          style={{ borderRadius: "10px" }}
                         >
-                          <IconPlusSmall className="h-4 w-4" aria-hidden />
-                          Add activity
+                          <IconPlusSmall className="h-3.5 w-3.5" aria-hidden />
+                          Add stop
                         </button>
                       </>
                     )}
@@ -664,6 +819,21 @@ export default function TripItineraryShell({
           </div>
         ) : null}
       </section>
+
+      {itineraryTabActive && itinerarySetupComplete ? (
+        <ItineraryAiAssistant
+          tripId={tripId}
+          date={assistantDate}
+          dayActivities={assistantDayActivities}
+          skippedActivities={skippedActivities}
+          completedActivities={completedActivities}
+          remainingActivities={remainingActivities}
+          tripPace={tripPace}
+          energyLevel={energyLevel}
+          travelerPreferences={travelerPreferences}
+          onSuggestion={(card) => setAiSuggestions((prev) => [card, ...prev].slice(0, 6))}
+        />
+      ) : null}
 
       {itineraryTabActive ? (
         <ActivityBottomSheet

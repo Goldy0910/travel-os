@@ -233,13 +233,13 @@ export async function generateAiItineraryDraft(input: {
   interests?: string;
   budget?: string;
 }): Promise<AiActivity[]> {
-  const prompt = `You are a trip itinerary planner.
+  const prompt = `You are an intelligent real-time travel companion and premium concierge helping travelers execute trips realistically with minimal stress.
 Return ONLY valid JSON. No markdown.
 
 Create a day-by-day itinerary for destination "${input.destination}".
 Trip dates: ${input.tripDates.join(", ")}.
-Interests: ${input.interests?.trim() || "General sightseeing"}.
-Budget: ${input.budget?.trim() || "Not specified"}.
+Traveler preferences/interests: ${input.interests?.trim() || "General sightseeing"}.
+Budget guidance: ${input.budget?.trim() || "Not specified"}.
 
 Strict format:
 {
@@ -253,11 +253,21 @@ Strict format:
   ]
 }
 
-Rules:
+Execution rules:
+- Always prioritize traveler experience and practicality over quantity.
+- Plan realistic day flow with travel time and fatigue in mind.
+- Avoid impossible schedules; do not place activities too tightly together.
+- Keep the day calm and actionable for mobile use.
+- Prefer high-value experiences and remove low-value filler when time is tight.
+- Preserve likely high-priority moments (sunset viewpoints, reserved experiences, special events) by scheduling them at sensible times.
+- If weather or delays could affect an activity, add a practical fallback in notes.
+- Keep each notes field short and useful, and include a brief "why" for the recommendation.
 - 3 to 5 activities per day.
 - Include only dates from the provided trip dates.
-- Keep activities practical and concise.
-- If unsure, still provide reasonable options for the destination.`;
+- If uncertain, still provide sensible options for the destination.
+
+Style:
+- Helpful, smart, calm, and concise.`;
 
   const raw = await callGeminiText(prompt);
   const parsed = parseLooseJson<{

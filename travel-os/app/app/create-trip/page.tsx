@@ -19,10 +19,17 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
 
   const supabase = await createSupabaseServerClient();
   const {
-    data: { user },
+    data: { user: authUser },
   } = await supabase.auth.getUser();
+  let user = authUser;
   if (!user) {
-    redirect("/app/login");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    user = session?.user ?? null;
+  }
+  if (!user) {
+    redirect("/app/login?next=/app/create-trip");
   }
 
   const { data: placeRows } = await supabase

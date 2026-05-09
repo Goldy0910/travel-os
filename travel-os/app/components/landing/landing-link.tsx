@@ -6,15 +6,17 @@ import type { ReactNode } from "react";
 
 export default function LandingLink({
   href,
+  prefetch,
   className,
   children,
 }: {
   href: string;
+  prefetch?: boolean;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <Link href={href} className={className}>
+    <Link href={href} prefetch={prefetch} className={className}>
       <span className="inline-flex min-w-0 w-full items-center justify-center gap-2 text-inherit">
         {children}
         <LinkLoadingIndicator

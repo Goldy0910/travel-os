@@ -11,6 +11,7 @@ type Props = {
 export default function ActivityPhotoGallery({ photos, activityTitle }: Props) {
   const [resolved, setResolved] = useState(0);
   const [showLoader, setShowLoader] = useState(photos.length > 0);
+  const [activePhoto, setActivePhoto] = useState<string | null>(null);
 
   useEffect(() => {
     setResolved(0);
@@ -27,6 +28,20 @@ export default function ActivityPhotoGallery({ photos, activityTitle }: Props) {
     const id = window.setTimeout(() => setShowLoader(false), 18_000);
     return () => window.clearTimeout(id);
   }, [photos]);
+
+  useEffect(() => {
+    if (!activePhoto) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActivePhoto(null);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activePhoto]);
 
   const bump = () => setResolved((n) => n + 1);
 
@@ -47,18 +62,57 @@ export default function ActivityPhotoGallery({ photos, activityTitle }: Props) {
         ) : null}
         <div className="grid grid-cols-3 gap-2.5">
           {photos.map((photoName, idx) => (
-            <img
+            <button
               key={`${photoName}-${idx}`}
-              src={`/api/place-photo?name=${encodeURIComponent(photoName)}&maxH=420`}
-              alt={`${activityTitle} photo ${idx + 1}`}
-              className="h-28 w-full rounded-2xl object-cover"
-              loading="eager"
-              onLoad={bump}
-              onError={bump}
-            />
+              type="button"
+              className="h-28 w-full overflow-hidden rounded-2xl"
+              onClick={() => setActivePhoto(photoName)}
+              aria-label={`Open ${activityTitle} photo ${idx + 1} fullscreen`}
+            >
+              <img
+                src={`/api/place-photo?name=${encodeURIComponent(photoName)}&maxH=420`}
+                alt={`${activityTitle} photo ${idx + 1}`}
+                className="h-full w-full object-cover"
+                loading="eager"
+                onLoad={bump}
+                onError={bump}
+              />
+            </button>
           ))}
         </div>
       </div>
+      {activePhoto ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-2 sm:p-4"
+          onClick={() => setActivePhoto(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${activityTitle} photo fullscreen view`}
+        >
+          <button
+            type="button"
+            className="absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-900 shadow"
+            onClick={() => setActivePhoto(null)}
+            aria-label="Cancel and return to place details"
+          >
+            <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+              <path
+                d="M6 6L18 18M18 6L6 18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+          <img
+            src={`/api/place-photo?name=${encodeURIComponent(activePhoto)}&maxH=1600`}
+            alt={`${activityTitle} fullscreen photo`}
+            className="h-auto max-h-[88dvh] w-auto max-w-[96vw] rounded-xl object-contain"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      ) : null}
     </section>
   );
 }

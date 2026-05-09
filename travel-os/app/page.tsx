@@ -312,6 +312,7 @@ export default function HomePage() {
               </p>
               <LandingLink
                 href="/app/create-trip"
+                prefetch={false}
                 className="relative mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-white px-6 py-3 text-base font-semibold text-slate-900 shadow-md transition active:scale-[0.98] touch-manipulation"
               >
                 Create trip

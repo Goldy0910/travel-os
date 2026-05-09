@@ -89,6 +89,7 @@ export default async function MembersHubPage() {
             <div className="mt-2.5 flex gap-2">
               <Link
                 href="/app/create-trip"
+                prefetch={false}
                 className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-900 px-3 text-sm font-medium text-white"
               >
                 Create trip

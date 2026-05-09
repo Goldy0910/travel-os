@@ -142,7 +142,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
             </p>
             <Link
               href="/app/create-trip"
-              prefetch
+              prefetch={false}
               className="mt-6 inline-flex min-h-11 items-center justify-center rounded-2xl bg-slate-900 px-6 text-sm font-semibold text-white"
             >
               Create trip
@@ -360,7 +360,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
         </div>
         <Link
           href="/app/create-trip"
-          prefetch
+          prefetch={false}
           aria-label="Create new trip"
           className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[122] flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg shadow-slate-900/25"
         >
