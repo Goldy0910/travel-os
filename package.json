@@ -1,14 +1,35 @@
 {
-  "name": "travel-till-99",
+  "name": "travel-os",
+  "version": "0.1.0",
   "private": true,
-  "workspaces": ["travel-os"],
-  "scripts": {
-    "dev": "npm run dev -w travel-os",
-    "build": "npm run build -w travel-os",
-    "start": "npm run start -w travel-os",
-    "lint": "npm run lint -w travel-os"
-  },
   "engines": {
     "node": "20.x"
+  },
+  "scripts": {
+    "dev": "node scripts/start-dev.mjs",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@supabase/auth-helpers-nextjs": "^0.15.0",
+    "@supabase/ssr": "^0.10.0",
+    "@supabase/supabase-js": "^2.101.1",
+    "jszip": "^3.10.1",
+    "lucide-react": "^1.7.0",
+    "next": "16.2.2",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "sonner": "^2.0.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
