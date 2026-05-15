@@ -25,17 +25,18 @@ export function generateNormalizedDaysFromMasterFile(
     file.destination.name?.trim() ||
     "Destination";
 
-  return file.itinerary.map((day) => {
-    const parsed = parseMasterItineraryDay(day);
+  return file.itinerary.map((day, index) => {
+    const dayNumber = index + 1;
+    const parsed = parseMasterItineraryDay({ ...day, dayNumber });
     const activities = normalizedActivitiesFromParsedDay(parsed, dest, day.id);
     return {
-      dayNumber: day.dayNumber,
-      title: parsed.dayTitle,
+      dayNumber,
+      title: `Day ${dayNumber}`,
       summary: parsed.summary,
       activities:
         activities.length > 0
           ? activities
-          : fallbackDayFromSummary(day, dest).activities,
+          : fallbackDayFromSummary({ ...day, dayNumber }, dest).activities,
     };
   });
 }
@@ -48,12 +49,17 @@ export function generateNormalizedDaysFromItineraryLines(
   return lines
     .filter((l) => l.trim().length > 0)
     .map((line, index) => {
+      const dayNumber = index + 1;
       const parsed = parseItineraryStringLine(line, index);
-      const dayId = `line-${index + 1}`;
-      const activities = normalizedActivitiesFromParsedDay(parsed, dest, dayId);
+      const dayId = `line-${dayNumber}`;
+      const activities = normalizedActivitiesFromParsedDay(
+        { ...parsed, dayNumber, dayTitle: `Day ${dayNumber}` },
+        dest,
+        dayId,
+      );
       return {
-        dayNumber: parsed.dayNumber,
-        title: parsed.dayTitle,
+        dayNumber,
+        title: `Day ${dayNumber}`,
         summary: parsed.summary,
         activities:
           activities.length > 0
@@ -61,8 +67,8 @@ export function generateNormalizedDaysFromItineraryLines(
             : fallbackDayFromSummary(
                 {
                   id: dayId,
-                  dayNumber: parsed.dayNumber,
-                  title: parsed.dayTitle,
+                  dayNumber,
+                  title: `Day ${dayNumber}`,
                   summary: parsed.summary,
                 },
                 dest,

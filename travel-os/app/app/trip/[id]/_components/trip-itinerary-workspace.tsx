@@ -32,7 +32,6 @@ type Props = {
   shellProps: ShellProps;
   showJoinWelcome?: boolean;
   welcomeBanner?: ReactNode;
-  activityFeed?: ReactNode;
 };
 
 export default function TripItineraryWorkspace({
@@ -47,7 +46,6 @@ export default function TripItineraryWorkspace({
   shellProps,
   showJoinWelcome,
   welcomeBanner,
-  activityFeed,
 }: Props) {
   const manageTripRef = useRef<(() => void) | null>(null);
 
@@ -168,8 +166,6 @@ export default function TripItineraryWorkspace({
           hideHeading
         />
       </CollapsibleSection>
-
-      {activityFeed}
     </div>
   );
 

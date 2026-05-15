@@ -2,7 +2,17 @@
 
 import { ChevronDown, Clock3, MapPin, MessageCircle, Sparkles } from "lucide-react";
 import type { RefObject } from "react";
-import { Fragment, memo, useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import { useTripActiveTab } from "../_lib/trip-active-tab-context";
 import { useTripFabRegistry } from "../_lib/trip-tab-fab-registry";
@@ -158,13 +168,16 @@ function estimateTravelMinutes(current: ItineraryItemDTO, next: ItineraryItemDTO
 function useDismissOnOutsideClick(
   open: boolean,
   onClose: () => void,
-  excludeRef?: RefObject<HTMLElement | null>,
+  excludeRefs?: RefObject<HTMLElement | null>[],
 ) {
+  const excludeRefsLatest = useRef(excludeRefs);
+  excludeRefsLatest.current = excludeRefs;
+
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: MouseEvent | TouchEvent) => {
       const t = e.target as Node;
-      if (excludeRef?.current?.contains(t)) return;
+      if (excludeRefsLatest.current?.some((r) => r.current?.contains(t))) return;
       onClose();
     };
     document.addEventListener("mousedown", onPointer);
@@ -173,9 +186,12 @@ function useDismissOnOutsideClick(
       document.removeEventListener("mousedown", onPointer);
       document.removeEventListener("touchstart", onPointer);
     };
-  }, [open, onClose, excludeRef]);
+  }, [open, onClose]);
 }
 
+
+/** Below-trigger positioning + portal: matches trip hero ⋮ menu visuals while escaping workspace `overflow-hidden`. */
+const ACTIVITY_MENU_MIN_WIDTH_PX = 176;
 
 function ActivityRowMenu({
   tripId,
@@ -188,60 +204,112 @@ function ActivityRowMenu({
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const menuId = useId();
   const { pending: deletePending, runAction: runDeleteActivity } = useFormActionFeedback();
 
-  useDismissOnOutsideClick(open, () => setOpen(false), wrapRef);
+  useDismissOnOutsideClick(open, () => setOpen(false), [wrapRef, menuRef]);
+
+  const layoutMenu = useCallback(() => {
+    const btn = triggerRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const gapPx = 6;
+    const menuEl = menuRef.current;
+    const w = Math.max(menuEl?.offsetWidth ?? ACTIVITY_MENU_MIN_WIDTH_PX, ACTIVITY_MENU_MIN_WIDTH_PX);
+    const top = r.bottom + gapPx;
+    const left = Math.min(
+      window.innerWidth - w - 8,
+      Math.max(8, r.right - w),
+    );
+    setCoords((prev) =>
+      prev && prev.top === top && prev.left === left ? prev : { top, left },
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setCoords(null);
+      return;
+    }
+    layoutMenu();
+    const id = requestAnimationFrame(() => layoutMenu());
+    return () => cancelAnimationFrame(id);
+  }, [open, layoutMenu, deletePending]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onViewportChange = () => layoutMenu();
+    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("scroll", onViewportChange, true);
+    return () => {
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("scroll", onViewportChange, true);
+    };
+  }, [open, layoutMenu]);
+
+  const menu =
+    open && coords && typeof document !== "undefined" ? (
+      <div
+        ref={menuRef}
+        id={menuId}
+        role="menu"
+        style={{
+          position: "fixed",
+          top: coords.top,
+          left: coords.left,
+          minWidth: ACTIVITY_MENU_MIN_WIDTH_PX,
+        }}
+        className="z-[200] min-w-[11rem] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg shadow-slate-900/10"
+      >
+        <button
+          type="button"
+          role="menuitem"
+          className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-slate-800 hover:bg-slate-50 touch-manipulation"
+          onClick={() => {
+            setOpen(false);
+            onEdit();
+          }}
+        >
+          Edit activity
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          disabled={deletePending}
+          className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 touch-manipulation"
+          onClick={() => {
+            if (!window.confirm("Delete this activity? This cannot be undone.")) {
+              return;
+            }
+            setOpen(false);
+            runDeleteActivity(() =>
+              deleteItineraryItemAction(tripId, item.id, new FormData()),
+            );
+          }}
+        >
+          {deletePending ? "Deleting…" : "Delete activity"}
+        </button>
+      </div>
+    ) : null;
 
   return (
     <div className="relative shrink-0 self-start" ref={wrapRef}>
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={open}
-        aria-haspopup="true"
+        aria-haspopup="menu"
         aria-controls={menuId}
         onClick={() => setOpen((v) => !v)}
-        className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+        className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 active:scale-[0.98] touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
       >
         <span className="sr-only">Activity options</span>
-        <IconDotsVertical />
+        <IconDotsVertical className="h-5 w-5" />
       </button>
-      {open ? (
-        <div
-          id={menuId}
-          role="menu"
-          className="absolute right-0 top-full z-40 mt-1 min-w-[9rem] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
-            onClick={() => {
-              setOpen(false);
-              onEdit();
-            }}
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={deletePending}
-            className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-            onClick={() => {
-              if (!window.confirm("Delete this activity? This cannot be undone.")) {
-                return;
-              }
-              setOpen(false);
-              runDeleteActivity(() =>
-                deleteItineraryItemAction(tripId, item.id, new FormData()),
-              );
-            }}
-          >
-            {deletePending ? "Deleting…" : "Delete"}
-          </button>
-        </div>
-      ) : null}
+      {menu ? createPortal(menu, document.body) : null}
     </div>
   );
 }

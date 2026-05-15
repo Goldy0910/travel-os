@@ -25,7 +25,15 @@ function parseItineraryLine(line: string, index: number): MasterItineraryDay {
 }
 
 export function itineraryFromStrings(lines: string[]): MasterItineraryDay[] {
-  return lines.filter(Boolean).map((line, i) => parseItineraryLine(line, i));
+  return lines.filter(Boolean).map((line, i) => {
+    const parsed = parseItineraryLine(line, i);
+    const dayNumber = i + 1;
+    return {
+      ...parsed,
+      dayNumber,
+      title: `Day ${dayNumber}`,
+    };
+  });
 }
 
 export function buildMasterTripFile(input: SaveMasterTripInput): MasterTripFile {

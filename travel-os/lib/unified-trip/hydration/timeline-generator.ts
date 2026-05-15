@@ -4,6 +4,8 @@ import type { TimelineSlot } from "./types";
 
 /**
  * Maps normalized plan days onto calendar dates and itinerary_day ids.
+ * Uses each day's position in the plan (1st plan day → 1st trip date), not `dayNumber`
+ * from AI text — duplicate "Day 1" labels in recommendations must not collapse days.
  */
 export function buildTimelineSlots(
   plan: NormalizedTripPlan,
@@ -15,15 +17,15 @@ export function buildTimelineSlots(
   if (allDates.length === 0) return [];
 
   return plan.days
-    .map((day) => {
-      const dateYmd = allDates[day.dayNumber - 1] ?? allDates[allDates.length - 1];
+    .map((day, index) => {
+      const dateYmd = allDates[index];
       if (!dateYmd) return null;
       const itineraryDayId = dayIdByDate.get(dateYmd);
       if (itineraryDayId == null) return null;
 
       return {
         dateYmd,
-        dayNumber: day.dayNumber,
+        dayNumber: index + 1,
         itineraryDayId,
         activities: day.activities,
       };

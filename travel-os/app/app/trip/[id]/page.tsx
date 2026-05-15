@@ -5,7 +5,6 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { countTripMembers, getMemberRole, isTripMember } from "@/lib/trip-membership";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import TripActivityFeed from "./_components/trip-activity-feed";
 import {
   groupCommentsByEntityId,
   memberDisplayLabel,
@@ -569,11 +568,6 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                       autoOpenAddActivity: quickAction === "activity",
                       itinerarySetupComplete,
                     }}
-                    activityFeed={
-                      itinerarySetupComplete && itineraryData.hasActivities ? (
-                        <TripActivityFeed tripId={tripId} />
-                      ) : null
-                    }
                   />
                 ) : null
               }
