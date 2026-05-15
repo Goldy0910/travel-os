@@ -13,6 +13,14 @@
   --travel-os-fab-bottom: calc(var(--travel-os-bottom-nav-h) + 0.75rem);
   /* Full-width sticky primary CTA (e.g. create trip) */
   --travel-os-sticky-cta-bottom: calc(var(--travel-os-bottom-nav-h) + 1rem);
+  /* Itinerary workspace: sticky Add/Refine bar (min-h-12 + padding) */
+  --travel-os-itinerary-sticky-h: calc(3.75rem + 0.5rem);
+  /* Right FAB column on itinerary (3 × 48px + gaps) */
+  --travel-os-fab-stack-h: 10.5rem;
+  /* Scroll padding for trip workspace content above nav + FAB stack */
+  --travel-os-workspace-scroll-pad: calc(
+    var(--travel-os-bottom-nav-h) + var(--travel-os-fab-stack-h) + 0.75rem
+  );
 }
 
 @theme inline {
@@ -33,6 +41,21 @@
   }
 }
 
+@keyframes homepage-result-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.homepage-result-enter {
+  animation: homepage-result-enter 0.45s ease-out both;
+}
+
 html {
   color-scheme: light;
 }
@@ -48,7 +71,7 @@ body {
 /* App shell (`app/app/layout.tsx`): single vertical scroll region under the header. */
 #app-shell-scroll-root {
   -webkit-overflow-scrolling: touch;
-  scroll-padding-bottom: calc(var(--travel-os-bottom-nav-h) + 0.75rem);
+  scroll-padding-bottom: var(--travel-os-workspace-scroll-pad, calc(var(--travel-os-bottom-nav-h) + 0.75rem));
 }
 
 /*
@@ -141,4 +164,85 @@ button:disabled,
 [type="submit"]:disabled,
 [aria-disabled="true"] {
   cursor: not-allowed;
+}
+
+/* Hide scrollbars on horizontal chip/tab strips (trip workspace) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Shimmer skeleton (itinerary hydration, tab fallback) */
+@keyframes travel-os-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.travel-os-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(226 232 240 / 0.85) 0%,
+    rgb(241 245 249 / 0.95) 45%,
+    rgb(226 232 240 / 0.85) 90%
+  );
+  background-size: 200% 100%;
+  animation: travel-os-shimmer 1.4s ease-in-out infinite;
+}
+
+/* Staggered section enter (trip itinerary workspace) */
+@keyframes trip-workspace-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.trip-workspace-enter {
+  animation: trip-workspace-enter 0.35s ease-out both;
+}
+
+.trip-workspace-enter-delay-1 {
+  animation-delay: 0.05s;
+}
+.trip-workspace-enter-delay-2 {
+  animation-delay: 0.1s;
+}
+.trip-workspace-enter-delay-3 {
+  animation-delay: 0.15s;
+}
+
+/* Off-screen panels: skip paint until near viewport */
+.trip-panel-cached {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
+}
+
+/* Horizontal snap scroll (insights, refinements) */
+.trip-snap-x {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.trip-snap-x > * {
+  scroll-snap-align: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .travel-os-shimmer,
+  .trip-workspace-enter,
+  .trip-workspace-enter-delay-1,
+  .trip-workspace-enter-delay-2,
+  .trip-workspace-enter-delay-3 {
+    animation: none;
+  }
 }

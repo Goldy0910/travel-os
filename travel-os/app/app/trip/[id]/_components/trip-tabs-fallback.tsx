@@ -10,13 +10,13 @@ export default function TripTabsFallback() {
             key={label}
             className="h-11 min-w-[5.5rem] shrink-0 rounded-t-lg bg-slate-100/90 px-3 py-3"
           >
-            <div className="h-4 w-14 animate-pulse rounded bg-slate-200" />
+            <div className="h-4 w-14 travel-os-shimmer rounded" />
           </div>
         ))}
       </div>
       <div className="px-4 py-6">
-        <div className="mx-auto h-40 max-w-sm animate-pulse rounded-2xl bg-slate-200/70" />
-        <div className="mx-auto mt-4 h-24 max-w-sm animate-pulse rounded-xl bg-slate-200/50" />
+        <div className="mx-auto h-40 max-w-sm travel-os-shimmer rounded-2xl" />
+        <div className="mx-auto mt-4 h-24 max-w-sm travel-os-shimmer rounded-xl" />
       </div>
     </div>
   );

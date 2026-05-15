@@ -71,7 +71,7 @@ export default function BottomSheetModal({
         type="button"
         tabIndex={open ? 0 : -1}
         aria-label="Close dialog"
-        className={`absolute inset-0 z-0 touch-none bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 z-0 touch-none bg-black/40 backdrop-blur-sm transition-opacity duration-300 motion-reduce:transition-none ${open ? "opacity-100" : "opacity-0"}`}
         onClick={onClose}
       />
       <div className="relative z-10 mx-auto w-full max-w-md overflow-x-hidden [touch-action:pan-y]">
@@ -80,7 +80,7 @@ export default function BottomSheetModal({
           aria-modal="true"
           aria-labelledby={title ? titleId : undefined}
           onClick={(e) => e.stopPropagation()}
-          className={`flex min-h-0 w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.12)] transition-transform duration-300 ease-out will-change-transform ${panelClassName} ${
+          className={`flex min-h-0 w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.12)] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none ${panelClassName} ${
             open
               ? "translate-y-0"
               : "translate-y-[calc(100%+var(--travel-os-bottom-nav-h,4rem))]"

@@ -9,6 +9,7 @@ import {
   type PlaceInfo,
 } from "@/lib/activity-place-details-cache";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { isMissingItineraryMetadataColumn } from "@/lib/supabase-schema-errors";
 import { isTripMember } from "@/lib/trip-membership";
 import ActivityPhotoGallery from "./_components/activity-photo-gallery";
 import ActivityReviews from "./_components/activity-reviews";
@@ -57,12 +58,26 @@ export default async function ActivityDetailsPage({ params }: Props) {
     .maybeSingle();
   if (!tripData) redirect("/app/home");
 
-  const { data: itemData } = await supabase
+  let itemData: Record<string, unknown> | null = null;
+  const extendedSelect = await supabase
     .from("itinerary_items")
-    .select("id, activity_name, title, location, time, date")
+    .select("id, activity_name, title, location, time, date, notes, google_place_id")
     .eq("trip_id", tripId)
     .eq("id", activityId)
     .maybeSingle();
+
+  if (extendedSelect.error && isMissingItineraryMetadataColumn(extendedSelect.error)) {
+    const base = await supabase
+      .from("itinerary_items")
+      .select("id, activity_name, title, location, time, date")
+      .eq("trip_id", tripId)
+      .eq("id", activityId)
+      .maybeSingle();
+    itemData = base.data as Record<string, unknown> | null;
+  } else {
+    itemData = extendedSelect.data as Record<string, unknown> | null;
+  }
+
   if (!itemData) redirect(`/app/trip/${encodeURIComponent(tripId)}?tab=itinerary`);
 
   const item = itemData as {
@@ -72,17 +87,22 @@ export default async function ActivityDetailsPage({ params }: Props) {
     location: string | null;
     time: string | null;
     date: string | null;
+    notes?: string | null;
+    google_place_id?: string | null;
   };
   const activityTitle = (item.activity_name || item.title || "Activity").trim();
   const location = (item.location || "").trim();
+  const activityNotes = (item.notes ?? "").trim();
   const dayChip = dayChipForDate(item.date);
 
   let placeInfo: PlaceInfo | null = null;
   let nearbyPlaces: NearbyPlace[] = [];
 
+  const storedPlaceId = (item.google_place_id ?? "").trim();
   const query = [activityTitle, location].filter(Boolean).join(", ");
-  const placeId = await getCachedSearchPlaceId(query);
-  placeInfo = await getCachedPlaceDetails(placeId);
+  const placeId =
+    storedPlaceId || (await getCachedSearchPlaceId(query));
+  placeInfo = placeId ? await getCachedPlaceDetails(placeId) : null;
   nearbyPlaces = await getCachedNearbyPlaces(`${location || activityTitle} attractions`);
 
   const tripTitle = pickFirstString(tripData as Record<string, unknown>, ["title", "name", "trip_name"], "Trip");
@@ -189,6 +209,13 @@ export default async function ActivityDetailsPage({ params }: Props) {
             ) : null}
           </div>
         </section>
+
+        {activityNotes ? (
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-slate-900">Trip notes</h2>
+            <p className="mt-2 text-sm leading-7 text-slate-700">{activityNotes}</p>
+          </section>
+        ) : null}
 
         {placeInfo?.summary ? (
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">

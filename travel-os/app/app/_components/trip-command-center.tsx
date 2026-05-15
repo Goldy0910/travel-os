@@ -1,3 +1,4 @@
+import { ensureUserMasterFilesLinkedToTrips } from "@/app/app/master-trip/actions";
 import { selectPrimaryTrip } from "@/app/app/_lib/use-primary-trip";
 import { pickFirstString, type TripRecord } from "@/app/app/_lib/trip-formatters";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -121,6 +122,8 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/app/login");
+
+  await ensureUserMasterFilesLinkedToTrips(supabase, user);
 
   const { trips: tripsRaw } = await fetchTripsViaMembership(supabase, user.id);
   const trips = tripsRaw as TripRecord[];

@@ -262,7 +262,7 @@ export default function TripSwipeTabs({
         <div className="flex w-full max-w-[390px] flex-col self-center">
           <nav
             ref={tabBarRef}
-            className="scrollbar-hide sticky top-0 z-[115] -mx-4 flex gap-0.5 overflow-x-auto overscroll-x-contain border-b border-slate-200/90 bg-white/95 px-3 pb-0 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 [touch-action:pan-x]"
+            className="scrollbar-hide trip-snap-x sticky top-0 z-[115] -mx-4 flex gap-0.5 overflow-x-auto overscroll-x-contain border-b border-slate-200/90 bg-white/95 px-3 pb-0 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 [touch-action:pan-x] scroll-px-3"
             aria-label="Trip sections"
           >
             {TRIP_TAB_KEYS.map((key, i) => {
@@ -281,7 +281,7 @@ export default function TripSwipeTabs({
                   onPointerEnter={() => prefetchTab(key)}
                   onTouchStart={() => prefetchTab(key)}
                   onClick={() => goToIndex(i)}
-                  className={`relative min-h-11 shrink-0 touch-manipulation rounded-t-lg px-3 py-3 text-[13px] transition-colors sm:px-3.5 sm:text-sm ${
+                  className={`relative min-h-11 shrink-0 snap-start touch-manipulation rounded-t-lg px-3 py-3 text-[13px] transition-colors sm:px-3.5 sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
                     active
                       ? "font-semibold text-slate-900"
                       : "font-medium text-slate-500 hover:text-slate-700"
@@ -324,7 +324,7 @@ export default function TripSwipeTabs({
                   aria-labelledby={`trip-tab-${key}`}
                   aria-hidden={!visible}
                   hidden={!visible}
-                  className="box-border w-full px-4 py-4 pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]"
+                  className={`box-border w-full px-4 py-4 pb-[calc(var(--travel-os-bottom-nav-h)+3rem)] ${!visible ? "trip-panel-cached" : ""}`}
                 >
                   {content}
                 </section>

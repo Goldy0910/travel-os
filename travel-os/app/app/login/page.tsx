@@ -4,6 +4,7 @@ import BackLink from "@/app/app/_components/back-link";
 import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { SetAppHeader } from "@/components/AppHeader";
 import { tryConsumePendingInvite } from "@/lib/join-trip-invite";
+import { tryConsumePendingRecommendation } from "@/lib/recommendation-session";
 import { PENDING_TRIP_INVITE_KEY } from "@/lib/pending-trip-invite";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { Eye, EyeOff } from "lucide-react";
@@ -15,6 +16,7 @@ function postLoginPath(): string {
     const raw = new URLSearchParams(window.location.search).get("next");
     if (!raw?.trim()) return "/app/home";
     const decoded = decodeURIComponent(raw.trim());
+    if (decoded === "/" || decoded.startsWith("/?")) return decoded.split("?")[0] || "/";
     if (!decoded.startsWith("/app") || decoded.startsWith("/app/login")) {
       return "/app/home";
     }
@@ -73,7 +75,9 @@ export default function LoginPage() {
   ) => {
     setIsRedirecting(true);
     const wentToTrip = await tryConsumePendingInvite(supabase, router);
-    if (!wentToTrip) {
+    if (wentToTrip) return;
+    const wentToRecommendation = await tryConsumePendingRecommendation(router);
+    if (!wentToRecommendation) {
       router.push(postLoginPath());
       router.refresh();
     }

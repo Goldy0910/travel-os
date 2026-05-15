@@ -1,5 +1,7 @@
 "use client";
 
+import { HOMEPAGE_DRAFT_KEY } from "@/app/components/homepage/constants";
+import { loadRecommendationSession } from "@/lib/recommendation-session";
 import ButtonSpinner from "@/app/app/_components/button-spinner";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
@@ -8,6 +10,95 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createTripAction } from "./actions";
 import { TravelPlaceIconLoose } from "./travel-place-icon";
 import type { TravelPlaceDTO } from "./travel-place-types";
+
+type CreateTripPrefill = {
+  slug?: string;
+  query?: string;
+  days?: number;
+};
+
+function ymdFromDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function addDaysToYmd(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return ymdFromDate(d);
+}
+
+function resolveCreateTripInitial(
+  places: TravelPlaceDTO[],
+  prefill?: CreateTripPrefill,
+): {
+  query: string;
+  selectedSlug: string | null;
+  startDateValue: string;
+  endDateValue: string;
+} {
+  let slug = prefill?.slug?.trim() || "";
+  let queryText = prefill?.query?.trim() || "";
+  let days = prefill?.days;
+
+  if (typeof window !== "undefined") {
+    const recSession = loadRecommendationSession();
+    if (recSession) {
+      slug = slug || recSession.decision.destinationSlug?.trim() || "";
+      if (!queryText) {
+        queryText =
+          recSession.decision.mode === "recommendation"
+            ? recSession.decision.canonicalLocation || recSession.decision.destination
+            : recSession.decision.destination;
+      }
+      days = days ?? recSession.preferences.days;
+    }
+    if (!slug && !queryText) {
+      try {
+        const raw = sessionStorage.getItem(HOMEPAGE_DRAFT_KEY);
+        if (raw) {
+          const draft = JSON.parse(raw) as {
+            slug?: string;
+            query?: string;
+            days?: number;
+          };
+          slug = draft.slug?.trim() || "";
+          queryText = draft.query?.trim() || "";
+          days = draft.days ?? days;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const bySlug = slug ? places.find((p) => p.slug === slug) : undefined;
+  const match =
+    bySlug ?? (queryText ? places.find((p) => placeMatches(p, queryText)) : undefined);
+
+  let startDateValue = "";
+  let endDateValue = "";
+  if (days && days > 0) {
+    const start = addDaysToYmd(ymdFromDate(new Date()), 14);
+    startDateValue = start;
+    endDateValue = addDaysToYmd(start, days - 1);
+  }
+
+  if (match) {
+    return {
+      query: match.canonical_location,
+      selectedSlug: match.slug,
+      startDateValue,
+      endDateValue,
+    };
+  }
+
+  return {
+    query: queryText,
+    selectedSlug: null,
+    startDateValue,
+    endDateValue,
+  };
+}
 
 function normalizeSearch(s: string) {
   return s.trim().toLowerCase();
@@ -26,16 +117,22 @@ function placeMatches(place: TravelPlaceDTO, q: string): boolean {
 export default function CreateTripForm({
   places,
   destinationsLoaded,
+  initialPrefill,
 }: {
   places: TravelPlaceDTO[];
   destinationsLoaded: boolean;
+  initialPrefill?: CreateTripPrefill;
 }) {
   const { pending, handleForm } = useFormActionFeedback();
-  const [query, setQuery] = useState("");
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const initial = useMemo(
+    () => resolveCreateTripInitial(places, initialPrefill),
+    [initialPrefill, places],
+  );
+  const [query, setQuery] = useState(initial.query);
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(initial.selectedSlug);
   const [listOpen, setListOpen] = useState(false);
-  const [startDateValue, setStartDateValue] = useState("");
-  const [endDateValue, setEndDateValue] = useState("");
+  const [startDateValue, setStartDateValue] = useState(initial.startDateValue);
+  const [endDateValue, setEndDateValue] = useState(initial.endDateValue);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const filteredPlaces = useMemo(() => {

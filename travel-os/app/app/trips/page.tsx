@@ -1,6 +1,10 @@
 import HubTripCard from "@/app/app/_components/hub-trip-card";
 import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
+import { ensureUserMasterFilesLinkedToTrips } from "@/app/app/master-trip/actions";
+import { parseMasterTripFile } from "@/lib/master-trip-file";
 import { getOrCacheTravelPlacePhotoUrls } from "@/lib/travel-place-photo-cache";
+import { isMissingTripMasterFilesTable } from "@/lib/supabase-schema-errors";
+import { resolveTripDisplayTitle } from "@/lib/trip-display-title";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchTripsViaMembership } from "@/lib/trip-membership";
 import Link from "next/link";
@@ -23,10 +27,30 @@ export default async function TripsPage() {
     redirect("/app/login");
   }
 
+  await ensureUserMasterFilesLinkedToTrips(supabase, user);
+
   const { trips: tripsRaw, tripIds, error: membershipTripsError } =
     await fetchTripsViaMembership(supabase, user.id);
   const tripsError = membershipTripsError;
   const trips = (tripsRaw ?? []) as TripRecord[];
+
+  const destinationNameByTripId = new Map<string, string>();
+  if (tripIds.length > 0) {
+    const { data: masterRows, error: masterError } = await supabase
+      .from("trip_master_files")
+      .select("trip_id, data")
+      .eq("user_id", user.id)
+      .in("trip_id", tripIds);
+    if (!isMissingTripMasterFilesTable(masterError)) {
+      for (const row of masterRows ?? []) {
+        if (!row.trip_id) continue;
+        const file = parseMasterTripFile(row.data);
+        if (file?.destination.name) {
+          destinationNameByTripId.set(String(row.trip_id), file.destination.name);
+        }
+      }
+    }
+  }
 
   // Only load photos for places the current user actually has trips for,
   // instead of scanning all known travel places.
@@ -118,7 +142,7 @@ export default async function TripsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Trips</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Your itineraries and plans in one list.
+            Trips you created here or from homepage recommendations.
           </p>
         </div>
 
@@ -155,16 +179,23 @@ export default async function TripsPage() {
             </div>
           ) : (
             trips.map((trip, index) => {
-              const title = pickFirstString(
-                trip,
-                ["title", "name", "trip_name"],
-                `Trip ${index + 1}`,
-              );
+              const tripIdForTitle =
+                typeof trip.id === "string" || typeof trip.id === "number"
+                  ? String(trip.id)
+                  : null;
               const location = pickFirstString(
                 trip,
                 ["location", "destination", "city", "place"],
                 "travel",
               );
+              const title = resolveTripDisplayTitle({
+                storedTitle: pickFirstString(trip, ["title", "name", "trip_name"], ""),
+                location,
+                destinationName: tripIdForTitle
+                  ? destinationNameByTripId.get(tripIdForTitle)
+                  : undefined,
+                fallback: `Trip ${index + 1}`,
+              });
               const startDate = pickFirstDate(trip, [
                 "start_date",
                 "startDate",

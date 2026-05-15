@@ -9,6 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import TripFabAnchor from "@/app/app/trip/[id]/_components/trip-fab-anchor";
 import type { ConnectSection, TripTabKey } from "./trip-tab-keys";
 
 type OpenFn = (() => void) | null;
@@ -17,6 +18,7 @@ type RegistryContextValue = {
   setOpenActivity: (fn: OpenFn) => void;
   setOpenExpense: (fn: OpenFn) => void;
   setOpenUpload: (fn: OpenFn) => void;
+  triggerAddActivity: () => void;
 };
 
 const TripFabRegistryContext = createContext<RegistryContextValue | null>(null);
@@ -57,17 +59,21 @@ export function TripFabRegistryProvider({
     openUploadRef.current = fn;
   }, []);
 
+  const triggerAddActivity = useCallback(() => {
+    openActivityRef.current?.();
+  }, []);
+
   const onFabPress = useCallback(() => {
     const t = activeTabRef.current;
-    if (t === "itinerary") openActivityRef.current?.();
+    if (t === "itinerary") triggerAddActivity();
     else if (t === "expenses") openExpenseRef.current?.();
     // FAB is only shown for Connect when the Docs segment is active (`docsFab`); no second gate on refs.
     else if (t === "connect") openUploadRef.current?.();
-  }, []);
+  }, [triggerAddActivity]);
 
   const ctx = useMemo(
-    () => ({ setOpenActivity, setOpenExpense, setOpenUpload }),
-    [setOpenActivity, setOpenExpense, setOpenUpload],
+    () => ({ setOpenActivity, setOpenExpense, setOpenUpload, triggerAddActivity }),
+    [setOpenActivity, setOpenExpense, setOpenUpload, triggerAddActivity],
   );
 
   const docsFab =
@@ -86,14 +92,16 @@ export function TripFabRegistryProvider({
     <TripFabRegistryContext.Provider value={ctx}>
       {children}
       {showFab ? (
-        <button
-          type="button"
-          aria-label={fabLabel}
-          onClick={onFabPress}
-          className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[110] flex h-14 w-14 min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95"
-        >
-          +
-        </button>
+        <TripFabAnchor bottomClassName="bottom-[var(--travel-os-fab-bottom)]" zClassName="z-[110]">
+          <button
+            type="button"
+            aria-label={fabLabel}
+            onClick={onFabPress}
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-900 text-2xl font-light leading-none text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-800 active:scale-95 touch-manipulation"
+          >
+            +
+          </button>
+        </TripFabAnchor>
       ) : null}
     </TripFabRegistryContext.Provider>
   );

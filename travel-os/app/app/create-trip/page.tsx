@@ -1,7 +1,6 @@
 import { SetAppHeader } from "@/components/AppHeader";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { redirect } from "next/navigation";
-import CreateTripForm from "./create-trip-form";
+import CreateTripGate from "./create-trip-gate";
 import { mergeTravelPlacesFromDb } from "./travel-places-fallback";
 import type { TravelPlaceDTO } from "./travel-place-types";
 
@@ -17,21 +16,12 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
       ? decodeURIComponent(errorParam)
       : "";
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  let user = authUser;
-  if (!user) {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    user = session?.user ?? null;
-  }
-  if (!user) {
-    redirect("/app/login?next=/app/create-trip");
-  }
+  const placeSlug = typeof params.place === "string" ? params.place : undefined;
+  const placeQuery = typeof params.q === "string" ? params.q : undefined;
+  const daysRaw = typeof params.days === "string" ? Number.parseInt(params.days, 10) : NaN;
+  const tripDays = Number.isFinite(daysRaw) && daysRaw > 0 ? daysRaw : undefined;
 
+  const supabase = await createSupabaseServerClient();
   const { data: placeRows } = await supabase
     .from("travel_places")
     .select("slug, primary_label, subtitle, visa_note, tags, icon_key, sort_order, canonical_location")
@@ -61,10 +51,6 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
             <h1 className="mt-1 text-2xl font-semibold text-slate-900">Create trip</h1>
           </div>
 
-          {error ? (
-            <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
-          ) : null}
-
           {travelPlaces.length === 0 ? (
             <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
               Destinations list is unavailable. Apply the latest database migration (travel_places), then
@@ -72,7 +58,16 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
             </p>
           ) : null}
 
-          <CreateTripForm places={travelPlaces} destinationsLoaded={travelPlaces.length > 0} />
+          <CreateTripGate
+            places={travelPlaces}
+            destinationsLoaded={travelPlaces.length > 0}
+            error={error}
+            initialPrefill={{
+              slug: placeSlug,
+              query: placeQuery,
+              days: tripDays,
+            }}
+          />
         </div>
         </div>
       </main>

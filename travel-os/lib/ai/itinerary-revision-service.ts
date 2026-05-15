@@ -3,6 +3,7 @@ import type { ItineraryOptimizationActivity } from "@/lib/ai/itinerary-optimizat
 
 type SnapshotPayload = {
   activities: ItineraryOptimizationActivity[];
+  affectedDates?: string[];
 };
 
 function isMissingSchemaObject(error: unknown): boolean {
@@ -193,21 +194,36 @@ export async function restoreRevisionSnapshot(input: {
 
   const snapshot = (revision.previous_snapshot ?? {}) as {
     activities?: ItineraryOptimizationActivity[];
+    affectedDates?: string[];
   };
   const activities = Array.isArray(snapshot.activities) ? snapshot.activities : [];
-  const date = activities[0]?.date ? normalizeDate(String(activities[0].date)) : "";
-  if (!date) return { restored: false };
+  if (activities.length === 0) return { restored: false };
 
-  await applyOptimizedActivities({
-    supabase: input.supabase,
-    tripId: input.tripId,
-    userId: input.userId,
-    date,
-    optimized: activities,
-  });
+  const datesFromSnapshot =
+    Array.isArray(snapshot.affectedDates) && snapshot.affectedDates.length > 0
+      ? snapshot.affectedDates.map((d) => normalizeDate(String(d))).filter(Boolean)
+      : [];
+
+  const dates =
+    datesFromSnapshot.length > 0
+      ? [...new Set(datesFromSnapshot)]
+      : [...new Set(activities.map((a) => normalizeDate(String(a.date))).filter(Boolean))];
+
+  for (const date of dates) {
+    const dayActivities = activities.filter((a) => normalizeDate(String(a.date)) === date);
+    if (dayActivities.length === 0) continue;
+    await applyOptimizedActivities({
+      supabase: input.supabase,
+      tripId: input.tripId,
+      userId: input.userId,
+      date,
+      optimized: dayActivities,
+    });
+  }
+
   return {
     restored: true,
-    date,
+    date: dates[0],
     reason: String(revision.revision_reason ?? "Undo revision"),
   };
 }

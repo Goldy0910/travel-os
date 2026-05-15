@@ -2,7 +2,7 @@
 
 import { ChevronDown, Clock3, MapPin, MessageCircle, Sparkles } from "lucide-react";
 import type { RefObject } from "react";
-import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import { useFormActionFeedback } from "@/app/app/_components/use-form-action-feedback";
 import { useTripActiveTab } from "../_lib/trip-active-tab-context";
 import { useTripFabRegistry } from "../_lib/trip-tab-fab-registry";
@@ -11,7 +11,6 @@ import {
   deleteItineraryItemAction,
   generateAiItineraryAction,
   importPdfItineraryAction,
-  deleteTripAction,
   saveItineraryActivityAction,
 } from "../data-actions";
 import ActivityBottomSheet, { type ActivitySheetInitial } from "./activity-bottom-sheet";
@@ -23,6 +22,7 @@ import TripUpdateBottomSheet, {
 } from "./trip-update-bottom-sheet";
 import ItineraryCreationSetup from "./itinerary-creation-setup";
 import ActivityDetailsNavLink from "./activity-details-nav-link";
+import TripManageMenu from "./trip-manage-menu";
 import ItineraryAiAssistant, {
   type AiSuggestionCard,
   type AssistantDayActivity,
@@ -68,6 +68,9 @@ type TripItineraryShellProps = {
   autoOpenAddActivity?: boolean;
   /** Server-backed: false until AI / PDF import succeeds or user chooses manual. */
   itinerarySetupComplete?: boolean;
+  /** Workspace layout hides duplicate headers and uses collapsible day cards. */
+  layoutMode?: "classic" | "workspace";
+  onRegisterManageTrip?: (open: (() => void) | null) => void;
 };
 
 function formatDateLabel(input: string) {
@@ -97,16 +100,6 @@ function IconDotsVertical({ className = "h-5 w-5" }: { className?: string }) {
       <circle cx="12" cy="5" r="1.75" />
       <circle cx="12" cy="12" r="1.75" />
       <circle cx="12" cy="19" r="1.75" />
-    </svg>
-  );
-}
-
-function IconDotsVerticalSmall({ className = "h-5 w-5" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
-      <circle cx="12" cy="6" r="1.8" />
-      <circle cx="12" cy="12" r="1.8" />
-      <circle cx="12" cy="18" r="1.8" />
     </svg>
   );
 }
@@ -183,78 +176,6 @@ function useDismissOnOutsideClick(
   }, [open, onClose, excludeRef]);
 }
 
-function TripManageMenu({
-  tripId,
-  canDeleteTrip,
-  onUpdateTrip,
-}: {
-  tripId: string;
-  canDeleteTrip: boolean;
-  onUpdateTrip: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const menuId = useId();
-  const { pending: deleteTripPending, runAction: runDeleteTrip } = useFormActionFeedback();
-
-  useDismissOnOutsideClick(open, () => setOpen(false), wrapRef);
-
-  if (!canDeleteTrip) return null;
-
-  return (
-    <div className="relative shrink-0" ref={wrapRef}>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-haspopup="true"
-        aria-controls={menuId}
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
-      >
-        <span className="sr-only">Trip actions</span>
-        <IconDotsVerticalSmall className="h-5 w-5" />
-      </button>
-      {open ? (
-        <div
-          id={menuId}
-          role="menu"
-          className="absolute right-0 top-full z-50 mt-2 min-w-[12rem] overflow-hidden rounded-xl border border-white/10 bg-slate-800 py-1 shadow-lg"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-white hover:bg-white/10"
-            onClick={() => {
-              setOpen(false);
-              onUpdateTrip();
-            }}
-          >
-            Update trip
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={deleteTripPending}
-            className="flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-rose-200 hover:bg-white/10 disabled:opacity-50"
-            onClick={() => {
-              if (
-                !window.confirm(
-                  "Delete this trip permanently? This removes itinerary, expenses, documents, and members.",
-                )
-              ) {
-                return;
-              }
-              setOpen(false);
-              runDeleteTrip(() => deleteTripAction(tripId, new FormData()));
-            }}
-          >
-            {deleteTripPending ? "Deleting…" : "Delete trip"}
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 function ActivityRowMenu({
   tripId,
@@ -336,7 +257,7 @@ type ItineraryActivityCardProps = {
   onEdit: () => void;
 };
 
-function ItineraryActivityCard({
+const ItineraryActivityCard = memo(function ItineraryActivityCard({
   tripId,
   item,
   status,
@@ -356,8 +277,8 @@ function ItineraryActivityCard({
   const panelId = `activity-panel-${item.id}`;
 
   return (
-    <article className="rounded-xl border border-black/[0.08] bg-white shadow-sm transition-colors hover:border-black/[0.16]">
-      <div className="flex items-center gap-2 px-3 py-2">
+    <article className="rounded-xl border border-black/[0.08] bg-white shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:border-black/[0.16] active:scale-[0.99] motion-reduce:transition-none [content-visibility:auto] [contain-intrinsic-size:auto_4.5rem]">
+      <div className="flex items-center gap-2 px-3 py-2.5">
         <ActivityDetailsNavLink
           href={`/app/trip/${encodeURIComponent(tripId)}/activity/${encodeURIComponent(item.id)}?from=itinerary`}
           className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
@@ -408,7 +329,7 @@ function ItineraryActivityCard({
               onClick={() => setIsExpanded((v) => !v)}
               aria-expanded={isExpanded}
               aria-controls={panelId}
-              className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 transition hover:bg-slate-200"
+              className="inline-flex min-h-9 min-w-9 items-center justify-center gap-0.5 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600 transition hover:bg-slate-200 touch-manipulation"
               title={`${commentCount} comment${commentCount === 1 ? "" : "s"}`}
             >
               <MessageCircle className="h-3 w-3" aria-hidden />
@@ -430,7 +351,7 @@ function ItineraryActivityCard({
             aria-expanded={isExpanded}
             aria-controls={panelId}
             aria-label={isExpanded ? "Collapse comments" : "Expand comments"}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 touch-manipulation"
           >
             <ChevronDown
               className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
@@ -459,7 +380,7 @@ function ItineraryActivityCard({
       </div>
     </article>
   );
-}
+});
 
 function TravelConnector({ minutes }: { minutes: number }) {
   return (
@@ -491,7 +412,10 @@ export default function TripItineraryShell({
   memberLabelByUserId,
   autoOpenAddActivity = false,
   itinerarySetupComplete = true,
+  layoutMode = "classic",
+  onRegisterManageTrip,
 }: TripItineraryShellProps) {
+  const isWorkspace = layoutMode === "workspace";
   const { runAction } = useFormActionFeedback();
   const activeTripTab = useTripActiveTab();
   const itineraryTabActive = activeTripTab === "itinerary";
@@ -511,6 +435,31 @@ export default function TripItineraryShell({
   const [formKey, setFormKey] = useState("new-0");
   const [aiSuggestions, setAiSuggestions] = useState<AiSuggestionCard[]>([]);
   const formKeySeq = useRef(0);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(() => new Set());
+
+  const openTripUpdate = useCallback(() => {
+    tripUpdateKeySeq.current += 1;
+    setTripUpdateFormKey(`trip-edit-${tripUpdateKeySeq.current}`);
+    setTripUpdateOpen(true);
+  }, []);
+
+  useEffect(() => {
+    onRegisterManageTrip?.(openTripUpdate);
+    return () => onRegisterManageTrip?.(null);
+  }, [onRegisterManageTrip, openTripUpdate]);
+
+  useEffect(() => {
+    if (!isWorkspace || orderedDates.length === 0) return;
+    setExpandedDates((prev) => {
+      if (prev.size > 0) return prev;
+      const next = new Set<string>();
+      if (orderedDates[0]) next.add(orderedDates[0]);
+      const today = new Date();
+      const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      if (orderedDates.includes(todayYmd)) next.add(todayYmd);
+      return next.size > 0 ? next : new Set([orderedDates[0]]);
+    });
+  }, [isWorkspace, orderedDates]);
 
   useEffect(() => {
     if (!itineraryTabActive) {
@@ -670,8 +619,18 @@ export default function TripItineraryShell({
     ),
   );
 
+  const toggleDayExpanded = (date: string) => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
+
   return (
     <>
+      {!isWorkspace ? (
       <section className="rounded-xl bg-[#1a2340] p-5 text-white shadow-md">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -684,23 +643,23 @@ export default function TripItineraryShell({
           <TripManageMenu
             tripId={tripId}
             canDeleteTrip={canDeleteTrip}
-            onUpdateTrip={() => {
-              tripUpdateKeySeq.current += 1;
-              setTripUpdateFormKey(`trip-edit-${tripUpdateKeySeq.current}`);
-              setTripUpdateOpen(true);
-            }}
+            onEditTrip={openTripUpdate}
+            variant="banner"
           />
         </div>
       </section>
+      ) : null}
 
+      {!isWorkspace ? (
       <section className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
         <p className="text-sm font-semibold text-indigo-900">Plan day by day with your group</p>
         <p className="mt-1 text-xs leading-relaxed text-indigo-800">
           Use Itinerary to map each day, add activities with time and location, and keep everyone aligned on the plan.
         </p>
       </section>
+      ) : null}
 
-      {aiSuggestions.length > 0 ? (
+      {aiSuggestions.length > 0 && !isWorkspace ? (
         <section className="space-y-2">
           {aiSuggestions.slice(0, 3).map((suggestion) => (
             <article
@@ -716,7 +675,7 @@ export default function TripItineraryShell({
         </section>
       ) : null}
 
-      {shouldShowDayWiseItinerary && orderedDates.length > 0 ? (
+      {shouldShowDayWiseItinerary && orderedDates.length > 0 && !isWorkspace ? (
         <div className="mt-3 flex flex-wrap gap-2">
           <span className="inline-flex items-center rounded-full border border-black/[0.12] bg-white px-3 py-1 text-xs font-medium text-slate-700">
             {totalActivities} activit{totalActivities === 1 ? "y" : "ies"}
@@ -730,8 +689,16 @@ export default function TripItineraryShell({
         </div>
       ) : null}
 
-      <section className="mt-4 rounded-xl border border-black/[0.08] bg-white p-4 shadow-sm">
-        <h2 className="text-base font-semibold text-[#1a2340]">Itinerary</h2>
+      <section
+        className={
+          isWorkspace
+            ? "rounded-2xl border border-slate-100 bg-white/80 p-1 shadow-sm"
+            : "mt-4 rounded-xl border border-black/[0.08] bg-white p-4 shadow-sm"
+        }
+      >
+        {!isWorkspace ? (
+          <h2 className="text-base font-semibold text-[#1a2340]">Itinerary</h2>
+        ) : null}
 
         {shouldShowItinerarySetupPrompt ? (
           <div className="mt-3">
@@ -753,19 +720,67 @@ export default function TripItineraryShell({
         {shouldShowDayWiseItinerary ? emptyState : null}
 
         {shouldShowDayWiseItinerary && orderedDates.length > 0 ? (
-          <div className="mt-5 space-y-8">
+          <div className={isWorkspace ? "space-y-3 p-2" : "mt-5 space-y-8"}>
             {orderedDates.map((date) => {
               const dateItems = grouped[date] ?? [];
+              const dayExpanded = !isWorkspace || expandedDates.has(date);
               return (
-                <div key={date}>
-                  <div className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#1a2340]" aria-hidden />
-                    <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      {formatDateLabelUpper(date)}
-                    </span>
-                    <span className="h-px min-w-0 flex-1 bg-slate-200" aria-hidden />
-                  </div>
-                  <div className="mt-3 space-y-1.5">
+                <div
+                  key={date}
+                  className={
+                    isWorkspace
+                      ? "overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm"
+                      : undefined
+                  }
+                >
+                  {isWorkspace ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleDayExpanded(date)}
+                      className="flex w-full min-h-12 items-center gap-2 px-3.5 py-3 text-left touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+                      aria-expanded={dayExpanded}
+                      aria-controls={`day-panel-${date}`}
+                    >
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-teal-500" aria-hidden />
+                      <span className="min-w-0 flex-1 text-sm font-semibold text-slate-900">
+                        {formatDateLabel(date)}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {dateItems.length} stop{dateItems.length === 1 ? "" : "s"}
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${dayExpanded ? "rotate-180" : ""}`}
+                        aria-hidden
+                      />
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#1a2340]" aria-hidden />
+                      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        {formatDateLabelUpper(date)}
+                      </span>
+                      <span className="h-px min-w-0 flex-1 bg-slate-200" aria-hidden />
+                    </div>
+                  )}
+                  <div
+                    id={isWorkspace ? `day-panel-${date}` : undefined}
+                    className={
+                      isWorkspace
+                        ? `grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
+                            dayExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                          }`
+                        : dayExpanded
+                          ? "mt-3"
+                          : "hidden"
+                    }
+                  >
+                    <div
+                      className={
+                        isWorkspace
+                          ? "min-h-0 overflow-hidden space-y-1.5 border-t border-slate-100 px-2 pb-2 pt-1"
+                          : "space-y-1.5"
+                      }
+                    >
                     {dateItems.length === 0 ? (
                       <button
                         type="button"
@@ -812,6 +827,7 @@ export default function TripItineraryShell({
                         </button>
                       </>
                     )}
+                    </div>
                   </div>
                 </div>
               );

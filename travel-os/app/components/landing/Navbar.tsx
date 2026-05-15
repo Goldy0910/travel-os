@@ -9,7 +9,7 @@ export default function Navbar() {
           href="/"
           className="text-base font-bold tracking-tight text-slate-900"
         >
-          Travel OS
+          TravelTill99
         </Link>
         <LandingLink
           href="/app/login"

@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Travel OS — Your trip, after booking",
+  title: "TravelTill99 — Decide where to go",
   description:
-    "Manage documents, itinerary, expenses, and group travel in one place. Built for modern travelers.",
+    "Not sure where to go? Tell us your time and trip style — we'll recommend a destination or validate your pick, then help you plan.",
 };
 
 export const viewport = {

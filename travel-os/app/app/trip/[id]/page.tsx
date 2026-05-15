@@ -13,9 +13,17 @@ import {
 } from "@/lib/trip-entity-comments";
 import type { EntityCommentDTO } from "./_components/entity-comments-block";
 import JoinWelcomeBanner from "./_components/join-welcome-banner";
-import TripItineraryShell, {
-  type ItineraryItemDTO,
-} from "./_components/trip-itinerary-shell";
+import { parseMasterTripFile } from "@/lib/master-trip-file";
+import { isMissingTripMasterFilesTable } from "@/lib/supabase-schema-errors";
+import { resolveTripDisplayTitle } from "@/lib/trip-display-title";
+import {
+  ensureTripItineraryHydrated,
+  normalizedPlanFromMasterFile,
+} from "@/lib/unified-trip";
+import { getOrCacheTravelPlacePhotoUrls } from "@/lib/travel-place-photo-cache";
+import { tripNeedsPlaceEnrichment } from "@/lib/unified-trip/hydration/enrich-places";
+import type { ItineraryItemDTO } from "./_components/trip-itinerary-shell";
+import TripItineraryWorkspace from "./_components/trip-itinerary-workspace";
 import TripMembersPanel from "./_components/trip-members-panel";
 import TripGuidesPanel from "./_components/trip-guides-panel";
 import TripSwipeTabs from "./_components/trip-swipe-tabs";
@@ -149,6 +157,8 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   const query = (await searchParams) ?? {};
   const showJoinWelcome =
     query.welcome === "1" || query.welcome === "true";
+  const fromRecommendation =
+    query.from === "recommendation" || query.from === "homepage";
   const rawTabQuery = pickFirstQuery(query, "tab");
   const activeTab = parseTripTabParam(rawTabQuery);
   const connectSection = parseConnectSectionFromSearch(
@@ -194,14 +204,67 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   }
 
   const trip = tripData as TripRecord;
+
+  let recommendationPlan: {
+    masterId: string;
+    version: number;
+    file: NonNullable<ReturnType<typeof parseMasterTripFile>>;
+  } | null = null;
+  const { data: masterRow, error: masterRowError } = await supabase
+    .from("trip_master_files")
+    .select("id, data, version")
+    .eq("trip_id", tripId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!isMissingTripMasterFilesTable(masterRowError) && masterRow?.id) {
+    const parsed = parseMasterTripFile(masterRow.data);
+    if (parsed) {
+      recommendationPlan = {
+        masterId: String(masterRow.id),
+        version: Number(masterRow.version) || 1,
+        file: parsed,
+      };
+    }
+  }
+
   const itinerarySetupComplete = pickTripBoolean(trip, ["itinerary_setup_complete"], true);
   const startRawEarly = pickFirstString(trip, ["start_date", "startDate", "date_from"], "");
   const endRawEarly = pickFirstString(trip, ["end_date", "endDate", "date_to"], "");
   const ymdStart = extractYMD(startRawEarly);
   const ymdEnd = extractYMD(endRawEarly);
 
-  const title = pickFirstString(trip, ["title", "name", "trip_name"], "Trip");
+  if (recommendationPlan && ymdStart && ymdEnd) {
+    try {
+      await ensureTripItineraryHydrated(
+        supabase,
+        tripId,
+        user.id,
+        recommendationPlan.file,
+        {
+          masterTripFileId: recommendationPlan.masterId,
+          startDateYmd: ymdStart,
+          endDateYmd: ymdEnd,
+        },
+      );
+    } catch {
+      /* hydration is best-effort; workspace still loads */
+    }
+  }
+
+  const normalizedRecommendationPlan = recommendationPlan
+    ? normalizedPlanFromMasterFile(recommendationPlan.file, {
+        tripId,
+        masterTripFileId: recommendationPlan.masterId,
+      })
+    : null;
+
   const location = pickFirstString(trip, ["location", "destination", "city"], "");
+  const title = resolveTripDisplayTitle({
+    storedTitle: pickFirstString(trip, ["title", "name", "trip_name"], ""),
+    location,
+    destinationName: recommendationPlan?.file.destination.name,
+    fallback: "Trip",
+  });
   const tripPlace = pickFirstString(
     trip,
     ["place", "location", "destination", "city"],
@@ -429,6 +492,27 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("en-US", { month: "long" });
   })();
 
+  const needsPlaceEnrichment =
+    recommendationPlan != null
+      ? await tripNeedsPlaceEnrichment(supabase, tripId)
+      : false;
+
+  const heroLocation =
+    recommendationPlan?.file.destination.canonicalLocation ||
+    tripPlace ||
+    location ||
+    title;
+  const heroPhotoMap = heroLocation
+    ? await getOrCacheTravelPlacePhotoUrls(supabase, [heroLocation])
+    : new Map<string, string>();
+  const heroImageUrl = heroPhotoMap.get(heroLocation) ?? null;
+
+  const showItineraryHydrationSkeleton =
+    fromRecommendation &&
+    itinerarySetupComplete &&
+    !itineraryData.hasActivities &&
+    recommendationPlan != null;
+
   const checklistActivities: string[] = [];
   if (activeTab === "checklist") {
     const { data: actRows } = await supabase
@@ -446,38 +530,51 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   return (
     <>
       <SetAppHeader title={title} showBack />
-      <main className="flex w-full flex-col bg-[#f4f4f0] pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]">
+      <main className="flex w-full flex-col bg-[#f4f4f0] pb-[var(--travel-os-workspace-scroll-pad)]">
         <div className="mx-auto flex w-full max-w-[390px] flex-col">
           <Suspense fallback={<TripTabsFallback />}>
             <TripSwipeTabs
               itinerary={
                 activeTab === "itinerary" ? (
-                  <div className="space-y-5">
-                    {showJoinWelcome ? (
+                  <TripItineraryWorkspace
+                    destinationName={
+                      recommendationPlan?.file.destination.name || title
+                    }
+                    heroImageUrl={heroImageUrl}
+                    plan={normalizedRecommendationPlan}
+                    masterFile={recommendationPlan?.file ?? null}
+                    masterId={recommendationPlan?.masterId ?? null}
+                    masterVersion={recommendationPlan?.version}
+                    needsPlaceEnrichment={needsPlaceEnrichment}
+                    showHydrationSkeleton={showItineraryHydrationSkeleton}
+                    showJoinWelcome={showJoinWelcome}
+                    welcomeBanner={
                       <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
-                    ) : null}
-                    <TripItineraryShell
-                      tripId={tripId}
-                      tripTitle={title}
-                      dateRangeLabel={dateRangeLabel}
-                      memberCount={itineraryData.memberCount}
-                      canDeleteTrip={itineraryData.canDeleteTrip}
-                      tripEditDefaults={tripEditDefaults}
-                      orderedDates={itineraryData.orderedDates}
-                      grouped={itineraryData.grouped}
-                      initialError={itineraryError}
-                      defaultDateForAdd={itineraryData.defaultDateForAdd}
-                      activityCommentsByItemId={itineraryData.activityCommentsByItemId}
-                      activityStateByItemId={itineraryData.activityStateByItemId}
-                      currentUserId={user.id}
-                      memberLabelByUserId={itineraryData.memberLabelByUserId}
-                      autoOpenAddActivity={quickAction === "activity"}
-                      itinerarySetupComplete={itinerarySetupComplete}
-                    />
-                    {itinerarySetupComplete && itineraryData.hasActivities ? (
-                      <TripActivityFeed tripId={tripId} />
-                    ) : null}
-                  </div>
+                    }
+                    shellProps={{
+                      tripId,
+                      tripTitle: title,
+                      dateRangeLabel,
+                      memberCount: itineraryData.memberCount,
+                      canDeleteTrip: itineraryData.canDeleteTrip,
+                      tripEditDefaults,
+                      orderedDates: itineraryData.orderedDates,
+                      grouped: itineraryData.grouped,
+                      initialError: itineraryError,
+                      defaultDateForAdd: itineraryData.defaultDateForAdd,
+                      activityCommentsByItemId: itineraryData.activityCommentsByItemId,
+                      activityStateByItemId: itineraryData.activityStateByItemId,
+                      currentUserId: user.id,
+                      memberLabelByUserId: itineraryData.memberLabelByUserId,
+                      autoOpenAddActivity: quickAction === "activity",
+                      itinerarySetupComplete,
+                    }}
+                    activityFeed={
+                      itinerarySetupComplete && itineraryData.hasActivities ? (
+                        <TripActivityFeed tripId={tripId} />
+                      ) : null
+                    }
+                  />
                 ) : null
               }
               expenses={

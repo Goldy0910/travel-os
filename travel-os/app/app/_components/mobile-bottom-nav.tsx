@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import MobileNavTabInner from "./mobile-nav-tab-inner";
 import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
+import TripFabAnchor from "@/app/app/trip/[id]/_components/trip-fab-anchor";
 import { UserRound } from "lucide-react";
 
 const LAST_TRIP_STORAGE_KEY = "travel-os-last-trip-id";
@@ -160,7 +161,9 @@ export default function MobileBottomNav() {
   // On trip Connect (any segment) or legacy `?tab=docs`, hide this FAB so it does not stack above the trip upload button (z-122 vs z-110).
   const hideFabOnTripTab =
     !!pathTripId &&
-    (tripTabLower === "guides" ||
+    (!tripTabParam ||
+      tripTabLower === "itinerary" ||
+      tripTabLower === "guides" ||
       tripTabLower === "checklist" ||
       tripTabLower === "food" ||
       tripTabLower === "language" ||
@@ -317,26 +320,51 @@ export default function MobileBottomNav() {
       ) : null}
 
       {showFab ? (
-        <button
-          type="button"
-          onClick={onFabClick}
-          disabled={fabLoading}
-          className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[122] flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 p-0 text-white shadow-lg shadow-slate-900/25 ring-0 outline-none [appearance:none] [backface-visibility:hidden] [box-sizing:border-box] [transform:translateZ(0)] [webkit-tap-highlight-color:transparent] focus:outline-none focus-visible:outline-none focus-visible:ring-0 disabled:opacity-85"
-          aria-label={fabAriaLabel}
-          aria-expanded={actionsOpen}
-        >
-          <span className="pointer-events-none flex h-5 w-5 items-center justify-center">
-            {fabLoading ? (
-              <span className="grid h-5 w-5 grid-cols-3 place-items-center gap-1" aria-hidden>
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:0ms]" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:140ms]" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
+        pathTripId ? (
+          <TripFabAnchor bottomClassName="bottom-[var(--travel-os-fab-bottom)]" zClassName="z-[122]">
+            <button
+              type="button"
+              onClick={onFabClick}
+              disabled={fabLoading}
+              className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 p-0 text-white shadow-lg shadow-slate-900/25 ring-0 outline-none touch-manipulation [appearance:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:opacity-85"
+              aria-label={fabAriaLabel}
+              aria-expanded={actionsOpen}
+            >
+              <span className="pointer-events-none flex h-5 w-5 items-center justify-center">
+                {fabLoading ? (
+                  <span className="grid h-5 w-5 grid-cols-3 place-items-center gap-1" aria-hidden>
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:0ms]" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:140ms]" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
+                  </span>
+                ) : (
+                  <FabPlusIcon />
+                )}
               </span>
-            ) : (
-              <FabPlusIcon />
-            )}
-          </span>
-        </button>
+            </button>
+          </TripFabAnchor>
+        ) : (
+          <button
+            type="button"
+            onClick={onFabClick}
+            disabled={fabLoading}
+            className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[122] flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 p-0 text-white shadow-lg shadow-slate-900/25 ring-0 outline-none touch-manipulation [appearance:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:opacity-85"
+            aria-label={fabAriaLabel}
+            aria-expanded={actionsOpen}
+          >
+            <span className="pointer-events-none flex h-5 w-5 items-center justify-center">
+              {fabLoading ? (
+                <span className="grid h-5 w-5 grid-cols-3 place-items-center gap-1" aria-hidden>
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:0ms]" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:140ms]" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
+                </span>
+              ) : (
+                <FabPlusIcon />
+              )}
+            </span>
+          </button>
+        )
       ) : null}
 
       <nav

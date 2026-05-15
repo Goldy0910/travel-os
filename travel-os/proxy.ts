@@ -35,11 +35,9 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  if (
-    pathname.startsWith("/app") &&
-    pathname !== "/app/login" &&
-    !user
-  ) {
+  const isPublicAppRoute =
+    pathname === "/app/login" || pathname === "/app/create-trip";
+  if (pathname.startsWith("/app") && !isPublicAppRoute && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/app/login";
     const returnTo = `${pathname}${request.nextUrl.search}`;
