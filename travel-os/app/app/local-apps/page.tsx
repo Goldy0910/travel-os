@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchTripsViaMembership } from "@/lib/trip-membership";
 import { redirect } from "next/navigation";
 import { pickFirstString, type TripRecord } from "@/app/app/_lib/trip-formatters";
+import { pickSearchParam } from "@/app/app/_lib/search-params";
 import { selectPrimaryTrip } from "@/app/app/_lib/use-primary-trip";
 import LocalAppsClient from "@/app/app/local-apps/_components/LocalAppsClient";
 import type { LocalAppsTripOption } from "@/app/app/local-apps/_lib/types";
@@ -12,7 +13,12 @@ function extractYmd(raw: string): string {
   return m?.[1] ?? "";
 }
 
-export default async function LocalAppsPage() {
+type LocalAppsPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function LocalAppsPage({ searchParams }: LocalAppsPageProps) {
+  const query = (await searchParams) ?? {};
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -45,7 +51,9 @@ export default async function LocalAppsPage() {
     endDate: "",
   };
   const finalTrips = tripOptions.length > 0 ? tripOptions : [fallbackTrip];
+  const requestedTripId = pickSearchParam(query, "trip");
   const initialTripId =
+    (requestedTripId && finalTrips.some((trip) => trip.id === requestedTripId) ? requestedTripId : null) ??
     (primaryTripId && finalTrips.some((trip) => trip.id === primaryTripId) ? primaryTripId : null) ??
     finalTrips[0]!.id;
 

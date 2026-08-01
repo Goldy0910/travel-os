@@ -7,6 +7,7 @@ import { SetAppHeader } from "@/components/AppHeader";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchTripsViaMembership } from "@/lib/trip-membership";
 import { redirect } from "next/navigation";
+import { pickSearchParam } from "@/app/app/_lib/search-params";
 
 function extractYmd(raw: string): string {
   const match = /^(\d{4}-\d{2}-\d{2})/.exec(raw.trim());
@@ -40,7 +41,12 @@ function selectUpcomingTripId(trips: TripVisa3Option[]): string | null {
   return upcoming?.id ?? null;
 }
 
-export default async function Visa3Page() {
+type Visa3PageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function Visa3Page({ searchParams }: Visa3PageProps) {
+  const query = (await searchParams) ?? {};
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -75,7 +81,12 @@ export default async function Visa3Page() {
 
   const upcomingTripId = selectUpcomingTripId(tripOptions);
   const { tripId: primaryTripId } = selectPrimaryTrip(trips);
-  const defaultTripId = upcomingTripId ?? primaryTripId ?? tripOptions[0]?.id ?? "";
+  const requestedTripId = pickSearchParam(query, "trip");
+  const heuristicTripId = upcomingTripId ?? primaryTripId ?? tripOptions[0]?.id ?? "";
+  const defaultTripId =
+    requestedTripId && tripOptions.some((t) => t.id === requestedTripId)
+      ? requestedTripId
+      : heuristicTripId;
 
   if (!tripOptions.length || !defaultTripId) {
     return (

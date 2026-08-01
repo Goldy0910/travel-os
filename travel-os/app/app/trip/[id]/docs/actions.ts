@@ -1,17 +1,11 @@
 "use server";
 
-import {
-  actorDisplayName,
-  formatDocumentUploadedAction,
-  insertTripActivityLog,
-} from "@/lib/activity-log";
+import { persistDocumentRecord } from "@/lib/documents/persist";
 import { actionError, actionSuccess, type FormActionResult } from "@/lib/form-action-result";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isTripMember } from "@/lib/trip-membership";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
-const DOCS_BUCKET = process.env.NEXT_PUBLIC_SUPABASE_DOCS_BUCKET || "trip-docs";
 
 export async function saveDocumentRecord(input: {
   tripId: string;
@@ -27,36 +21,15 @@ export async function saveDocumentRecord(input: {
     redirect("/app/login");
   }
 
-  const expectedPrefix = `${user.id}/${input.tripId}/`;
-  if (!input.filePath.startsWith(expectedPrefix)) {
-    return actionError("Invalid upload path.");
-  }
-
   const allowed = await isTripMember(supabase, input.tripId, user.id);
   if (!allowed) {
     return actionError("Trip not found or access denied.");
   }
 
-  const { data: publicUrlData } = supabase.storage
-    .from(DOCS_BUCKET)
-    .getPublicUrl(input.filePath);
-
-  const { error: insertError } = await supabase.from("documents").insert({
-    trip_id: input.tripId,
-    user_id: user.id,
-    file_name: input.fileName,
-    file_url: publicUrlData.publicUrl,
-  });
-
-  if (insertError) {
-    return actionError(insertError.message);
+  const result = await persistDocumentRecord(supabase, user, input);
+  if (!result.ok) {
+    return actionError(result.error);
   }
-
-  await insertTripActivityLog(supabase, {
-    tripId: input.tripId,
-    userId: user.id,
-    action: formatDocumentUploadedAction(actorDisplayName(user), input.fileName),
-  });
 
   revalidatePath(`/app/trip/${input.tripId}`);
   revalidatePath(`/app/trip/${input.tripId}/docs`);

@@ -60,6 +60,9 @@ function defaultHeaderForPath(pathname: string): AppHeaderOverride {
   if (path === "/app/expenses") {
     return { title: "Expenses", showBack: true };
   }
+  if (path === "/app/chat") {
+    return { title: "Chat", showBack: true };
+  }
 
   const m = /^\/app\/trip\/[^/]+\/(docs|expenses|members|chat|guides)$/.exec(path);
   if (m) {
@@ -122,7 +125,7 @@ export function AppHeader() {
       style={{ minHeight: HEADER_H }}
     >
       <div
-        className="mx-auto flex h-14 max-w-md items-center gap-2 px-4 pt-[max(0px,env(safe-area-inset-top))]"
+        className="travel-os-content flex h-14 items-center gap-2 px-4 pt-[max(0px,env(safe-area-inset-top))] md:px-8"
         style={{ minHeight: HEADER_H }}
       >
         <div className="flex w-10 shrink-0 justify-start">

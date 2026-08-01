@@ -1,4 +1,8 @@
 import type { AiTripContext, BuildAiContextInput, ContextActivity } from "@/lib/ai/types";
+import {
+  EMPTY_USER_TRAVEL_MEMORY_FIELDS,
+  type UserTravelMemoryFields,
+} from "@/lib/user-travel-memory/types";
 
 function normalizeActivity(activity: ContextActivity): ContextActivity | null {
   const title = activity.title?.trim();
@@ -24,10 +28,22 @@ export function buildAiTripContext(input: BuildAiContextInput): AiTripContext {
     completedActivities: activities.filter((activity) => activity.state === "completed"),
     skippedActivities: activities.filter((activity) => activity.state === "skipped"),
     travelerPreferences: input.travelerPreferences ?? {},
+    /** Cross-trip layer — kept separate from trip-scoped travelerPreferences. */
+    userTravelMemory: input.userTravelMemory ?? { ...EMPTY_USER_TRAVEL_MEMORY_FIELDS },
     currentTimeIso: (input.currentTime ?? new Date()).toISOString(),
     cityOrLocation: input.cityOrLocation?.trim() || input.destination?.trim() || "Unknown location",
     weather: { summary: input.weatherPlaceholder?.trim() || "Weather unavailable" },
     budget: input.budget ?? { level: "unknown" },
     transportMode: input.transportMode ?? "unknown",
+  };
+}
+
+export function attachUserTravelMemoryToContext(
+  context: AiTripContext,
+  userTravelMemory: UserTravelMemoryFields | null | undefined,
+): AiTripContext {
+  return {
+    ...context,
+    userTravelMemory: userTravelMemory ?? { ...EMPTY_USER_TRAVEL_MEMORY_FIELDS },
   };
 }

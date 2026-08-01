@@ -138,7 +138,7 @@ export default async function TripsPage() {
 
   return (
     <main className="w-full bg-slate-50 px-4 py-5 pb-[calc(var(--travel-os-bottom-nav-h)+5rem)] sm:py-6 sm:pb-[calc(var(--travel-os-bottom-nav-h)+5.5rem)]">
-      <div className="mx-auto w-full max-w-[390px] space-y-5">
+      <div className="travel-os-content space-y-5 md:px-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Trips</h1>
           <p className="mt-1 text-sm text-slate-600">

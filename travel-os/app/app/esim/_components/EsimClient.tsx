@@ -49,7 +49,7 @@ export default function EsimClient({ trips, initialTripId }: Props) {
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 pb-24 pt-4">
-      <div className="mx-auto w-full max-w-md space-y-4">
+      <div className="travel-os-content space-y-4 md:px-4">
         <section className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
           <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
             Trip destination

@@ -1,7 +1,8 @@
 "use client";
 
 import BottomSheetModal from "@/app/app/_components/bottom-sheet-modal";
-import { useTripItineraryAssistantOptional } from "./trip-itinerary-assistant-context";
+import ItineraryEditProposalCard from "@/app/app/chat/_components/itinerary-edit-proposal-card";
+import type { ItineraryEditProposal } from "@/lib/chat/itinerary-edit-types";
 import { Send, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
@@ -21,6 +22,7 @@ type AssistantMessage = {
   role: "assistant" | "user";
   text: string;
   label?: string;
+  proposal?: ItineraryEditProposal | null;
 };
 
 export type AiSuggestionCard = {
@@ -81,7 +83,6 @@ export default function ItineraryAiAssistant({
   onSuggestion,
 }: Props) {
   const router = useRouter();
-  const assistantCtx = useTripItineraryAssistantOptional();
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [typing, setTyping] = useState(false);
@@ -92,13 +93,6 @@ export default function ItineraryAiAssistant({
   const [lastRevisionId, setLastRevisionId] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!assistantCtx) return;
-    assistantCtx.registerOpenAssistant(() => setOpen(true));
-    return () => assistantCtx.registerOpenAssistant(null);
-  }, [assistantCtx]);
-
   const [messages, setMessages] = useState<AssistantMessage[]>([
     {
       id: "assistant-welcome",
@@ -195,6 +189,22 @@ export default function ItineraryAiAssistant({
             ? data.error
             : "I couldn't answer that right now.";
       await pushAssistantMessage(assistantText || "I couldn't answer that right now.");
+      const proposalRaw =
+        response.ok && data.proposal && typeof data.proposal === "object"
+          ? (data.proposal as ItineraryEditProposal)
+          : null;
+      if (proposalRaw?.edits?.length) {
+        setMessages((prev) => {
+          const next = [...prev];
+          for (let i = next.length - 1; i >= 0; i--) {
+            if (next[i]?.role === "assistant") {
+              next[i] = { ...next[i]!, proposal: proposalRaw };
+              break;
+            }
+          }
+          return next;
+        });
+      }
       if (response.ok && data.applied === true) {
         const revisionId = typeof data.revisionId === "string" ? data.revisionId : null;
         if (revisionId) setLastRevisionId(revisionId);
@@ -443,20 +453,17 @@ export default function ItineraryAiAssistant({
 
   return (
     <>
-      {!assistantCtx ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--travel-os-bottom-nav-h)+0.75rem)] z-[130]">
-          <div className="mx-auto flex w-full max-w-[390px] justify-end px-4 pointer-events-none">
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-900/25 active:scale-95 touch-manipulation"
-              aria-label="AI Assistant"
-            >
-              <Sparkles className="h-5 w-5" aria-hidden />
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <div className="fixed bottom-[calc(var(--travel-os-fab-bottom)+4.75rem)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[130]">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex h-14 min-w-14 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-4 text-sm font-semibold text-white shadow-xl shadow-indigo-900/30 transition-transform duration-200 hover:scale-[1.02] active:scale-95"
+          aria-label="Open AI itinerary assistant"
+        >
+          <Sparkles className="h-4 w-4" aria-hidden />
+          <span className="hidden sm:inline">AI Assistant</span>
+        </button>
+      </div>
 
       <BottomSheetModal
         open={open}
@@ -484,6 +491,30 @@ export default function ItineraryAiAssistant({
                   </p>
                 ) : null}
                 {message.text || "…"}
+                {message.role === "assistant" && message.proposal ? (
+                  <ItineraryEditProposalCard
+                    proposal={message.proposal}
+                    onStatusChange={(proposalId, status) => {
+                      setMessages((prev) =>
+                        prev.map((m) => {
+                          if (m.id !== message.id || !m.proposal) return m;
+                          if (m.proposal.proposalId !== proposalId) return m;
+                          return {
+                            ...m,
+                            proposal: { ...m.proposal, status },
+                          };
+                        }),
+                      );
+                      if (status === "applied") {
+                        onSuggestion({
+                          id: `s-apply-${Date.now()}`,
+                          text: "Itinerary updated from AI proposal.",
+                          tone: "success",
+                        });
+                      }
+                    }}
+                  />
+                ) : null}
               </div>
             ))}
             {typing ? (

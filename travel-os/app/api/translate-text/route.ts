@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-flash"] as const;
+import { GEMINI_GENERATE_MODELS } from "@/lib/ai/gemini-models";
 const TRANSIENT_ERROR_TEXT =
   "Translation service is busy right now. Please try again in a few seconds.";
 
@@ -113,7 +113,7 @@ ${JSON.stringify(text)}`;
   let lastHttpStatus = 502;
   let lastErrorMessage = "Translation failed";
 
-  for (const model of MODELS) {
+  for (const model of GEMINI_GENERATE_MODELS) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
       const response = await fetch(url, {

@@ -1,6 +1,9 @@
 import { SetAppHeader } from "@/components/AppHeader";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import CreateTripGate from "./create-trip-gate";
+import { pickSearchParam } from "@/app/app/_lib/search-params";
+import { getDestinationBySlug } from "@/lib/find-destination/catalog";
+import { redirect } from "next/navigation";
+import CreateTripForm from "./create-trip-form";
 import { mergeTravelPlacesFromDb } from "./travel-places-fallback";
 import type { TravelPlaceDTO } from "./travel-place-types";
 
@@ -15,13 +18,28 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
     typeof errorParam === "string" && errorParam.length > 0
       ? decodeURIComponent(errorParam)
       : "";
-
-  const placeSlug = typeof params.place === "string" ? params.place : undefined;
-  const placeQuery = typeof params.q === "string" ? params.q : undefined;
-  const daysRaw = typeof params.days === "string" ? Number.parseInt(params.days, 10) : NaN;
-  const tripDays = Number.isFinite(daysRaw) && daysRaw > 0 ? daysRaw : undefined;
+  const placeHint = pickSearchParam(params, "place");
+  const destinationHint = pickSearchParam(params, "destination");
 
   const supabase = await createSupabaseServerClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  let user = authUser;
+  if (!user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    user = session?.user ?? null;
+  }
+  if (!user) {
+    const nextQs = new URLSearchParams();
+    if (placeHint) nextQs.set("place", placeHint);
+    if (destinationHint) nextQs.set("destination", destinationHint);
+    const qs = nextQs.toString();
+    redirect(`/app/login?next=${encodeURIComponent(`/app/create-trip${qs ? `?${qs}` : ""}`)}`);
+  }
+
   const { data: placeRows } = await supabase
     .from("travel_places")
     .select("slug, primary_label, subtitle, visa_note, tags, icon_key, sort_order, canonical_location")
@@ -40,16 +58,43 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
     })),
   );
 
+  const catalogDest = placeHint ? getDestinationBySlug(placeHint) : null;
+  const matchedPlace =
+    travelPlaces.find((p) => p.slug === placeHint) ||
+    travelPlaces.find((p) => catalogDest && p.slug === catalogDest.travelPlaceSlug) ||
+    travelPlaces.find(
+      (p) =>
+        catalogDest &&
+        p.primary_label.toLowerCase() === catalogDest.name.toLowerCase(),
+    ) ||
+    travelPlaces.find(
+      (p) =>
+        destinationHint &&
+        p.canonical_location.toLowerCase().includes(destinationHint.toLowerCase()),
+    ) ||
+    null;
+
+  const initialPlaceSlug = matchedPlace?.slug ?? null;
+  const initialQuery =
+    matchedPlace?.canonical_location ||
+    (catalogDest ? `${catalogDest.name}, ${catalogDest.country}` : "") ||
+    destinationHint ||
+    "";
+
   return (
     <>
       <SetAppHeader title="Create trip" showBack />
       <main className="box-border min-h-full min-w-0 max-w-full overflow-x-hidden bg-slate-50 px-4 py-6 pb-[calc(var(--travel-os-bottom-nav-h)+7rem)]">
-        <div className="mx-auto w-full min-w-0 max-w-md space-y-4">
+        <div className="travel-os-content min-w-0 space-y-4 md:px-4">
         <div className="box-border min-w-0 max-w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-6">
             <p className="text-sm text-slate-500">New Trip</p>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900">Create trip</h1>
           </div>
+
+          {error ? (
+            <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+          ) : null}
 
           {travelPlaces.length === 0 ? (
             <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -58,15 +103,11 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
             </p>
           ) : null}
 
-          <CreateTripGate
+          <CreateTripForm
             places={travelPlaces}
             destinationsLoaded={travelPlaces.length > 0}
-            error={error}
-            initialPrefill={{
-              slug: placeSlug,
-              query: placeQuery,
-              days: tripDays,
-            }}
+            initialPlaceSlug={initialPlaceSlug}
+            initialQuery={initialQuery}
           />
         </div>
         </div>

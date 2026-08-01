@@ -12,8 +12,7 @@ export default async function TripMembersPage({
   const { id: tripId } = await params;
   const query = (await searchParams) ?? {};
   const sp = new URLSearchParams();
-  sp.set("tab", "connect");
-  sp.set("section", "members");
+  sp.set("tab", "members");
   const err = query.error;
   if (typeof err === "string" && err.length > 0) sp.set("error", err);
   redirect(`/app/trip/${tripId}?${sp.toString()}`);

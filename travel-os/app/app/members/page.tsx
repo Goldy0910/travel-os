@@ -76,7 +76,7 @@ export default async function MembersHubPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-4 pb-[calc(var(--travel-os-bottom-nav-h)+5rem)]">
-      <div className="mx-auto w-full max-w-md space-y-3">
+      <div className="travel-os-content space-y-3 md:px-4">
         <header>
           <h1 className="text-xl font-semibold text-slate-900">Members</h1>
           <p className="mt-0.5 text-xs text-slate-600">People across all your trips.</p>

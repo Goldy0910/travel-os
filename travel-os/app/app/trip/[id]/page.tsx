@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { countTripMembers, getMemberRole, isTripMember } from "@/lib/trip-membership";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import TripActivityFeed from "./_components/trip-activity-feed";
 import {
   groupCommentsByEntityId,
   memberDisplayLabel,
@@ -12,30 +13,29 @@ import {
 } from "@/lib/trip-entity-comments";
 import type { EntityCommentDTO } from "./_components/entity-comments-block";
 import JoinWelcomeBanner from "./_components/join-welcome-banner";
-import { parseMasterTripFile } from "@/lib/master-trip-file";
-import { isMissingTripMasterFilesTable } from "@/lib/supabase-schema-errors";
-import { resolveTripDisplayTitle } from "@/lib/trip-display-title";
-import {
-  ensureTripItineraryHydrated,
-  normalizedPlanFromMasterFile,
-} from "@/lib/unified-trip";
-import { getOrCacheTravelPlacePhotoUrls } from "@/lib/travel-place-photo-cache";
-import { tripNeedsPlaceEnrichment } from "@/lib/unified-trip/hydration/enrich-places";
-import type { ItineraryItemDTO } from "./_components/trip-itinerary-shell";
-import TripItineraryWorkspace from "./_components/trip-itinerary-workspace";
+import TripItineraryShell, {
+  type ItineraryItemDTO,
+} from "./_components/trip-itinerary-shell";
 import TripMembersPanel from "./_components/trip-members-panel";
 import TripGuidesPanel from "./_components/trip-guides-panel";
 import TripSwipeTabs from "./_components/trip-swipe-tabs";
 import TripTabsFallback from "./_components/trip-tabs-fallback";
-import TripChatClient from "./chat/_components/trip-chat-client";
+import AIChat from "@/app/app/chat/_components/ai-chat";
 import TripExpensesClient from "./expenses/_components/trip-expenses-client";
 import { loadTripTabPanelsData } from "./_lib/load-trip-panels-data";
-import { parseConnectSectionFromSearch, parseTripTabParam } from "./_lib/trip-tab-keys";
+import { parseTripTabParam } from "./_lib/trip-tab-keys";
 import ChecklistTab from "@/app/app/_components/ChecklistTab";
 import LanguageClient from "@/app/app/trip/[id]/language/_components/LanguageClient";
 import FoodTab from "@/components/FoodTab";
-
-
+import TripToolsPanel from "@/app/app/trip/[id]/_components/trip-tools-panel";
+import TripOverviewPanel from "@/app/app/trip/[id]/_components/trip-overview-panel";
+import { loadConversationMemory } from "@/lib/chat/memory";
+import type { ConversationMemory } from "@/lib/chat/memory-types";
+import type { Conversation, ConversationMessage } from "@/lib/chat/types";
+import {
+  ensureTripConversation,
+  loadConversationMessages,
+} from "@/lib/chat/trip-conversation";
 type TripPageProps = {
   params: Promise<{ id: string }>;
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -156,14 +156,9 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   const query = (await searchParams) ?? {};
   const showJoinWelcome =
     query.welcome === "1" || query.welcome === "true";
-  const fromRecommendation =
-    query.from === "recommendation" || query.from === "homepage";
   const rawTabQuery = pickFirstQuery(query, "tab");
-  const activeTab = parseTripTabParam(rawTabQuery);
-  const connectSection = parseConnectSectionFromSearch(
-    rawTabQuery || null,
-    pickFirstQuery(query, "section") || null,
-  );
+  const rawSectionQuery = pickFirstQuery(query, "section");
+  const activeTab = parseTripTabParam(rawTabQuery, rawSectionQuery);
   const quickAction = pickFirstQuery(query, "quickAction").trim().toLowerCase();
   const rawPrefillExpenseInr = decodeOptionalQueryParam(pickFirstQuery(query, "prefillExpenseInr")).trim();
   const parsedPrefillExpenseInr =
@@ -203,67 +198,14 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   }
 
   const trip = tripData as TripRecord;
-
-  let recommendationPlan: {
-    masterId: string;
-    version: number;
-    file: NonNullable<ReturnType<typeof parseMasterTripFile>>;
-  } | null = null;
-  const { data: masterRow, error: masterRowError } = await supabase
-    .from("trip_master_files")
-    .select("id, data, version")
-    .eq("trip_id", tripId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!isMissingTripMasterFilesTable(masterRowError) && masterRow?.id) {
-    const parsed = parseMasterTripFile(masterRow.data);
-    if (parsed) {
-      recommendationPlan = {
-        masterId: String(masterRow.id),
-        version: Number(masterRow.version) || 1,
-        file: parsed,
-      };
-    }
-  }
-
   const itinerarySetupComplete = pickTripBoolean(trip, ["itinerary_setup_complete"], true);
   const startRawEarly = pickFirstString(trip, ["start_date", "startDate", "date_from"], "");
   const endRawEarly = pickFirstString(trip, ["end_date", "endDate", "date_to"], "");
   const ymdStart = extractYMD(startRawEarly);
   const ymdEnd = extractYMD(endRawEarly);
 
-  if (recommendationPlan && ymdStart && ymdEnd) {
-    try {
-      await ensureTripItineraryHydrated(
-        supabase,
-        tripId,
-        user.id,
-        recommendationPlan.file,
-        {
-          masterTripFileId: recommendationPlan.masterId,
-          startDateYmd: ymdStart,
-          endDateYmd: ymdEnd,
-        },
-      );
-    } catch {
-      /* hydration is best-effort; workspace still loads */
-    }
-  }
-
-  const normalizedRecommendationPlan = recommendationPlan
-    ? normalizedPlanFromMasterFile(recommendationPlan.file, {
-        tripId,
-        masterTripFileId: recommendationPlan.masterId,
-      })
-    : null;
-
+  const title = pickFirstString(trip, ["title", "name", "trip_name"], "Trip");
   const location = pickFirstString(trip, ["location", "destination", "city"], "");
-  const title = resolveTripDisplayTitle({
-    storedTitle: pickFirstString(trip, ["title", "name", "trip_name"], ""),
-    location,
-    destinationName: recommendationPlan?.file.destination.name,
-    fallback: "Trip",
-  });
   const tripPlace = pickFirstString(
     trip,
     ["place", "location", "destination", "city"],
@@ -302,8 +244,19 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   };
 
   const itineraryData =
-    activeTab === "itinerary"
+    activeTab === "itinerary" || activeTab === "overview"
       ? await (async () => {
+          if (activeTab === "overview") {
+            const [memberCount, myRole] = await Promise.all([
+              countTripMembers(supabase, tripId),
+              getMemberRole(supabase, tripId, user.id),
+            ]);
+            return {
+              ...itineraryDefaults,
+              memberCount,
+              canDeleteTrip: myRole === "organizer",
+            };
+          }
           if (ymdStart && ymdEnd) {
             try {
               await pruneItineraryOutsideTripRange(supabase, tripId, ymdStart, ymdEnd);
@@ -467,10 +420,8 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     activeTab,
     expensesError: tabKeyForErrors === "expenses" ? rawError : "",
     docsSuccess,
-    docsError:
-      tabKeyForErrors === "connect" && connectSection === "docs" ? rawError : "",
-    membersError:
-      tabKeyForErrors === "connect" && connectSection === "members" ? rawError : "",
+    docsError: tabKeyForErrors === "docs" ? rawError : "",
+    membersError: tabKeyForErrors === "members" ? rawError : "",
   });
 
   const startForChecklist = pickFirstString(trip, ["start_date", "startDate", "date_from"], "");
@@ -491,27 +442,6 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("en-US", { month: "long" });
   })();
 
-  const needsPlaceEnrichment =
-    recommendationPlan != null
-      ? await tripNeedsPlaceEnrichment(supabase, tripId)
-      : false;
-
-  const heroLocation =
-    recommendationPlan?.file.destination.canonicalLocation ||
-    tripPlace ||
-    location ||
-    title;
-  const heroPhotoMap = heroLocation
-    ? await getOrCacheTravelPlacePhotoUrls(supabase, [heroLocation])
-    : new Map<string, string>();
-  const heroImageUrl = heroPhotoMap.get(heroLocation) ?? null;
-
-  const showItineraryHydrationSkeleton =
-    fromRecommendation &&
-    itinerarySetupComplete &&
-    !itineraryData.hasActivities &&
-    recommendationPlan != null;
-
   const checklistActivities: string[] = [];
   if (activeTab === "checklist") {
     const { data: actRows } = await supabase
@@ -526,49 +456,118 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     }
   }
 
+  let tripAiConversation: Conversation | null = null;
+  let tripAiMessages: ConversationMessage[] = [];
+  let tripAiMemory: ConversationMemory | null = null;
+  let tripAiError = "";
+  if (activeTab === "chat") {
+    const ensured = await ensureTripConversation(supabase, {
+      tripId,
+      userId: user.id,
+      title: title || location || "Trip chat",
+    });
+    if (!ensured.ok) {
+      tripAiError = ensured.error;
+    } else {
+      tripAiConversation = {
+        id: ensured.conversation.id,
+        user_id: ensured.conversation.user_id,
+        title: ensured.conversation.title,
+        created_at: ensured.conversation.created_at,
+        updated_at: ensured.conversation.updated_at,
+        trip_id: ensured.conversation.trip_id,
+      };
+      const loaded = await loadConversationMessages(supabase, ensured.conversation.id);
+      tripAiMessages = (loaded.messages ?? []).map((row) => ({
+        id: String(row.id),
+        conversation_id: String(row.conversation_id),
+        role: row.role as ConversationMessage["role"],
+        content: String(row.content ?? ""),
+        metadata:
+          row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+            ? (row.metadata as Record<string, unknown>)
+            : {},
+        created_at: String(row.created_at),
+      }));
+      tripAiMemory = await loadConversationMemory(supabase, ensured.conversation.id);
+    }
+  }
+
   return (
     <>
       <SetAppHeader title={title} showBack />
-      <main className="flex w-full flex-col bg-[#f4f4f0] pb-[var(--travel-os-workspace-scroll-pad)]">
-        <div className="mx-auto flex w-full max-w-[390px] flex-col">
+      <main className="flex w-full flex-col bg-[#f4f4f0] pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]">
+        <div className="travel-os-content flex flex-col md:px-4">
           <Suspense fallback={<TripTabsFallback />}>
             <TripSwipeTabs
+              chat={
+                activeTab === "chat" ? (
+                  tripAiConversation ? (
+                    <AIChat
+                      tripId={tripId}
+                      tripScoped
+                      initialConversations={[tripAiConversation]}
+                      initialConversationId={tripAiConversation.id}
+                      initialMessages={tripAiMessages}
+                      initialMemory={tripAiMemory}
+                    />
+                  ) : (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-5 text-sm text-amber-950">
+                      <p className="font-medium">Trip conversation unavailable</p>
+                      <p className="mt-2 text-amber-900/80">
+                        {tripAiError ||
+                          "Run migration 20260513_conversations_trip_ownership.sql, then reload."}
+                      </p>
+                    </div>
+                  )
+                ) : null
+              }
+              overview={
+                activeTab === "overview" ? (
+                  <div className="space-y-5">
+                    {showJoinWelcome ? (
+                      <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
+                    ) : null}
+                    <TripOverviewPanel
+                      tripId={tripId}
+                      tripTitle={title}
+                      locationLabel={location || tripPlace}
+                      dateRangeLabel={dateRangeLabel}
+                      memberCount={itineraryData.memberCount}
+                      canDeleteTrip={itineraryData.canDeleteTrip}
+                      tripEditDefaults={tripEditDefaults}
+                    />
+                  </div>
+                ) : null
+              }
               itinerary={
                 activeTab === "itinerary" ? (
-                  <TripItineraryWorkspace
-                    destinationName={
-                      recommendationPlan?.file.destination.name || title
-                    }
-                    heroImageUrl={heroImageUrl}
-                    plan={normalizedRecommendationPlan}
-                    masterFile={recommendationPlan?.file ?? null}
-                    masterId={recommendationPlan?.masterId ?? null}
-                    masterVersion={recommendationPlan?.version}
-                    needsPlaceEnrichment={needsPlaceEnrichment}
-                    showHydrationSkeleton={showItineraryHydrationSkeleton}
-                    showJoinWelcome={showJoinWelcome}
-                    welcomeBanner={
+                  <div className="space-y-5">
+                    {showJoinWelcome ? (
                       <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
-                    }
-                    shellProps={{
-                      tripId,
-                      tripTitle: title,
-                      dateRangeLabel,
-                      memberCount: itineraryData.memberCount,
-                      canDeleteTrip: itineraryData.canDeleteTrip,
-                      tripEditDefaults,
-                      orderedDates: itineraryData.orderedDates,
-                      grouped: itineraryData.grouped,
-                      initialError: itineraryError,
-                      defaultDateForAdd: itineraryData.defaultDateForAdd,
-                      activityCommentsByItemId: itineraryData.activityCommentsByItemId,
-                      activityStateByItemId: itineraryData.activityStateByItemId,
-                      currentUserId: user.id,
-                      memberLabelByUserId: itineraryData.memberLabelByUserId,
-                      autoOpenAddActivity: quickAction === "activity",
-                      itinerarySetupComplete,
-                    }}
-                  />
+                    ) : null}
+                    <TripItineraryShell
+                      tripId={tripId}
+                      tripTitle={title}
+                      dateRangeLabel={dateRangeLabel}
+                      memberCount={itineraryData.memberCount}
+                      canDeleteTrip={itineraryData.canDeleteTrip}
+                      tripEditDefaults={tripEditDefaults}
+                      orderedDates={itineraryData.orderedDates}
+                      grouped={itineraryData.grouped}
+                      initialError={itineraryError}
+                      defaultDateForAdd={itineraryData.defaultDateForAdd}
+                      activityCommentsByItemId={itineraryData.activityCommentsByItemId}
+                      activityStateByItemId={itineraryData.activityStateByItemId}
+                      currentUserId={user.id}
+                      memberLabelByUserId={itineraryData.memberLabelByUserId}
+                      autoOpenAddActivity={quickAction === "activity"}
+                      itinerarySetupComplete={itinerarySetupComplete}
+                    />
+                    {itinerarySetupComplete && itineraryData.hasActivities ? (
+                      <TripActivityFeed tripId={tripId} />
+                    ) : null}
+                  </div>
                 ) : null
               }
               expenses={
@@ -581,18 +580,11 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                   />
                 ) : null
               }
-              connectChat={
-                activeTab === "connect" ? (
-                  <TripChatClient
-                    tripId={tripId}
-                    currentUserId={user.id}
-                    initialMessages={panels.chat.initialMessages}
-                    memberLabelByUserId={panels.chat.memberLabelByUserId}
-                  />
-                ) : null
+              members={
+                activeTab === "members" ? <TripMembersPanel {...panels.members} /> : null
               }
-              connectDocsProps={
-                activeTab === "connect"
+              docsProps={
+                activeTab === "docs"
                   ? {
                       tripId,
                       ...panels.docs,
@@ -601,8 +593,14 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                   : null
               }
               guides={<TripGuidesPanel bundle={guidesBundle} destinationLabel={tripPlace || location} />}
-              connectMembers={
-                activeTab === "connect" ? <TripMembersPanel {...panels.members} /> : null
+              language={
+                activeTab === "language" ? (
+                  <LanguageClient
+                    tripId={tripId}
+                    tripTitle={title}
+                    destination={tripPlace || location || title}
+                  />
+                ) : null
               }
               checklist={
                 activeTab === "checklist" ? (
@@ -624,15 +622,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                   />
                 ) : null
               }
-              language={
-                activeTab === "language" ? (
-                  <LanguageClient
-                    tripId={tripId}
-                    tripTitle={title}
-                    destination={tripPlace || location || title}
-                  />
-                ) : null
-              }
+              tools={activeTab === "tools" ? <TripToolsPanel tripId={tripId} /> : null}
             />
           </Suspense>
         </div>

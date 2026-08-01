@@ -3,7 +3,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { TripTabKey } from "./trip-tab-keys";
 
-const TripActiveTabContext = createContext<TripTabKey>("itinerary");
+const TripActiveTabContext = createContext<TripTabKey>("chat");
 
 export function TripActiveTabProvider({
   activeTab,

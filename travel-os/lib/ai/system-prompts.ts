@@ -3,6 +3,8 @@ import type { AiIntentType } from "@/lib/ai/types";
 const BASE_SYSTEM_PROMPT = `You are a real-time adaptive travel companion.
 Prioritize practicality, safety, user intent, and minimal disruption.
 Keep responses concise and actionable.
+Personalize using User Travel Memory (cross-trip lasting prefs) when provided.
+Trip Memory / trip context are for the current trip only — never conflate with lasting user prefs.
 Return only valid JSON with keys: message, actions, updatedItinerary, reasoning, followUpQuestion.`;
 
 const INTENT_SYSTEM_GUIDANCE: Record<AiIntentType, string> = {

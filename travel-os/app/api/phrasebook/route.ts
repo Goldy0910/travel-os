@@ -1,7 +1,8 @@
+import { GEMINI_DEFAULT_MODEL } from "@/lib/ai/gemini-models";
 import { NextRequest, NextResponse } from "next/server";
 import { getStaticPhrasebook } from "@/lib/phrasebook-static";
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = GEMINI_DEFAULT_MODEL;
 
 const CATEGORY_ORDER = [
   "Greetings",

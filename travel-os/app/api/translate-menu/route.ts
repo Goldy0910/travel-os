@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const GEMINI_MODELS = [
-  "gemini-2.5-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-1.5-flash",
-] as const;
+import { GEMINI_GENERATE_MODELS } from "@/lib/ai/gemini-models";
 
 function extractText(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
@@ -60,7 +56,7 @@ Return ONLY a JSON array. No markdown, no explanation. Format:
   { "original": "original text", "translated": "translated text", "price": "price or null", "category": "food category" }
 ]`;
 
-  for (const model of GEMINI_MODELS) {
+  for (const model of GEMINI_GENERATE_MODELS) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const response = await fetch(url, {
       method: "POST",

@@ -59,6 +59,16 @@ export type ContextActivity = {
   estimatedDurationMinutes?: number;
   estimatedCost?: number;
 };
+export type UserTravelMemoryContext = {
+  favorite_destinations: string[];
+  hotel_type: string | null;
+  budget_range: string | null;
+  travel_style: string | null;
+  preferred_airlines: string[];
+  preferred_food: string[];
+  travel_pace: string | null;
+};
+
 export type AiTripContext = {
   tripId: string;
   tripTitle: string;
@@ -68,7 +78,13 @@ export type AiTripContext = {
   tripEndDate?: string | null;
   completedActivities: ContextActivity[];
   skippedActivities: ContextActivity[];
+  /** Trip-scoped preferences for this companion session. */
   travelerPreferences: TravelerPreferences;
+  /**
+   * Cross-trip User Travel Memory — separate from travelerPreferences / trip_memory.
+   * Do not merge trip facts into this layer.
+   */
+  userTravelMemory: UserTravelMemoryContext;
   currentTimeIso: string;
   cityOrLocation: string;
   weather: { summary: string; temperatureC?: number };
@@ -84,6 +100,7 @@ export type BuildAiContextInput = {
   tripEndDate?: string | null;
   activities?: ContextActivity[];
   travelerPreferences?: TravelerPreferences;
+  userTravelMemory?: UserTravelMemoryContext;
   currentTime?: Date;
   cityOrLocation?: string | null;
   weatherPlaceholder?: string;

@@ -111,7 +111,7 @@ export default async function ActivityDetailsPage({ params }: Props) {
   return (
     <>
       <SetAppHeader title="Activity details" showBack />
-      <main className="mx-auto w-full max-w-md space-y-4 bg-slate-50 px-4 pb-[calc(var(--travel-os-bottom-nav-h)+5rem)] pt-3">
+      <main className="travel-os-content space-y-4 bg-slate-50 px-4 pb-[calc(var(--travel-os-bottom-nav-h)+5rem)] pt-3 md:px-8">
         <Link
           href={`/app/trip/${encodeURIComponent(tripId)}?tab=itinerary`}
           className="inline-flex min-h-10 items-center text-sm font-semibold text-slate-700"

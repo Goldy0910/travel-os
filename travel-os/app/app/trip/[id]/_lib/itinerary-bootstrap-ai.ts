@@ -1,3 +1,5 @@
+import { GEMINI_GENERATE_MODELS } from "@/lib/ai/gemini-models";
+
 type AiActivity = {
   date: string;
   title: string;
@@ -6,11 +8,6 @@ type AiActivity = {
   notes: string | null;
 };
 
-const GEMINI_MODELS = [
-  "gemini-2.5-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-1.5-flash",
-] as const;
 
 type ExtractedPdfActivity = {
   date?: string | null;
@@ -191,7 +188,7 @@ async function callGeminiText(prompt: string, inlinePdfBase64?: string): Promise
 
   let lastError = "Gemini response unavailable";
   let lastModel = "";
-  for (const model of GEMINI_MODELS) {
+  for (const model of GEMINI_GENERATE_MODELS) {
     lastModel = model;
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,

@@ -3,11 +3,17 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { fetchTripsViaMembership } from "@/lib/trip-membership";
 import { redirect } from "next/navigation";
 import { pickFirstString, type TripRecord } from "@/app/app/_lib/trip-formatters";
+import { pickSearchParam } from "@/app/app/_lib/search-params";
 import { selectPrimaryTrip } from "@/app/app/_lib/use-primary-trip";
 import EsimClient from "@/app/app/esim/_components/EsimClient";
 import type { EsimTripOption } from "@/app/app/esim/_lib/types";
 
-export default async function EsimPage() {
+type EsimPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function EsimPage({ searchParams }: EsimPageProps) {
+  const query = (await searchParams) ?? {};
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -37,7 +43,9 @@ export default async function EsimPage() {
     destination: "Destination",
   };
   const finalTrips = tripOptions.length > 0 ? tripOptions : [fallbackTrip];
+  const requestedTripId = pickSearchParam(query, "trip");
   const initialTripId =
+    (requestedTripId && finalTrips.some((trip) => trip.id === requestedTripId) ? requestedTripId : null) ??
     (primaryTripId && finalTrips.some((trip) => trip.id === primaryTripId) ? primaryTripId : null) ??
     finalTrips[0]!.id;
 

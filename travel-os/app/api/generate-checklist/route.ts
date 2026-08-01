@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { GEMINI_GENERATE_MODELS } from "@/lib/ai/gemini-models";
 const ALLOWED = new Set(["documents", "clothes", "electronics", "health", "toiletries", "misc"]);
 
 /**
- * Try in order for generativelanguage.googleapis.com v1beta :generateContent.
- * Avoid gemini-1.5-flash-8b — not exposed for generateContent on v1beta (404).
- * See: https://ai.google.dev/gemini-api/docs/models
+ * Model fallbacks: see `GEMINI_GENERATE_MODELS` in `@/lib/ai/gemini-models`.
  */
-const GEMINI_MODELS = [
-  "gemini-2.5-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-1.5-flash",
-] as const;
 
 function normalizeCategory(raw: unknown): string {
   const s = typeof raw === "string" ? raw.trim().toLowerCase() : "";
@@ -85,7 +79,7 @@ Include destination-specific items (e.g. sunscreen for beach, rain jacket for mo
 
   let lastFailure: { status: number; model: string; message: string; raw?: unknown } | null = null;
 
-  for (const model of GEMINI_MODELS) {
+  for (const model of GEMINI_GENERATE_MODELS) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const response = await fetch(url, {
       method: "POST",
@@ -179,7 +173,7 @@ Include destination-specific items (e.g. sunscreen for beach, rain jacket for mo
       error: lastFailure
         ? `${lastFailure.message} (last attempt: ${lastFailure.model})`
         : "Gemini request failed.",
-      hint: `${hint} Models attempted: ${GEMINI_MODELS.join(", ")}.`,
+      hint: `${hint} Models attempted: ${GEMINI_GENERATE_MODELS.join(", ")}.`,
       items: [],
       ...(process.env.NODE_ENV === "development" && lastFailure?.raw
         ? { detail: lastFailure.raw }

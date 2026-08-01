@@ -282,7 +282,7 @@ export default function TripChatClient({
   return (
     <div className="flex flex-col bg-slate-50">
       <div className="px-4 pt-3">
-        <div className="mx-auto w-full max-w-md rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
+        <div className="travel-os-content rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
           <p className="text-sm font-semibold text-sky-900">Keep the group in sync instantly</p>
           <p className="mt-1 text-xs leading-relaxed text-sky-800">
             Use chat for quick decisions, sharing updates, and links so everyone sees trip communication in one thread.
@@ -295,7 +295,7 @@ export default function TripChatClient({
         aria-live="polite"
         aria-relevant="additions"
       >
-        <div className="mx-auto flex w-full max-w-md flex-col gap-3 pb-2">
+        <div className="travel-os-content flex flex-col gap-3 pb-2">
           {messages.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
               <p className="text-sm font-medium text-slate-700">
@@ -390,16 +390,16 @@ export default function TripChatClient({
         {sendError ? (
           <p
             role="alert"
-            className="mx-auto mb-2 max-w-md rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-left text-xs text-rose-800"
+            className="travel-os-content mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-left text-xs text-rose-800"
           >
             {sendError}
           </p>
         ) : (
-          <p className="mx-auto mb-2 max-w-md text-center text-xs font-medium text-slate-500">
+          <p className="travel-os-content mb-2 text-center text-xs font-medium text-slate-500">
             Message this trip — appears for everyone on the trip
           </p>
         )}
-        <div className="mx-auto flex w-full max-w-md items-end gap-2">
+        <div className="travel-os-content flex items-end gap-2">
           <label htmlFor="trip-chat-input" className="sr-only">
             Message
           </label>

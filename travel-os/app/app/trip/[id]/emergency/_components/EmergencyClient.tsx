@@ -15,7 +15,7 @@ export default function EmergencyClient({ tripId, tripTitle, destination }: Prop
 
   return (
     <div className="min-h-0 bg-[#f4f4f0] pb-8" data-trip-id={tripId}>
-      <div className="mx-auto flex max-w-[390px] flex-col gap-4 px-4 py-3">
+      <div className="travel-os-content flex flex-col gap-4 px-4 py-3 md:px-8">
         <p className="sr-only">
           {tripTitle} — emergency and safety for {destination}
         </p>

@@ -53,6 +53,35 @@ function persistInviteFromUrl() {
 
 const MIN_PASSWORD_LEN = 6;
 
+function formatAuthError(error: unknown): string {
+  const msg =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" &&
+          error != null &&
+          "message" in error &&
+          typeof (error as { message: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "";
+  const name =
+    typeof error === "object" &&
+    error != null &&
+    "name" in error &&
+    typeof (error as { name: unknown }).name === "string"
+      ? (error as { name: string }).name
+      : "";
+  const combined = `${name} ${msg}`.toLowerCase();
+  if (
+    combined.includes("failed to fetch") ||
+    combined.includes("fetch failed") ||
+    combined.includes("networkerror") ||
+    combined.includes("authretryable")
+  ) {
+    return "Can't reach Supabase auth. Check your internet connection, and confirm NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in travel-os/.env.local point to an active project (then restart npm run dev).";
+  }
+  return msg.trim() || "Something went wrong. Try again.";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const passwordHintId = useId();
@@ -122,7 +151,7 @@ export default function LoginPage() {
       if (isSignup) {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) {
-          setErrorMessage(error.message);
+          setErrorMessage(formatAuthError(error));
           return;
         }
         if (data.session) {
@@ -164,7 +193,7 @@ export default function LoginPage() {
         password,
       });
       if (error) {
-        setErrorMessage(error.message);
+        setErrorMessage(formatAuthError(error));
         return;
       }
       try {
@@ -176,9 +205,7 @@ export default function LoginPage() {
         setErrorMessage("Couldn’t open the app. Try again.");
       }
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Something went wrong. Try again.",
-      );
+      setErrorMessage(formatAuthError(err));
     } finally {
       if (!keepLoadingUntilUnmount) {
         setIsSubmitting(false);

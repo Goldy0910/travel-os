@@ -187,11 +187,12 @@ export async function loadTripTabPanelsData(
   },
 ): Promise<TripTabPanelsData> {
   const wantsExpenses = query.activeTab === "expenses";
-  const wantsConnect = query.activeTab === "connect";
-  const wantsDocs = wantsConnect;
-  const wantsChat = wantsConnect;
-  const wantsMembers = wantsConnect;
-  const needsRole = wantsExpenses || wantsConnect;
+  const wantsDocs = query.activeTab === "docs";
+  // Group `messages` chat is separate; trip AI conversation is loaded in page.tsx.
+  const wantsChat = false;
+  const wantsMembers = query.activeTab === "members";
+  const wantsOverview = query.activeTab === "overview";
+  const needsRole = wantsExpenses || wantsDocs || wantsMembers || wantsOverview;
 
   const memberRole = needsRole ? await getMemberRole(supabase, tripId, user.id) : null;
   const isOrganizer = memberRole === "organizer";
@@ -236,9 +237,10 @@ export async function loadTripTabPanelsData(
     ? await supabase.from("members").select("*").eq("trip_id", tripId).order("created_at", { ascending: true })
     : { data: [], error: null };
 
-  const profileRes = wantsExpenses || wantsConnect
-    ? await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle()
-    : { data: null, error: null };
+  const profileRes =
+    wantsExpenses || wantsDocs || wantsChat || wantsMembers
+      ? await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle()
+      : { data: null, error: null };
 
   const expenses = (expensesData ?? []) as ExpenseRecord[];
   const expenseIds = expenses

@@ -7,6 +7,7 @@ export * from "@/lib/ai/fallback-handler";
 export * from "@/lib/ai/intent-router";
 export * from "@/lib/ai/itinerary-optimization-engine";
 export * from "@/lib/ai/itinerary-revision-service";
+export * from "@/lib/ai/apply-itinerary-revisions";
 export * from "@/lib/ai/optimization-helpers";
 export * from "@/lib/ai/optimization-route-handler";
 export * from "@/lib/ai/optimization-service";

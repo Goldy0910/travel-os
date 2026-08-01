@@ -1,6 +1,7 @@
 "use server";
 
 import { getFallbackTravelPlaceBySlug } from "@/app/app/create-trip/travel-places-fallback";
+import { ensureTripConversation } from "@/lib/chat/trip-conversation";
 import { actionError, actionSuccess, type FormActionResult } from "@/lib/form-action-result";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
@@ -184,6 +185,13 @@ export async function createTripAction(formData: FormData): Promise<FormActionRe
   if (seedManaliStarter) {
     await seedManaliStarterItinerary(supabase, tripId, user.id, startDate, endDate);
   }
+
+  // Every trip owns exactly one AI conversation (created empty; history starts here).
+  await ensureTripConversation(supabase, {
+    tripId,
+    userId: user.id,
+    title: location,
+  });
 
   revalidatePath("/app/trips");
   revalidatePath("/app/home");

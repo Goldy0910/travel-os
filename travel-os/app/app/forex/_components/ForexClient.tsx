@@ -222,7 +222,7 @@ export default function ForexClient({ trips, initialTripId }: Props) {
 
   return (
     <main className="min-h-screen bg-slate-50 pb-[calc(var(--travel-os-bottom-nav-h)+5rem)]">
-      <div className="mx-auto w-full max-w-md space-y-3 px-4 pb-8 pt-3">
+      <div className="travel-os-content space-y-3 px-4 pb-8 pt-3 md:px-8">
         <section className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Trip</p>
           <select

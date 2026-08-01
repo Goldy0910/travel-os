@@ -192,7 +192,7 @@ export default async function ExpensesHubPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-6 pb-[calc(var(--travel-os-bottom-nav-h)+6rem)]">
-      <div className="mx-auto w-full max-w-md space-y-4">
+      <div className="travel-os-content space-y-4 md:px-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Expenses</h1>
           <p className="mt-1 text-sm text-slate-600">

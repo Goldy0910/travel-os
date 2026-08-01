@@ -4,11 +4,11 @@ import PageLoader from "@/components/ui/page-loader";
 import { TripActiveTabProvider } from "@/app/app/trip/[id]/_lib/trip-active-tab-context";
 import { TripFabRegistryProvider } from "@/app/app/trip/[id]/_lib/trip-tab-fab-registry";
 import {
-  parseConnectSectionFromSearch,
+  isDefaultTripTab,
   parseTripTabParam,
+  TRIP_TAB_BAR_KEYS,
   TRIP_TAB_KEYS,
   TRIP_TAB_LABELS,
-  type ConnectSection,
   type TripTabKey,
 } from "@/app/app/trip/[id]/_lib/trip-tab-keys";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -23,47 +23,49 @@ import {
   useTransition,
 } from "react";
 import type { TripDocsClientInputProps } from "@/app/app/trip/[id]/docs/_components/trip-docs-client";
-import TripConnectHub from "./trip-connect-hub";
+import TripDocsClient from "@/app/app/trip/[id]/docs/_components/trip-docs-client";
 
 const TAB_COUNT = TRIP_TAB_KEYS.length;
 
 type Props = {
+  chat: ReactNode;
+  overview: ReactNode;
   itinerary: ReactNode;
   expenses: ReactNode;
-  connectChat: ReactNode;
-  /** Serializable docs props; `connectDocsActive` is applied inside `TripConnectHub`. */
-  connectDocsProps: TripDocsClientInputProps | null;
-  connectMembers: ReactNode;
+  members: ReactNode;
+  docsProps: TripDocsClientInputProps | null;
   guides: ReactNode;
+  language: ReactNode;
   checklist: ReactNode;
   food: ReactNode;
-  language: ReactNode;
+  tools: ReactNode;
 };
 
 /**
  * Trip section tabs: one panel visible at a time (no horizontal swipe carousel).
  * Avoids mobile browsers treating vertical scroll as horizontal tab changes and
- * conflicts with nested horizontal strips (e.g. Explore categories).
+ * conflicts with nested horizontal strips (e.g. Guide categories).
  */
 export default function TripSwipeTabs({
+  chat,
+  overview,
   itinerary,
   expenses,
-  connectChat,
-  connectDocsProps,
-  connectMembers,
+  members,
+  docsProps,
   guides,
+  language,
   checklist,
   food,
-  language,
+  tools,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const tabKey = parseTripTabParam(searchParams.get("tab"));
+  const tabKey = parseTripTabParam(searchParams.get("tab"), searchParams.get("section"));
   const urlIndex = TRIP_TAB_KEYS.indexOf(tabKey);
   const [uiTabKey, setUiTabKey] = useState<TripTabKey>(tabKey);
-  const [uiConnectSection, setUiConnectSection] = useState<ConnectSection>("chat");
 
   const tabBarRef = useRef<HTMLDivElement>(null);
   const tabBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -73,58 +75,34 @@ export default function TripSwipeTabs({
   const [isTabPending, startTabTransition] = useTransition();
   const uiIndex = Math.max(0, TRIP_TAB_KEYS.indexOf(uiTabKey));
 
-  useLayoutEffect(() => {
-    if (parseTripTabParam(searchParams.get("tab")) !== "connect") return;
-    setUiConnectSection(
-      parseConnectSectionFromSearch(searchParams.get("tab"), searchParams.get("section")),
-    );
-  }, [searchParams]);
-
-  const pushConnectSection = useCallback(
-    (s: ConnectSection) => {
-      setUiConnectSection(s);
-      const next = new URLSearchParams(searchParams.toString());
-      next.set("tab", "connect");
-      if (s === "chat") next.delete("section");
-      else next.set("section", s);
-      const qs = next.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [pathname, router, searchParams],
-  );
-
-  const connectPanel = useMemo(() => {
-    if (connectChat == null || connectMembers == null || connectDocsProps == null) return null;
-    return (
-      <TripConnectHub
-        section={uiConnectSection}
-        onSectionChange={pushConnectSection}
-        chat={connectChat}
-        members={connectMembers}
-        docs={connectDocsProps}
-      />
-    );
-  }, [connectChat, connectDocsProps, connectMembers, pushConnectSection, uiConnectSection]);
+  const docsPanel = useMemo(() => {
+    if (docsProps == null) return null;
+    return <TripDocsClient {...docsProps} connectDocsActive />;
+  }, [docsProps]);
 
   const panels: ReactNode[] = useMemo(
-    () => [itinerary, connectPanel, checklist, expenses, language, food, guides],
-    [itinerary, connectPanel, checklist, expenses, language, food, guides],
+    () => [
+      chat,
+      overview,
+      itinerary,
+      expenses,
+      members,
+      docsPanel,
+      guides,
+      language,
+      checklist,
+      food,
+      tools,
+    ],
+    [chat, overview, itinerary, expenses, members, docsPanel, guides, language, checklist, food, tools],
   );
 
   const tabHrefByKey = useMemo(() => {
     const base = new URLSearchParams(searchParams.toString());
-    const out: Record<TripTabKey, string> = {
-      itinerary: pathname,
-      connect: pathname,
-      checklist: pathname,
-      expenses: pathname,
-      language: pathname,
-      food: pathname,
-      guides: pathname,
-    };
+    const out = {} as Record<TripTabKey, string>;
     for (const key of TRIP_TAB_KEYS) {
       const sp = new URLSearchParams(base.toString());
-      if (key === "itinerary") sp.delete("tab");
+      if (isDefaultTripTab(key)) sp.delete("tab");
       else sp.set("tab", key);
       sp.delete("section");
       const qs = sp.toString();
@@ -136,15 +114,12 @@ export default function TripSwipeTabs({
   const replaceTab = useCallback(
     (key: TripTabKey) => {
       const next = new URLSearchParams(searchParams.toString());
-      if (key === "itinerary") {
+      if (isDefaultTripTab(key)) {
         next.delete("tab");
       } else {
         next.set("tab", key);
       }
       next.delete("section");
-      if (key === "connect") {
-        setUiConnectSection("chat");
-      }
       const qs = next.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
@@ -181,8 +156,12 @@ export default function TripSwipeTabs({
     setUiTabKey(tabKey);
   }, [tabKey]);
 
-  useEffect(() => {
-    const btn = tabBtnRefs.current[uiIndex];
+  useLayoutEffect(() => {
+    const barKeyIndex = TRIP_TAB_BAR_KEYS.indexOf(
+      uiTabKey as (typeof TRIP_TAB_BAR_KEYS)[number],
+    );
+    if (barKeyIndex < 0) return;
+    const btn = tabBtnRefs.current[barKeyIndex];
     const bar = tabBarRef.current;
     if (!btn || !bar) return;
     const gr = bar.getBoundingClientRect();
@@ -192,7 +171,7 @@ export default function TripSwipeTabs({
     } else if (br.right > gr.right - 8) {
       bar.scrollTo({ left: bar.scrollLeft + (br.right - gr.right) + 16, behavior: "smooth" });
     }
-  }, [uiIndex]);
+  }, [uiTabKey]);
 
   useEffect(() => {
     const active = uiIndex;
@@ -205,7 +184,10 @@ export default function TripSwipeTabs({
     let cancelled = false;
     const schedule =
       typeof window !== "undefined" && "requestIdleCallback" in window
-        ? (cb: () => void) => (window as Window & { requestIdleCallback: (fn: () => void) => number }).requestIdleCallback(cb)
+        ? (cb: () => void) =>
+            (window as Window & { requestIdleCallback: (fn: () => void) => number }).requestIdleCallback(
+              cb,
+            )
         : (cb: () => void) => window.setTimeout(cb, 250);
     schedule(() => {
       if (cancelled) return;
@@ -216,20 +198,19 @@ export default function TripSwipeTabs({
     };
   }, [prefetchTab, tabKey, uiIndex]);
 
-  const goToIndex = useCallback(
+  const goToBarIndex = useCallback(
     (i: number) => {
-      const clamped = Math.max(0, Math.min(TAB_COUNT - 1, i));
-      const key = TRIP_TAB_KEYS[clamped]!;
+      const clamped = Math.max(0, Math.min(TRIP_TAB_BAR_KEYS.length - 1, i));
+      const key = TRIP_TAB_BAR_KEYS[clamped]!;
       if (key === uiTabKey) return;
 
       const cachedPanel = panelCacheRef.current[key];
       if (cachedPanel != null) {
         setUiTabKey(key);
         const next = new URLSearchParams(searchParams.toString());
-        if (key === "itinerary") next.delete("tab");
+        if (isDefaultTripTab(key)) next.delete("tab");
         else next.set("tab", key);
         next.delete("section");
-        if (key === "connect") setUiConnectSection("chat");
         const qs = next.toString();
         router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
         return;
@@ -241,7 +222,7 @@ export default function TripSwipeTabs({
     [pathname, replaceTab, router, searchParams, uiTabKey],
   );
 
-  const activeTabKey: TripTabKey = TRIP_TAB_KEYS[uiIndex] ?? "itinerary";
+  const activeTabKey: TripTabKey = TRIP_TAB_KEYS[uiIndex] ?? "chat";
 
   /* Tab panels: parent passes null for inactive tabs; cache last non-null tree per key for instant restore. */
   /* eslint-disable react-hooks/refs -- ref holds memoized panel trees; read/write during render keeps cache in sync with props */
@@ -255,18 +236,15 @@ export default function TripSwipeTabs({
 
   return (
     <TripActiveTabProvider activeTab={activeTabKey}>
-      <TripFabRegistryProvider
-        activeTab={activeTabKey}
-        connectSection={activeTabKey === "connect" ? uiConnectSection : null}
-      >
-        <div className="flex w-full max-w-[390px] flex-col self-center">
+      <TripFabRegistryProvider activeTab={activeTabKey}>
+        <div className="travel-os-content flex flex-col self-center">
           <nav
             ref={tabBarRef}
-            className="scrollbar-hide trip-snap-x sticky top-0 z-[115] -mx-4 flex gap-0.5 overflow-x-auto overscroll-x-contain border-b border-slate-200/90 bg-white/95 px-3 pb-0 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 [touch-action:pan-x] scroll-px-3"
+            className="scrollbar-hide sticky top-0 z-[115] -mx-4 flex gap-0.5 overflow-x-auto overscroll-x-contain border-b border-slate-200/90 bg-white/95 px-3 pb-0 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 [touch-action:pan-x]"
             aria-label="Trip sections"
           >
-            {TRIP_TAB_KEYS.map((key, i) => {
-              const active = i === uiIndex;
+            {TRIP_TAB_BAR_KEYS.map((key, i) => {
+              const active = key === uiTabKey;
               return (
                 <button
                   key={key}
@@ -280,8 +258,8 @@ export default function TripSwipeTabs({
                   id={`trip-tab-${key}`}
                   onPointerEnter={() => prefetchTab(key)}
                   onTouchStart={() => prefetchTab(key)}
-                  onClick={() => goToIndex(i)}
-                  className={`relative min-h-11 shrink-0 snap-start touch-manipulation rounded-t-lg px-3 py-3 text-[13px] transition-colors sm:px-3.5 sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ${
+                  onClick={() => goToBarIndex(i)}
+                  className={`relative min-h-11 shrink-0 touch-manipulation rounded-t-lg px-3 py-3 text-[13px] transition-colors sm:px-3.5 sm:text-sm ${
                     active
                       ? "font-semibold text-slate-900"
                       : "font-medium text-slate-500 hover:text-slate-700"
@@ -306,10 +284,7 @@ export default function TripSwipeTabs({
                 aria-live="polite"
                 aria-busy="true"
               >
-                <PageLoader
-                  message={activeTabKey === "connect" ? "Loading Connect…" : "Loading…"}
-                  className="flex-1 py-16"
-                />
+                <PageLoader message="Loading…" className="flex-1 py-16" />
               </div>
             ) : null}
             {panels.map((panel, i) => {
@@ -324,7 +299,7 @@ export default function TripSwipeTabs({
                   aria-labelledby={`trip-tab-${key}`}
                   aria-hidden={!visible}
                   hidden={!visible}
-                  className={`box-border w-full px-4 py-4 pb-[calc(var(--travel-os-bottom-nav-h)+3rem)] ${!visible ? "trip-panel-cached" : ""}`}
+                  className="box-border w-full px-4 py-4 pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]"
                 >
                   {content}
                 </section>

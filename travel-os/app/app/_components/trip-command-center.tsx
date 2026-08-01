@@ -7,7 +7,6 @@ import { fetchTripsViaMembership } from "@/lib/trip-membership";
 import { SetAppHeader } from "@/components/AppHeader";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Globe2 } from "lucide-react";
 
 type ItineraryItem = {
   id: string | number;
@@ -135,7 +134,7 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
       <>
         <SetAppHeader title="Travel Till 99" showBack={false} />
         <main className="min-h-screen bg-slate-50 px-4 py-6 pb-32">
-          <div className="mx-auto w-full max-w-md rounded-3xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
+          <div className="travel-os-content rounded-3xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
             <div className="text-4xl" aria-hidden>
               ✈️
             </div>
@@ -203,21 +202,14 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
     return true;
   });
 
-  const addExpenseHref = `/app/trip/${primaryTripId}?tab=expenses&quickAction=expense`;
   const addActivityHref = `/app/trip/${primaryTripId}?tab=itinerary&quickAction=activity`;
-  const uploadDocHref = `/app/trip/${primaryTripId}?tab=connect&section=docs&quickAction=doc`;
-  const inviteHref = `/app/trip/${primaryTripId}?tab=connect&section=members`;
-  const languageHref = `/app/trip/${primaryTripId}?tab=language`;
-  const emergencyHref = `/app/trip/${primaryTripId}/emergency`;
-  const restaurantsHref = `/app/trip/${primaryTripId}?tab=food&foodTab=discover`;
-  const menuHref = `/app/trip/${primaryTripId}?tab=food&foodTab=menu`;
 
   return (
     <>
       <SetAppHeader title="Travel Till 99" showBack={false} />
       <main className="min-h-screen bg-slate-50 pb-32 pt-4">
-        <div className="mx-auto w-full max-w-md space-y-5 px-4">
-          <section data-testid="section-today" className="space-y-4">
+        <div className="travel-os-content space-y-5 px-4 md:px-8">
+          <section data-testid="section-today" className="space-y-4 md:grid md:grid-cols-2 md:gap-5 md:space-y-0">
             <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
               <div
                 className="h-28 w-full bg-gradient-to-br from-indigo-200 via-sky-100 to-violet-100"
@@ -305,60 +297,6 @@ export default async function TripCommandCenter({ searchParams }: TripCommandCen
                 )}
               </div>
             </article>
-          </section>
-
-          <section data-testid="section-actions" className="space-y-3">
-            <h2 className="text-base font-semibold text-slate-900">Quick actions</h2>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { href: addExpenseHref, icon: "💸", label: "Add Expense" },
-                { href: addActivityHref, icon: "🗓️", label: "Add Activity" },
-                { href: uploadDocHref, icon: "📄", label: "Upload Doc" },
-                { href: inviteHref, icon: "👥", label: "Invite Member" },
-              ].map((action) => (
-                <Link
-                  key={action.label}
-                  href={action.href}
-                  prefetch
-                  className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-800 shadow-sm transition active:scale-[0.98]"
-                >
-                  <span aria-hidden>{action.icon}</span>
-                  <span>{action.label}</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          <section data-testid="section-tools" className="space-y-3">
-            <h2 className="text-base font-semibold text-slate-900">Tools</h2>
-            <div className="grid grid-cols-2 gap-2.5">
-              {[
-                { href: languageHref, icon: "🗣️", label: "Language Translator" },
-                { href: emergencyHref, icon: "🆘", label: "Emergency" },
-                { href: restaurantsHref, icon: "🍽️", label: "Restaurants" },
-                { href: menuHref, icon: "📋", label: "Menu Translator" },
-                { href: "/app/tools/visa3", icon: "", label: "Visa", Icon: Globe2 },
-                { href: "/app/esim", icon: "📶", label: "eSIM" },
-                { href: "/app/local-apps", icon: "📱", label: "Local Apps" },
-                { href: "/app/forex", icon: "💱", label: "Forex" },
-              ].map((tool) => (
-                <Link
-                  key={tool.label}
-                  href={tool.href}
-                  prefetch
-                  className="flex min-h-11 w-full items-center gap-3 rounded-2xl border border-slate-200 bg-gradient-to-br from-indigo-50 to-white px-3.5 py-3 text-left shadow-sm transition active:scale-[0.98]"
-                >
-                  {tool.Icon ? (
-                    <tool.Icon className="h-5 w-5 text-slate-700" aria-hidden />
-                  ) : (
-                    <span className="text-xl" aria-hidden>
-                      {tool.icon}
-                    </span>
-                  )}
-                  <span className="text-sm font-semibold text-slate-800">{tool.label}</span>
-                </Link>
-              ))}
-            </div>
           </section>
         </div>
         <Link

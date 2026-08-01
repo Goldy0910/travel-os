@@ -288,7 +288,7 @@ export default function Visa3Client({ trips, defaultTripId, defaultPassportCount
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-50 pb-[calc(var(--travel-os-bottom-nav-h)+5rem)]">
-      <div className="mx-auto w-full max-w-[430px] space-y-3.5 px-4 pb-8 pt-3 md:max-w-2xl">
+      <div className="travel-os-content space-y-3.5 px-4 pb-8 pt-3 md:px-8">
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="grid grid-cols-1 gap-3">
             <div className="space-y-2">

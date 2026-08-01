@@ -1,15 +1,31 @@
 import { NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildAiTripContext, runAdaptiveAi } from "@/lib/ai";
-import { createItineraryRevision } from "@/lib/ai/itinerary-revision-service";
-import type { ItineraryOptimizationActivity } from "@/lib/ai/itinerary-optimization-engine";
+import { revisionsToProposedEdits } from "@/lib/ai/apply-itinerary-revisions";
+import type { ItineraryEditIntent, ItineraryEditProposal } from "@/lib/chat/itinerary-edit-types";
 import type {
   AiStructuredResponse,
-  ItineraryRevision,
 } from "@/lib/ai/types";
+import { buildChatRetrievalContext } from "@/lib/chat/context-builder";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isTripMember } from "@/lib/trip-membership";
 import { extractYMD } from "@/lib/itinerary-trip-range";
+import { executeTool } from "@/lib/tools/execute";
+import { registerDefaultTools } from "@/lib/tools/register-defaults";
+import {
+  ensureTripMemory,
+  saveTripMemory,
+  updateTripMemoryFromUserMessage,
+  type TripMemory,
+} from "@/lib/trip-memory";
+import {
+  emptyUserTravelMemory,
+  ensureUserTravelMemory,
+  harvestUserTravelMemoryFromMessage,
+  saveUserTravelMemory,
+  type UserTravelMemory,
+} from "@/lib/user-travel-memory";
+
+registerDefaultTools();
 
 function parseYmd(input: string): string {
   const v = input.trim();
@@ -31,26 +47,6 @@ function parseTimeToMinutes(value: string | null): number | null {
   const mm = Number(m[2]);
   if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
   return hh * 60 + mm;
-}
-
-function normalizeTime(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const v = value.trim().toLowerCase();
-  if (!v) return null;
-  const m12 = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/.exec(v);
-  if (m12) {
-    let h = Number(m12[1]);
-    const min = Number(m12[2] ?? "0");
-    const ap = m12[3];
-    if (ap === "pm" && h < 12) h += 12;
-    if (ap === "am" && h === 12) h = 0;
-    if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
-      return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
-    }
-  }
-  const m24 = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(v);
-  if (m24) return `${String(Number(m24[1])).padStart(2, "0")}:${m24[2]}`;
-  return null;
 }
 
 function parseTimeFromMessage(message: string): string | null {
@@ -78,6 +74,29 @@ function isTimingUpdateRequest(message: string): boolean {
   return (
     /\b(update|change|move|shift|reschedule|set)\b/.test(text) &&
     /\btime|timing\b/.test(text)
+  );
+}
+
+/** Full regenerations go through generate_itinerary — not free-text schedules. */
+function isFullItineraryGenerationRequest(message: string): boolean {
+  const text = message.trim().toLowerCase();
+  if (!text) return false;
+  const wantsGenerate =
+    /\b(generate|create|build|make|plan|rebuild|regenerate|replace)\b/.test(text) ||
+    /\b(full|new|another)\s+(itinerary|schedule|day[- ]by[- ]day)\b/.test(text);
+  const mentionsItinerary =
+    /\b(itinerary|day[- ]by[- ]day|full\s+plan|whole\s+(trip|plan)|entire\s+(trip|plan))\b/.test(
+      text,
+    );
+  return wantsGenerate && mentionsItinerary;
+}
+
+function isReplaceExistingAffirmation(message: string, lastAssistantText: string): boolean {
+  if (!isAffirmation(message)) return false;
+  const v = lastAssistantText.toLowerCase();
+  return (
+    /replace|overwrite|regenerate|existing itinerary|replaceexisting/i.test(v) ||
+    /already has an itinerary/i.test(v)
   );
 }
 
@@ -311,167 +330,6 @@ type ContextActivityRow = {
   status: string;
 };
 
-async function ensureItineraryDayId(
-  supabase: SupabaseClient,
-  tripId: string,
-  userId: string,
-  date: string,
-): Promise<string | number | null> {
-  const { data: existingDay } = await supabase
-    .from("itinerary_days")
-    .select("id")
-    .eq("trip_id", tripId)
-    .eq("date", date)
-    .maybeSingle();
-  if (existingDay?.id != null) return existingDay.id;
-
-  const { data: newDay, error } = await supabase
-    .from("itinerary_days")
-    .insert({ trip_id: tripId, user_id: userId, date })
-    .select("id")
-    .single();
-  if (error || !newDay?.id) return null;
-  return newDay.id;
-}
-
-type ApplyResult = {
-  added: number;
-  updated: number;
-  deleted: number;
-  appliedDays: Set<string>;
-  addedTitles: string[];
-  updatedTitles: string[];
-  deletedTitles: string[];
-};
-
-async function applyAssistantRevisions(input: {
-  supabase: SupabaseClient;
-  tripId: string;
-  userId: string;
-  fallbackDate: string;
-  tripStartDate: string | null;
-  tripEndDate: string | null;
-  existingActivities: Map<string, ContextActivityRow>;
-  revisions: ItineraryRevision[];
-}): Promise<ApplyResult> {
-  const result: ApplyResult = {
-    added: 0,
-    updated: 0,
-    deleted: 0,
-    appliedDays: new Set<string>(),
-    addedTitles: [],
-    updatedTitles: [],
-    deletedTitles: [],
-  };
-
-  for (const raw of input.revisions) {
-    if (!raw || typeof raw !== "object") continue;
-
-    const day = parseYmd(typeof raw.day === "string" ? raw.day : "") || input.fallbackDate;
-    if (!day) continue;
-    if (input.tripStartDate && day < input.tripStartDate) continue;
-    if (input.tripEndDate && day > input.tripEndDate) continue;
-
-    const activityId = typeof raw.activityId === "string" ? raw.activityId.trim() : "";
-    const isExisting = activityId.length > 0 && input.existingActivities.has(activityId);
-    const state = coerceState(raw.state);
-    const title = typeof raw.title === "string" ? raw.title.trim() : "";
-    const location =
-      typeof raw.location === "string" && raw.location.trim() ? raw.location.trim() : null;
-    const time = normalizeTime(raw.time);
-
-    if (isExisting && state === "skipped") {
-      const { error } = await input.supabase
-        .from("itinerary_items")
-        .delete()
-        .eq("trip_id", input.tripId)
-        .eq("id", activityId);
-      if (!error) {
-        result.deleted += 1;
-        result.appliedDays.add(day);
-        const existingRow = input.existingActivities.get(activityId);
-        const removedTitle = existingRow?.title || title;
-        if (removedTitle) result.deletedTitles.push(removedTitle);
-      }
-      continue;
-    }
-
-    if (isExisting) {
-      const updates: Record<string, unknown> = {};
-      if (title) {
-        updates.title = title;
-        updates.activity_name = title;
-      }
-      if (location) updates.location = location;
-      if (time) updates.time = time;
-
-      if (Object.keys(updates).length === 0) continue;
-
-      const richUpdate = { ...updates, user_modified: true };
-      let { error } = await input.supabase
-        .from("itinerary_items")
-        .update(richUpdate)
-        .eq("trip_id", input.tripId)
-        .eq("id", activityId);
-      if (error) {
-        const fallback = await input.supabase
-          .from("itinerary_items")
-          .update(updates)
-          .eq("trip_id", input.tripId)
-          .eq("id", activityId);
-        error = fallback.error;
-      }
-      if (!error) {
-        result.updated += 1;
-        result.appliedDays.add(day);
-        const existingRow = input.existingActivities.get(activityId);
-        const updatedTitle = title || existingRow?.title || "";
-        if (updatedTitle) result.updatedTitles.push(updatedTitle);
-      }
-      continue;
-    }
-
-    if (state === "skipped") continue;
-    if (!title) continue;
-
-    const dayId = await ensureItineraryDayId(input.supabase, input.tripId, input.userId, day);
-
-    const richInsert: Record<string, unknown> = {
-      trip_id: input.tripId,
-      user_id: input.userId,
-      itinerary_day_id: dayId,
-      date: day,
-      activity_name: title,
-      title,
-      location: location || "Location TBD",
-      time,
-      ai_generated: true,
-      user_modified: false,
-    };
-    let { error } = await input.supabase.from("itinerary_items").insert(richInsert);
-    if (error) {
-      const fallback = await input.supabase.from("itinerary_items").insert({
-        trip_id: input.tripId,
-        user_id: input.userId,
-        itinerary_day_id: dayId,
-        date: day,
-        activity_name: title,
-        title,
-        location: location || "Location TBD",
-        time,
-      });
-      error = fallback.error;
-    }
-    if (!error) {
-      result.added += 1;
-      result.appliedDays.add(day);
-      if (title) result.addedTitles.push(title);
-    }
-  }
-
-  return result;
-}
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -489,6 +347,42 @@ export async function POST(
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const message = typeof body.message === "string" ? body.message.trim() : "";
   if (!message) return NextResponse.json({ ok: false, error: "Message is required." }, { status: 400 });
+
+  // Trip memory must be loaded before any AI response.
+  let tripMemory: TripMemory = await ensureTripMemory(supabase, tripId).catch(() => ({
+    trip_id: tripId,
+    budget: null,
+    hotel_preference: null,
+    food_preference: null,
+    flight_preference: null,
+    interests: [],
+    visited_places: [],
+    packing_preferences: [],
+    emergency_contacts: [],
+    updated_at: new Date().toISOString(),
+  }));
+  try {
+    const extracted = await updateTripMemoryFromUserMessage({
+      current: tripMemory,
+      userMessage: message,
+    });
+    tripMemory = await saveTripMemory(supabase, tripId, extracted);
+  } catch {
+    // Auto-update is best-effort
+  }
+
+  // Cross-trip user travel memory — isolated from trip_memory.
+  let userTravelMemory: UserTravelMemory = emptyUserTravelMemory(user.id);
+  try {
+    userTravelMemory = await ensureUserTravelMemory(supabase, user.id);
+    const harvested = await harvestUserTravelMemoryFromMessage({
+      current: userTravelMemory,
+      userMessage: message,
+    });
+    userTravelMemory = await saveUserTravelMemory(supabase, user.id, harvested);
+  } catch {
+    // Best-effort
+  }
 
   const date = parseYmd(typeof body.date === "string" ? body.date : "");
   const nowIso =
@@ -591,15 +485,33 @@ export async function POST(
     })),
     cityOrLocation: destination,
     weatherPlaceholder: typeof body.weatherSummary === "string" ? body.weatherSummary : "Weather unavailable",
+    userTravelMemory: {
+      favorite_destinations: userTravelMemory.favorite_destinations,
+      hotel_type: userTravelMemory.hotel_type,
+      budget_range: userTravelMemory.budget_range,
+      travel_style: userTravelMemory.travel_style,
+      preferred_airlines: userTravelMemory.preferred_airlines,
+      preferred_food: userTravelMemory.preferred_food,
+      travel_pace: userTravelMemory.travel_pace,
+    },
     travelerPreferences: {
-      interests: Array.isArray(body.preferences)
-        ? body.preferences.map((v) => String(v)).slice(0, 8)
-        : [],
+      interests: [
+        ...(Array.isArray(body.preferences)
+          ? body.preferences.map((v) => String(v)).slice(0, 8)
+          : []),
+        ...tripMemory.interests,
+      ].slice(0, 12),
       pace:
         body.tripPace === "relaxed" || body.tripPace === "balanced" || body.tripPace === "packed"
           ? body.tripPace
           : "balanced",
+      foodPreferences: tripMemory.food_preference
+        ? [tripMemory.food_preference]
+        : undefined,
     },
+    budget: tripMemory.budget
+      ? { level: "unknown", currency: tripMemory.budget }
+      : undefined,
     transportMode:
       body.transportMode === "walking" ||
       body.transportMode === "public_transport" ||
@@ -644,47 +556,77 @@ export async function POST(
           ? body.remainingActivities
           : 0,
       activities: existingActivityList,
-      preferences: Array.isArray(body.preferences)
-        ? body.preferences.map((v) => String(v)).slice(0, 8)
-        : [],
+      preferences: [
+        ...(Array.isArray(body.preferences)
+          ? body.preferences.map((v) => String(v)).slice(0, 8)
+          : []),
+        ...tripMemory.interests,
+      ].slice(0, 12),
       tripStartDate,
       tripEndDate,
     });
 
+    // Relevance-filtered slices (expenses / docs / members / guide) — shared Context Builder.
+    let retrievedContext = "";
+    try {
+      const built = await buildChatRetrievalContext({
+        supabase,
+        userId: user.id,
+        userMessage: message,
+        tripId,
+        tripMemory,
+        mode: "trip_slices",
+        // Itinerary already in compactContext — skip companion re-fetch.
+        skipCompanion: true,
+        destinationHint: destination,
+      });
+      retrievedContext = built.promptBlock;
+    } catch {
+      // Best-effort — assistant still works with compact itinerary context.
+    }
+
     const actionItems = existingActivityList.map((item) => ({ id: item.id, title: item.title }));
 
-    // Fast path: explicit "update X time to HH:mm" requests are still applied directly.
+    // Fast path: explicit "update X time to HH:mm" — propose for confirmation (do not auto-apply).
     if (isTimingUpdateRequest(message) && actionItems.length > 0) {
       const requestedTime = parseTimeFromMessage(message);
       if (requestedTime) {
         const targetId = pickTargetActivityId(message, actionItems);
         if (targetId) {
-          const richUpdate = await supabase
-            .from("itinerary_items")
-            .update({ time: requestedTime, user_modified: true })
-            .eq("trip_id", tripId)
-            .eq("id", targetId);
-          if (richUpdate.error) {
-            await supabase
-              .from("itinerary_items")
-              .update({ time: requestedTime })
-              .eq("trip_id", tripId)
-              .eq("id", targetId);
-          }
           const targetTitle =
             actionItems.find((item) => item.id === targetId)?.title ?? "activity";
+          const day = date || existingActivityMap.get(targetId)?.date || "";
+          const proposal: ItineraryEditProposal = {
+            proposalId: crypto.randomUUID(),
+            tripId,
+            intent: "move_activity",
+            summary: `Update ${targetTitle} to ${requestedTime}`,
+            rationale: "Timing change from your request",
+            edits: [
+              {
+                op: "update",
+                day,
+                activityId: targetId,
+                title: targetTitle,
+                time: requestedTime,
+                label: `Update “${targetTitle}” → ${requestedTime}`,
+              },
+            ],
+            status: "pending",
+            createdAt: new Date().toISOString(),
+          };
           const response = {
-            message: `Done. I updated ${targetTitle} to ${requestedTime}.`,
+            message: `I can update ${targetTitle} to ${requestedTime}. Confirm below to apply — nothing is saved until you tap Apply.`,
             actions: [
               {
                 type: "revise_itinerary" as const,
-                label: "Updated activity time",
+                label: "Proposed activity time",
               },
             ],
             updatedItinerary: [
-              { day: date || "", activityId: targetId, title: targetTitle, time: requestedTime },
+              { day, activityId: targetId, title: targetTitle, time: requestedTime },
             ],
-            reasoning: "Applied requested timing change directly to itinerary.",
+            reasoning: "Proposed timing change; awaiting user confirmation.",
             followUpQuestion: "Want me to rebalance nearby activities too?",
           };
           await supabase.from("ai_conversations").insert({
@@ -692,12 +634,13 @@ export async function POST(
             user_id: user.id,
             intent: "adjust_day",
             message,
-            response,
+            response: { ...response, itineraryProposal: proposal },
           });
           return NextResponse.json({
             ok: true,
             response,
-            applied: true,
+            applied: false,
+            proposal,
           });
         }
       }
@@ -736,6 +679,90 @@ export async function POST(
       ? detectPendingMutationFromAssistant(lastAssistantText)
       : null;
     const userIsAffirming = isAffirmation(message);
+
+    // Full itinerary generation via generate_itinerary tool (writes itinerary_* tables).
+    const wantsFullGenerate =
+      isFullItineraryGenerationRequest(message) ||
+      isReplaceExistingAffirmation(message, lastAssistantText);
+    if (wantsFullGenerate) {
+      const prefs = Array.isArray(body.preferences)
+        ? body.preferences.map((v) => String(v)).filter(Boolean).slice(0, 8)
+        : [];
+      const paceRaw =
+        body.tripPace === "relaxed" || body.tripPace === "balanced" || body.tripPace === "packed"
+          ? body.tripPace
+          : undefined;
+      const replaceExisting =
+        /\breplace|overwrite|regenerate|rebuild\b/i.test(message) ||
+        isReplaceExistingAffirmation(message, lastAssistantText);
+
+      const toolResult = await executeTool({
+        name: "generate_itinerary",
+        args: {
+          tripId,
+          preferences: prefs.join(", ") || undefined,
+          pace: paceRaw,
+          replaceExisting,
+        },
+        ctx: { userId: user.id, tripId },
+      });
+
+      const toolData =
+        toolResult.ok && toolResult.data && typeof toolResult.data === "object"
+          ? (toolResult.data as {
+              status?: string;
+              message?: string;
+              activityCount?: number;
+              dayCount?: number;
+            })
+          : null;
+
+      const response =
+        toolResult.ok && toolData?.status === "generated"
+          ? {
+              message:
+                toolData.message ||
+                "Itinerary generated and saved. Open the Itinerary tab to review it.",
+              actions: [{ type: "revise_itinerary" as const, label: "Generated itinerary" }],
+              updatedItinerary: [],
+              reasoning: "Invoked generate_itinerary tool to persist itinerary days/items.",
+              followUpQuestion: "Want any day adjusted?",
+            }
+          : toolResult.ok && toolData?.status === "needs_confirmation"
+            ? {
+                message:
+                  toolData.message ||
+                  "This trip already has an itinerary. Confirm if you want me to replace it.",
+                actions: [{ type: "inform" as const, label: "Confirm replace" }],
+                updatedItinerary: [],
+                reasoning: "generate_itinerary requires replaceExisting confirmation.",
+                followUpQuestion: "Reply yes to replace the existing itinerary.",
+              }
+            : {
+                message: toolResult.ok
+                  ? toolData?.message || "Could not generate itinerary."
+                  : toolResult.error || "Could not generate itinerary.",
+                actions: [{ type: "inform" as const, label: "Generation failed" }],
+                updatedItinerary: [],
+                reasoning: "generate_itinerary tool returned an error.",
+                followUpQuestion: "Want to try again with different preferences?",
+              };
+
+      await supabase.from("ai_conversations").insert({
+        trip_id: tripId,
+        user_id: user.id,
+        intent: "plan_day",
+        message,
+        response,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        response,
+        applied: toolResult.ok && toolData?.status === "generated",
+      });
+    }
+
     const explicitMutationKind = detectMutationIntent(message);
     const mutationKind: MutationKind | null =
       explicitMutationKind ?? (userIsAffirming ? pendingFromAssistant : null);
@@ -789,6 +816,9 @@ export async function POST(
         mutationInstructions ? `\nInstructions:\n${mutationInstructions}` : "",
         followThroughInstruction,
         `\nLive trip context:\n${compactContext}`,
+        retrievedContext
+          ? `\nRetrieved trip context (relevance-filtered):\n${retrievedContext}`
+          : "",
         `\nRespond in 2-3 short practical lines and keep updatedItinerary aligned with the action you describe.`,
       ]
         .filter(Boolean)
@@ -798,132 +828,43 @@ export async function POST(
         message: fullPrompt,
         context,
         intent: mutationKind ? "adjust_day" : undefined,
+        tripMemory,
       });
     }
 
-    let appliedSummary: ApplyResult = {
-      added: 0,
-      updated: 0,
-      deleted: 0,
-      appliedDays: new Set<string>(),
-      addedTitles: [],
-      updatedTitles: [],
-      deletedTitles: [],
-    };
-    let revisionId: string | null = null;
+    let itineraryProposal: ItineraryEditProposal | null = null;
 
     const candidateRevisions = Array.isArray(ai.updatedItinerary) ? ai.updatedItinerary : [];
     if (mutationKind && candidateRevisions.length > 0) {
-      const itemRowsRich = (items ?? []) as Array<Record<string, unknown>>;
-      const toFullActivity = (
-        row: Record<string, unknown>,
-      ): ItineraryOptimizationActivity => ({
-        id: String(row.id ?? ""),
-        trip_id: tripId,
-        itinerary_day_id:
-          row.itinerary_day_id == null
-            ? null
-            : (row.itinerary_day_id as string | number),
-        date:
-          typeof row.date === "string"
-            ? extractYMD(String(row.date)) ?? String(row.date).trim().slice(0, 10)
-            : "",
-        title: String(row.title ?? row.activity_name ?? "Activity"),
-        location: typeof row.location === "string" ? row.location : "",
-        time: typeof row.time === "string" ? row.time : null,
-        priority_score:
-          typeof row.priority_score === "number" ? row.priority_score : null,
-        sunset_sensitive: row.sunset_sensitive === true,
-        booking_required: row.booking_required === true,
-        ai_generated: row.ai_generated === true,
-        user_modified: row.user_modified === true,
-      });
-      const previousSnapshot: ItineraryOptimizationActivity[] = itemRowsRich.map(toFullActivity);
-
-      appliedSummary = await applyAssistantRevisions({
-        supabase,
-        tripId,
-        userId: user.id,
-        fallbackDate: date,
-        tripStartDate,
-        tripEndDate,
-        existingActivities: existingActivityMap,
-        revisions: candidateRevisions,
-      });
-
-      if (appliedSummary.added + appliedSummary.updated + appliedSummary.deleted > 0) {
-        const updatedActivities: ItineraryOptimizationActivity[] = [];
-        const reloadDates = Array.from(appliedSummary.appliedDays);
-        if (reloadDates.length > 0) {
-          const runReload = async (select: string) =>
-            await supabase
-              .from("itinerary_items")
-              .select(select)
-              .eq("trip_id", tripId)
-              .in("date", reloadDates)
-              .order("time", { ascending: true });
-          let reloadResult = (await runReload(richSelect)) as {
-            data: Array<Record<string, unknown>> | null;
-            error: { message?: string } | null;
-          };
-          if (reloadResult.error) {
-            reloadResult = (await runReload(fallbackSelect)) as {
-              data: Array<Record<string, unknown>> | null;
-              error: { message?: string } | null;
-            };
-          }
-          for (const row of (reloadResult.data ?? []) as Array<Record<string, unknown>>) {
-            updatedActivities.push(toFullActivity(row));
-          }
-        }
-
-        revisionId = await createItineraryRevision({
-          supabase,
+      const intentMap: Record<MutationKind, ItineraryEditIntent> = {
+        add: "add_activity",
+        delete: "delete_activity",
+        update: "move_activity",
+      };
+      const edits = revisionsToProposedEdits(candidateRevisions);
+      if (edits.length > 0) {
+        itineraryProposal = {
+          proposalId: crypto.randomUUID(),
           tripId,
-          revisionReason: `assistant_chat:${mutationKind}`,
-          previous: { activities: previousSnapshot },
-          updated: { activities: updatedActivities },
-        });
+          intent: intentMap[mutationKind],
+          summary:
+            ai.message?.trim() ||
+            `Proposed ${mutationKind} for ${edits.length} activit${edits.length === 1 ? "y" : "ies"}`,
+          rationale: ai.reasoning?.trim() || undefined,
+          edits,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        };
+        ai = {
+          ...ai,
+          message: `${ai.message ? `${ai.message} ` : ""}Review the proposed changes below and tap Apply to update your itinerary — nothing is saved until you confirm.`.trim(),
+        };
+      } else {
+        ai = {
+          ...ai,
+          message: `${ai.message ? `${ai.message} ` : ""}I couldn't build a concrete edit proposal — please try rephrasing (e.g. specify the day, time, or which activity).`.trim(),
+        };
       }
-    }
-
-    const totalApplied =
-      appliedSummary.added + appliedSummary.updated + appliedSummary.deleted;
-
-    if (mutationKind && totalApplied > 0) {
-      const dayLabel = appliedSummary.appliedDays.size === 1
-        ? Array.from(appliedSummary.appliedDays)[0]
-        : "";
-      const summaryParts: string[] = [];
-      if (appliedSummary.added > 0) {
-        const titles = appliedSummary.addedTitles.slice(0, 3).join(", ");
-        summaryParts.push(
-          titles ? `Added ${titles}` : `Added ${appliedSummary.added}`,
-        );
-      }
-      if (appliedSummary.updated > 0) {
-        const titles = appliedSummary.updatedTitles.slice(0, 3).join(", ");
-        summaryParts.push(
-          titles ? `Updated ${titles}` : `Updated ${appliedSummary.updated}`,
-        );
-      }
-      if (appliedSummary.deleted > 0) {
-        const titles = appliedSummary.deletedTitles.slice(0, 3).join(", ");
-        summaryParts.push(
-          titles ? `Removed ${titles}` : `Removed ${appliedSummary.deleted}`,
-        );
-      }
-      const summary = summaryParts.join(". ");
-      const dayClause = dayLabel ? ` for ${dayLabel}` : "";
-      ai = {
-        ...ai,
-        message: `Done${dayClause}. ${summary}.`.replace(/\s+\./g, ".").trim(),
-      };
-    } else if (mutationKind && candidateRevisions.length > 0 && totalApplied === 0) {
-      ai = {
-        ...ai,
-        message: `${ai.message ? `${ai.message} ` : ""}I couldn't apply the change — please try rephrasing (e.g. specify the day, time, or which activity).`.trim(),
-      };
     }
 
     await supabase.from("ai_conversations").insert({
@@ -931,18 +872,22 @@ export async function POST(
       user_id: user.id,
       intent: mutationKind ? "adjust_day" : ai.actions?.[0]?.type ?? "conversational",
       message,
-      response: ai,
+      response: {
+        ...ai,
+        ...(itineraryProposal ? { itineraryProposal } : {}),
+      },
     });
 
     return NextResponse.json({
       ok: true,
       response: ai,
-      applied: totalApplied > 0,
-      revisionId,
+      applied: false,
+      proposal: itineraryProposal,
+      revisionId: null,
       changes: {
-        added: appliedSummary.added,
-        updated: appliedSummary.updated,
-        deleted: appliedSummary.deleted,
+        added: 0,
+        updated: 0,
+        deleted: 0,
       },
     });
   } catch (error) {

@@ -1,4 +1,5 @@
 import { createFallbackResponse, withRetries } from "@/lib/ai/fallback-handler";
+import { GEMINI_GENERATE_MODELS } from "@/lib/ai/gemini-models";
 import { routeIntentFromInput } from "@/lib/ai/intent-router";
 import { buildIntentPrompt } from "@/lib/ai/prompt-generators";
 import { parseAiStructuredResponse } from "@/lib/ai/response-parser";
@@ -9,15 +10,14 @@ import type {
   AiStructuredResponse,
   AiTripContext,
 } from "@/lib/ai/types";
-
-const GEMINI_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-flash"] as const;
+import type { TripMemoryFields } from "@/lib/trip-memory/types";
 
 async function callGeminiWithFallback(systemPrompt: string, userPrompt: string): Promise<string> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error("Missing GEMINI_API_KEY");
 
   let lastMessage = "AI response unavailable";
-  for (const model of GEMINI_MODELS) {
+  for (const model of GEMINI_GENERATE_MODELS) {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
@@ -54,10 +54,16 @@ export async function runAdaptiveAi(input: {
   message: string;
   context: AiTripContext;
   intent?: AiIntentType;
+  tripMemory?: TripMemoryFields | null;
 }): Promise<AiStructuredResponse> {
   const intent = input.intent ?? routeIntentFromInput(input.message);
   const systemPrompt = getSystemPromptForIntent(intent);
-  const prompt = buildIntentPrompt({ userMessage: input.message, intent, context: input.context });
+  const prompt = buildIntentPrompt({
+    userMessage: input.message,
+    intent,
+    context: input.context,
+    tripMemory: input.tripMemory,
+  });
   try {
     const raw = await withRetries(() => callGeminiWithFallback(systemPrompt, prompt), {
       maxAttempts: 3,
@@ -73,6 +79,7 @@ export async function runAdaptiveAiWithState(input: {
   message: string;
   context: AiTripContext;
   intent?: AiIntentType;
+  tripMemory?: TripMemoryFields | null;
 }): Promise<AiExecutionState> {
   try {
     const response = await runAdaptiveAi(input);

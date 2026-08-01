@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import MobileNavTabInner from "./mobile-nav-tab-inner";
 import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
-import TripFabAnchor from "@/app/app/trip/[id]/_components/trip-fab-anchor";
 import { UserRound } from "lucide-react";
 
 const LAST_TRIP_STORAGE_KEY = "travel-os-last-trip-id";
@@ -139,11 +138,15 @@ export default function MobileBottomNav() {
       tripTabParam === "expenses" ||
       tripTabParam === "members" ||
       tripTabParam === "chat" ||
+      tripTabParam === "overview" ||
       tripTabParam === "connect" ||
       tripTabParam === "guides" ||
       tripTabParam === "checklist" ||
       tripTabParam === "food" ||
-      tripTabParam === "language");
+      tripTabParam === "language" ||
+      tripTabParam === "tools" ||
+      // Bare trip URL defaults to Chat.
+      (!tripTabParam && normalizedPath.startsWith("/trip/")));
 
   const onTripToolPage =
     !!extractTripIdFromPath(pathForUi) &&
@@ -158,25 +161,26 @@ export default function MobileBottomNav() {
   const connectShowsDocsFab =
     tripTabLower === "docs" ||
     (tripTabLower === "connect" && sectionLower === "docs");
-  // On trip Connect (any segment) or legacy `?tab=docs`, hide this FAB so it does not stack above the trip upload button (z-122 vs z-110).
+  // Hide global FAB on trip tabs that have their own chrome or shouldn't show quick-add.
   const hideFabOnTripTab =
     !!pathTripId &&
-    (!tripTabParam ||
-      tripTabLower === "itinerary" ||
-      tripTabLower === "guides" ||
+    (tripTabLower === "guides" ||
       tripTabLower === "checklist" ||
       tripTabLower === "food" ||
       tripTabLower === "language" ||
+      tripTabLower === "tools" ||
       tripTabLower === "members" ||
       tripTabLower === "chat" ||
+      tripTabLower === "overview" ||
       tripTabLower === "connect" ||
+      (!tripTabParam && normalizedPath.startsWith("/trip/")) ||
       connectShowsDocsFab);
   const hideFabOnGlobalMembers = normalizedPath === "/members";
   const hideFabOnLocalApps =
     normalizedPath === "/local-apps" || normalizedPath.startsWith("/local-apps/");
   const hideFabOnForex =
     normalizedPath === "/forex" || normalizedPath.startsWith("/forex/");
-  const hideFabOnHome = normalizedPath === "/home";
+  const hideFabOnHome = normalizedPath === "/home" || normalizedPath === "/chat";
   /** FAB navigates here; fixed primary CTA already fills the thumb zone — overlap breaks mobile layout. */
   const hideFabOnCreateTrip =
     normalizedPath === "/create-trip" || normalizedPath.startsWith("/create-trip/");
@@ -197,9 +201,9 @@ export default function MobileBottomNav() {
 
   const tabs = [
     {
-      label: "Homepage",
+      label: "Chat",
       href: "/app/home",
-      active: normalizedPath === "/home",
+      active: normalizedPath === "/home" || normalizedPath === "/chat",
       icon: HomeIcon,
     },
     {
@@ -222,7 +226,7 @@ export default function MobileBottomNav() {
   const actionHref = (tab: "expenses" | "docs" | "itinerary") => {
     if (effectiveTripId) {
       const sp = new URLSearchParams();
-      if (tab !== "itinerary") sp.set("tab", tab);
+      sp.set("tab", tab);
       sp.set("quickAction", tab === "itinerary" ? "activity" : tab === "docs" ? "doc" : "expense");
       const qs = sp.toString();
       return `/app/trip/${encodeURIComponent(effectiveTripId)}${qs ? `?${qs}` : ""}`;
@@ -243,7 +247,7 @@ export default function MobileBottomNav() {
     // Trip details page: open tab-specific modal directly.
     if (pathTripId) {
       const sp = new URLSearchParams(searchParams.toString());
-      const tab = (sp.get("tab") ?? "itinerary").toLowerCase();
+      const tab = (sp.get("tab") ?? "chat").toLowerCase();
       const section = (sp.get("section") ?? "").toLowerCase();
       const action =
         tab === "docs" || (tab === "connect" && section === "docs")
@@ -259,7 +263,7 @@ export default function MobileBottomNav() {
     if (normalizedPath === "/docs" && effectiveTripId) {
       setFabLoading(true);
       router.push(
-        `/app/trip/${encodeURIComponent(effectiveTripId)}?tab=connect&section=docs&quickAction=doc`,
+        `/app/trip/${encodeURIComponent(effectiveTripId)}?tab=docs&quickAction=doc`,
       );
       return;
     }
@@ -278,14 +282,14 @@ export default function MobileBottomNav() {
     <>
       {actionsOpen ? (
         <div
-          className="fixed inset-0 z-[120] bg-slate-900/35 backdrop-blur-[1px]"
+          className="fixed inset-0 z-[120] bg-slate-900/35 backdrop-blur-[1px] md:left-[var(--travel-os-sidebar-w)]"
           onClick={() => setActionsOpen(false)}
           aria-hidden
         />
       ) : null}
       {actionsOpen ? (
-        <div className="fixed inset-x-0 bottom-[calc(var(--travel-os-bottom-nav-h)+0.75rem)] z-[121] px-4">
-          <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
+        <div className="fixed inset-x-0 bottom-[calc(var(--travel-os-bottom-nav-h)+0.75rem)] z-[121] px-4 md:bottom-6 md:left-[var(--travel-os-sidebar-w)] md:right-auto md:w-80">
+          <div className="travel-os-content rounded-2xl border border-slate-200 bg-white p-3 shadow-xl md:mx-0 md:max-w-none">
             <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               QUICK ACTIONS
             </p>
@@ -320,55 +324,31 @@ export default function MobileBottomNav() {
       ) : null}
 
       {showFab ? (
-        pathTripId ? (
-          <TripFabAnchor bottomClassName="bottom-[var(--travel-os-fab-bottom)]" zClassName="z-[122]">
-            <button
-              type="button"
-              onClick={onFabClick}
-              disabled={fabLoading}
-              className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 p-0 text-white shadow-lg shadow-slate-900/25 ring-0 outline-none touch-manipulation [appearance:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:opacity-85"
-              aria-label={fabAriaLabel}
-              aria-expanded={actionsOpen}
-            >
-              <span className="pointer-events-none flex h-5 w-5 items-center justify-center">
-                {fabLoading ? (
-                  <span className="grid h-5 w-5 grid-cols-3 place-items-center gap-1" aria-hidden>
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:0ms]" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:140ms]" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
-                  </span>
-                ) : (
-                  <FabPlusIcon />
-                )}
+        <button
+          type="button"
+          onClick={onFabClick}
+          disabled={fabLoading}
+          className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[122] flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 p-0 text-white shadow-lg shadow-slate-900/25 ring-0 outline-none [appearance:none] [backface-visibility:hidden] [box-sizing:border-box] [transform:translateZ(0)] [webkit-tap-highlight-color:transparent] focus:outline-none focus-visible:outline-none focus-visible:ring-0 disabled:opacity-85 md:bottom-6 md:right-6"
+          aria-label={fabAriaLabel}
+          aria-expanded={actionsOpen}
+        >
+          <span className="pointer-events-none flex h-5 w-5 items-center justify-center">
+            {fabLoading ? (
+              <span className="grid h-5 w-5 grid-cols-3 place-items-center gap-1" aria-hidden>
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:0ms]" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:140ms]" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
               </span>
-            </button>
-          </TripFabAnchor>
-        ) : (
-          <button
-            type="button"
-            onClick={onFabClick}
-            disabled={fabLoading}
-            className="fixed bottom-[var(--travel-os-fab-bottom)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[122] flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 p-0 text-white shadow-lg shadow-slate-900/25 ring-0 outline-none touch-manipulation [appearance:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:opacity-85"
-            aria-label={fabAriaLabel}
-            aria-expanded={actionsOpen}
-          >
-            <span className="pointer-events-none flex h-5 w-5 items-center justify-center">
-              {fabLoading ? (
-                <span className="grid h-5 w-5 grid-cols-3 place-items-center gap-1" aria-hidden>
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:0ms]" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:140ms]" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white [animation-delay:280ms]" />
-                </span>
-              ) : (
-                <FabPlusIcon />
-              )}
-            </span>
-          </button>
-        )
+            ) : (
+              <FabPlusIcon />
+            )}
+          </span>
+        </button>
       ) : null}
 
+      {/* Mobile bottom tab bar */}
       <nav
-        className="pointer-events-auto fixed inset-x-0 bottom-0 z-[100] border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
+        className="pointer-events-auto fixed inset-x-0 bottom-0 z-[100] border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 md:hidden"
         aria-label="App"
       >
         <div className="mx-auto grid w-full max-w-md grid-cols-3 px-0.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
@@ -386,6 +366,36 @@ export default function MobileBottomNav() {
           })}
         </div>
       </nav>
+
+      {/* Desktop web sidebar */}
+      <aside
+        className="pointer-events-auto relative z-[100] hidden h-dvh w-[var(--travel-os-sidebar-w)] shrink-0 flex-col border-l border-slate-200 bg-white md:order-first md:flex md:border-l-0 md:border-r"
+        aria-label="App"
+      >
+        <div className="border-b border-slate-100 px-5 py-5">
+          <p className="text-base font-bold tracking-tight text-slate-900">Travel Till 99</p>
+          <p className="mt-0.5 text-xs text-slate-500">Web app</p>
+        </div>
+        <nav className="flex flex-1 flex-col gap-1 p-3">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <Link
+                key={tab.label}
+                href={tab.href}
+                className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition ${
+                  tab.active
+                    ? "bg-slate-100 text-slate-900 ring-1 ring-slate-200"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <Icon active={tab.active} />
+                <span>{tab.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
     </>
   );
 }
