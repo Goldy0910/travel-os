@@ -5,9 +5,11 @@ import {
   getCachedNearbyPlaces,
   getCachedPlaceDetails,
   getCachedSearchPlaceId,
+  getPlacesApiStatus,
   type NearbyPlace,
   type PlaceInfo,
 } from "@/lib/activity-place-details-cache";
+import { formatPlacesMapsError } from "@/lib/chat/gemini-errors";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isMissingItineraryMetadataColumn } from "@/lib/supabase-schema-errors";
 import { isTripMember } from "@/lib/trip-membership";
@@ -105,6 +107,10 @@ export default async function ActivityDetailsPage({ params }: Props) {
   placeInfo = placeId ? await getCachedPlaceDetails(placeId) : null;
   nearbyPlaces = await getCachedNearbyPlaces(`${location || activityTitle} attractions`);
 
+  const placesStatus =
+    !placeInfo && nearbyPlaces.length === 0 ? await getPlacesApiStatus() : null;
+  const placesUnavailable = placesStatus && !placesStatus.reachable ? placesStatus : null;
+
   const tripTitle = pickFirstString(tripData as Record<string, unknown>, ["title", "name", "trip_name"], "Trip");
   const titleClassName = titleClassForText(activityTitle);
 
@@ -149,10 +155,20 @@ export default async function ActivityDetailsPage({ params }: Props) {
           ) : null}
         </section>
 
+        {placesUnavailable ? (
+          <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-amber-950">Google Maps place details</h2>
+            <p className="mt-2 text-sm leading-6 text-amber-900">
+              {formatPlacesMapsError(placesUnavailable.message)}
+            </p>
+          </section>
+        ) : null}
+
         {placeInfo?.photos?.length ? (
           <ActivityPhotoGallery photos={placeInfo.photos} activityTitle={activityTitle} />
         ) : null}
 
+        {!placesUnavailable ? (
         <section className="space-y-3">
           <h2 className="text-base font-semibold text-slate-900">Details</h2>
           <div className="grid grid-cols-2 gap-2.5">
@@ -209,6 +225,7 @@ export default async function ActivityDetailsPage({ params }: Props) {
             ) : null}
           </div>
         </section>
+        ) : null}
 
         {activityNotes ? (
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">

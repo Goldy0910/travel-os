@@ -1,4 +1,5 @@
 import AIChat from "@/app/app/chat/_components/ai-chat";
+import { hydrateConversationLabels } from "@/lib/chat/hydrate-conversation-labels";
 import { loadConversationMemory } from "@/lib/chat/memory";
 import type { ConversationMemory } from "@/lib/chat/memory-types";
 import type { Conversation, ConversationMessage } from "@/lib/chat/types";
@@ -44,7 +45,7 @@ export default async function StandaloneChatShell({
   // Standalone inbox only — trip-owned conversations live on the trip Chat tab.
   let listQuery = supabase
     .from("conversations")
-    .select("id, user_id, title, created_at, updated_at, trip_id")
+    .select("id, user_id, title, subtitle, created_at, updated_at, trip_id")
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false })
     .limit(20);
@@ -56,7 +57,7 @@ export default async function StandaloneChatShell({
 
   if (
     conversationsError &&
-    /trip_id|schema cache|PGRST|column/i.test(conversationsError.message)
+    /subtitle|trip_id|schema cache|PGRST|column/i.test(conversationsError.message)
   ) {
     const fallback = await supabase
       .from("conversations")
@@ -69,6 +70,9 @@ export default async function StandaloneChatShell({
   }
 
   let conversations = (conversationsError ? [] : conversationsData ?? []) as Conversation[];
+  if (!conversationsError) {
+    conversations = await hydrateConversationLabels(supabase, conversations);
+  }
   const migrationMissing =
     !!conversationsError &&
     /could not find the table|schema cache|PGRST205/i.test(conversationsError.message);

@@ -1,4 +1,8 @@
 import { GEMINI_GENERATE_MODELS } from "@/lib/ai/gemini-models";
+import {
+  StructuredChatStreamDecoder,
+  type StructuredChatResponse,
+} from "@/lib/chat/structured-response";
 
 export type ChatHistoryTurn = {
   role: "user" | "assistant";
@@ -31,7 +35,7 @@ async function* streamGeminiModel(input: {
   systemPrompt: string;
   history: ChatHistoryTurn[];
   signal?: AbortSignal;
-}): AsyncGenerator<string, void, unknown> {
+}): AsyncGenerator<string, StructuredChatResponse, unknown> {
   throwIfAborted(input.signal);
 
   const contents = input.history.map((turn) => ({
@@ -40,6 +44,9 @@ async function* streamGeminiModel(input: {
   }));
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${input.model}:streamGenerateContent?alt=sse`;
+
+  // Plain stream (no forced JSON mime type) — stays on free Flash quota.
+  // Prompt still asks for {response, entities}; decoder unwraps when the model complies.
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -68,6 +75,7 @@ async function* streamGeminiModel(input: {
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  const structuredDecoder = new StructuredChatStreamDecoder();
   let buffer = "";
 
   try {
@@ -88,7 +96,8 @@ async function* streamGeminiModel(input: {
         try {
           const parsed = JSON.parse(data) as unknown;
           const delta = extractSseTextDelta(parsed);
-          if (delta) yield delta;
+          const visible = structuredDecoder.push(delta);
+          if (visible) yield visible;
         } catch {
           // Ignore malformed SSE frames
         }
@@ -101,12 +110,15 @@ async function* streamGeminiModel(input: {
         try {
           const parsed = JSON.parse(data) as unknown;
           const delta = extractSseTextDelta(parsed);
-          if (delta) yield delta;
+          const visible = structuredDecoder.push(delta);
+          if (visible) yield visible;
         } catch {
           // ignore
         }
       }
     }
+
+    return structuredDecoder.finish();
   } finally {
     try {
       reader.releaseLock();
@@ -120,7 +132,7 @@ export async function* streamChatCompletion(input: {
   systemPrompt: string;
   history: ChatHistoryTurn[];
   signal?: AbortSignal;
-}): AsyncGenerator<string, void, unknown> {
+}): AsyncGenerator<string, StructuredChatResponse, unknown> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
@@ -128,14 +140,13 @@ export async function* streamChatCompletion(input: {
   for (const model of GEMINI_GENERATE_MODELS) {
     throwIfAborted(input.signal);
     try {
-      yield* streamGeminiModel({
+      return yield* streamGeminiModel({
         apiKey,
         model,
         systemPrompt: input.systemPrompt,
         history: input.history,
         signal: input.signal,
       });
-      return;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") throw error;
       lastError = error instanceof Error ? error.message : "AI response unavailable";

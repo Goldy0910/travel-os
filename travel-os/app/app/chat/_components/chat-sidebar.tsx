@@ -409,6 +409,11 @@ export default function ChatSidebar({
                           <span className="line-clamp-1 font-medium">
                             {conversation.title || "Untitled"}
                           </span>
+                          {conversation.subtitle?.trim() ? (
+                            <span className="mt-0.5 line-clamp-1 text-[0.7rem] font-normal text-slate-500">
+                              {conversation.subtitle.trim()}
+                            </span>
+                          ) : null}
                         </button>
 
                         <div className="relative shrink-0 pr-1" data-chat-menu={conversation.id}>

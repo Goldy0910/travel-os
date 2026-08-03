@@ -45,6 +45,7 @@ const STREAM_EVENT_TYPES = new Set([
   "delta",
   "assistant_message",
   "recommendations",
+  "place_cards",
   "itinerary_proposal",
   "title",
   "memory",

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
+import { normalizeGooglePlaceId } from "@/lib/google-places-ids";
 import { getGooglePlacesServerKey } from "@/lib/google-places-server-key";
 
 /** Search / nearby text cache (7d) — resolves place id from free-text query. */
@@ -43,6 +44,19 @@ export type NearbyPlace = {
   mapsUrl: string;
 };
 
+export type PlacesApiStatus = {
+  configured: boolean;
+  reachable: boolean;
+  message: string | null;
+};
+
+class PlacesApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PlacesApiError";
+  }
+}
+
 function normalizeCacheKey(input: string): string {
   return input
     .trim()
@@ -61,7 +75,24 @@ function priceLevelLabel(levelRaw: string): string {
   return "Not available";
 }
 
-async function fetchGoogleJson(url: string, key: string, fieldMask: string): Promise<unknown | null> {
+function placesDeniedMessage(status: number, body: string): string {
+  if (status === 403 || status === 401) {
+    if (/API_KEY_HTTP_REFERRER_BLOCKED|referer/i.test(body)) {
+      return "Your Google key is restricted to HTTP referrers. Use a server key (IP restriction or none) for Places API (New).";
+    }
+    if (/PERMISSION_DENIED|not been used|has not been used|enable/i.test(body)) {
+      return "Enable Places API (New) on the Google Cloud project for GOOGLE_PLACES_API_KEY, with billing on.";
+    }
+    return "Places API (New) denied this key. Enable the API and allow it on GOOGLE_PLACES_API_KEY.";
+  }
+  return `Places API request failed (HTTP ${status}).`;
+}
+
+async function fetchGoogleJson(
+  url: string,
+  key: string,
+  fieldMask: string,
+): Promise<{ ok: true; data: unknown } | { ok: false; status: number; body: string }> {
   const response = await fetch(url, {
     method: "GET",
     headers: {
@@ -70,8 +101,12 @@ async function fetchGoogleJson(url: string, key: string, fieldMask: string): Pro
     },
     cache: "no-store",
   });
-  if (!response.ok) return null;
-  return response.json().catch(() => null);
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    return { ok: false, status: response.status, body };
+  }
+  const data = await response.json().catch(() => null);
+  return { ok: true, data };
 }
 
 async function searchTextPlaceUncached(query: string, apiKey: string): Promise<string> {
@@ -90,21 +125,31 @@ async function searchTextPlaceUncached(query: string, apiKey: string): Promise<s
     }),
     cache: "no-store",
   });
-  if (!response.ok) return "";
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new PlacesApiError(placesDeniedMessage(response.status, body));
+  }
   const data = (await response.json().catch(() => null)) as { places?: Array<{ id?: string }> } | null;
   const placeId = data?.places?.[0]?.id;
-  return typeof placeId === "string" ? placeId : "";
+  return typeof placeId === "string" ? normalizeGooglePlaceId(placeId) : "";
 }
 
-async function fetchPlaceDetailsUncached(placeId: string, apiKey: string): Promise<PlaceInfo | null> {
-  if (!placeId) return null;
+async function fetchPlaceDetailsUncached(placeId: string, apiKey: string): Promise<PlaceInfo> {
+  const id = normalizeGooglePlaceId(placeId);
+  if (!id) throw new PlacesApiError("Missing place id");
+
   const fields =
     "id,displayName,formattedAddress,googleMapsUri,rating,userRatingCount,priceLevel,editorialSummary,websiteUri,nationalPhoneNumber,currentOpeningHours,regularOpeningHours,photos,reviews";
-  const data = (await fetchGoogleJson(
-    `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
+  const result = await fetchGoogleJson(
+    `https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`,
     apiKey,
     fields,
-  )) as
+  );
+  if (!result.ok) {
+    throw new PlacesApiError(placesDeniedMessage(result.status, result.body));
+  }
+
+  const data = result.data as
     | {
         id?: string;
         displayName?: { text?: string };
@@ -128,7 +173,7 @@ async function fetchPlaceDetailsUncached(placeId: string, apiKey: string): Promi
         }>;
       }
     | null;
-  if (!data?.id) return null;
+  if (!data?.id) throw new PlacesApiError("Place details response was empty");
 
   const photos = (data.photos ?? [])
     .map((p) => (typeof p.name === "string" && p.name.startsWith("places/") ? p.name : ""))
@@ -143,7 +188,7 @@ async function fetchPlaceDetailsUncached(placeId: string, apiKey: string): Promi
   }));
 
   return {
-    id: data.id,
+    id: normalizeGooglePlaceId(data.id) || data.id,
     name: data.displayName?.text || "",
     address: data.formattedAddress || "",
     mapsUrl: data.googleMapsUri || "",
@@ -177,7 +222,10 @@ async function fetchNearbyPlacesUncached(query: string, apiKey: string): Promise
     }),
     cache: "no-store",
   });
-  if (!response.ok) return [];
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new PlacesApiError(placesDeniedMessage(response.status, body));
+  }
   const data = (await response.json().catch(() => null)) as
     | {
         places?: Array<{
@@ -192,7 +240,7 @@ async function fetchNearbyPlacesUncached(query: string, apiKey: string): Promise
     | null;
   return (data?.places ?? [])
     .map((p) => ({
-      id: p.id ?? "",
+      id: normalizeGooglePlaceId(p.id ?? "") || (p.id ?? ""),
       name: p.displayName?.text ?? "",
       address: p.formattedAddress ?? "",
       rating: typeof p.rating === "number" ? p.rating : null,
@@ -204,52 +252,91 @@ async function fetchNearbyPlacesUncached(query: string, apiKey: string): Promise
 
 /**
  * Cached text search → first Google Place id (Places API New).
- * Reduces repeated SearchText billing for the same activity title/location string.
+ * API errors throw inside the cache callback so they are not stored for 7 days.
  */
 export async function getCachedSearchPlaceId(query: string): Promise<string> {
   const normalized = normalizeCacheKey(query);
   if (!normalized) return "";
-  return unstable_cache(
-    async () => {
-      const apiKey = getGooglePlacesServerKey();
-      if (!apiKey) return "";
-      return searchTextPlaceUncached(normalized, apiKey);
-    },
-    ["travel-os-activity-place-search-v1", normalized],
-    { revalidate: REVALIDATE_SEARCH_SEC },
-  )();
+  try {
+    return await unstable_cache(
+      async () => {
+        const apiKey = getGooglePlacesServerKey();
+        if (!apiKey) throw new PlacesApiError("Missing Places API key");
+        return searchTextPlaceUncached(normalized, apiKey);
+      },
+      ["travel-os-activity-place-search-v2", normalized],
+      { revalidate: REVALIDATE_SEARCH_SEC },
+    )();
+  } catch {
+    return "";
+  }
 }
 
 /**
  * Cached Place Details (photos, reviews, hours, etc.) by resource id.
+ * Failures throw and are not written into the long-lived cache.
  */
 export async function getCachedPlaceDetails(placeId: string): Promise<PlaceInfo | null> {
-  const id = placeId.trim();
+  const id = normalizeGooglePlaceId(placeId);
   if (!id) return null;
-  return unstable_cache(
-    async () => {
-      const apiKey = getGooglePlacesServerKey();
-      if (!apiKey) return null;
-      return fetchPlaceDetailsUncached(id, apiKey);
-    },
-    ["travel-os-activity-place-details-v1", id],
-    { revalidate: REVALIDATE_DETAILS_SEC },
-  )();
+  try {
+    return await unstable_cache(
+      async () => {
+        const apiKey = getGooglePlacesServerKey();
+        if (!apiKey) throw new PlacesApiError("Missing Places API key");
+        return fetchPlaceDetailsUncached(id, apiKey);
+      },
+      ["travel-os-activity-place-details-v2", id],
+      { revalidate: REVALIDATE_DETAILS_SEC },
+    )();
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Cached nearby text search results.
+ * API failures are not cached.
  */
 export async function getCachedNearbyPlaces(query: string): Promise<NearbyPlace[]> {
   const normalized = normalizeCacheKey(query);
   if (!normalized) return [];
-  return unstable_cache(
-    async () => {
-      const apiKey = getGooglePlacesServerKey();
-      if (!apiKey) return [];
-      return fetchNearbyPlacesUncached(normalized, apiKey);
-    },
-    ["travel-os-activity-nearby-v1", normalized],
-    { revalidate: REVALIDATE_NEARBY_SEC },
-  )();
+  try {
+    return await unstable_cache(
+      async () => {
+        const apiKey = getGooglePlacesServerKey();
+        if (!apiKey) throw new PlacesApiError("Missing Places API key");
+        const places = await fetchNearbyPlacesUncached(normalized, apiKey);
+        if (!places.length) throw new PlacesApiError("No nearby places");
+        return places;
+      },
+      ["travel-os-activity-nearby-v2", normalized],
+      { revalidate: REVALIDATE_NEARBY_SEC },
+    )();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Lightweight probe used by activity UI when place enrichment is empty.
+ */
+export async function getPlacesApiStatus(): Promise<PlacesApiStatus> {
+  const apiKey = getGooglePlacesServerKey();
+  if (!apiKey) {
+    return {
+      configured: false,
+      reachable: false,
+      message:
+        "Missing GOOGLE_PLACES_API_KEY (or GOOGLE_MAPS_API_KEY). Add a server key with Places API (New) enabled.",
+    };
+  }
+
+  try {
+    await searchTextPlaceUncached("Eiffel Tower Paris", apiKey);
+    return { configured: true, reachable: true, message: null };
+  } catch (err) {
+    const message = err instanceof PlacesApiError ? err.message : "Places API (New) is unreachable.";
+    return { configured: true, reachable: false, message };
+  }
 }

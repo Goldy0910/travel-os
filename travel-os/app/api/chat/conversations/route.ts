@@ -1,4 +1,5 @@
 import type { Conversation } from "@/lib/chat/types";
+import { hydrateConversationLabels } from "@/lib/chat/hydrate-conversation-labels";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { NextRequest } from "next/server";
 
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from("conversations")
-    .select("id, user_id, title, created_at, updated_at, trip_id", { count: "exact" })
+    .select("id, user_id, title, subtitle, created_at, updated_at, trip_id", { count: "exact" })
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false })
     .range(offset, offset + limit - 1);
@@ -47,13 +48,12 @@ export async function GET(req: NextRequest) {
   query = query.is("trip_id", null);
 
   if (q) {
-    // Escape LIKE wildcards in user input
     const escaped = q.replace(/[%_]/g, (ch) => `\\${ch}`);
-    query = query.ilike("title", `%${escaped}%`);
+    query = query.or(`title.ilike.%${escaped}%,subtitle.ilike.%${escaped}%`);
   }
 
   let { data, error, count } = await query;
-  if (error && /trip_id|schema cache|PGRST|column/i.test(error.message)) {
+  if (error && /subtitle|trip_id|schema cache|PGRST|column/i.test(error.message)) {
     let fallback = supabase
       .from("conversations")
       .select("id, user_id, title, created_at, updated_at", { count: "exact" })
@@ -73,7 +73,8 @@ export async function GET(req: NextRequest) {
     return Response.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  const conversations = (data ?? []) as Conversation[];
+  let conversations = (data ?? []) as Conversation[];
+  conversations = await hydrateConversationLabels(supabase, conversations);
   const total = typeof count === "number" ? count : conversations.length;
   const nextOffset = offset + conversations.length;
   const hasMore = nextOffset < total;

@@ -1,14 +1,23 @@
 "use client";
 
+import PlaceTextMention from "@/app/app/chat/_components/place-text-mention";
 import { copyTextToClipboard } from "@/app/app/chat/_lib/chat-client-actions";
+import type { ChatPlaceCard } from "@/lib/places/types";
 import { Check, Copy } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+
+type PlaceMentionHandlers = {
+  places?: ChatPlaceCard[];
+  onPlaceOpen?: (card: ChatPlaceCard) => void;
+  onPlaceHover?: (card: ChatPlaceCard) => void;
+  onPlaceHoverEnd?: () => void;
+};
 
 type MarkdownMessageProps = {
   content: string;
   className?: string;
-};
+} & PlaceMentionHandlers;
 
 function isSafeHref(href: string) {
   return (
@@ -21,6 +30,10 @@ function isSafeHref(href: string) {
 
 function isSafeImageSrc(src: string) {
   return src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function CodeBlock({ code, language }: { code: string; language?: string }) {
@@ -75,10 +88,23 @@ function SafeImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function inlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
+function linkifyPlaceNames(
+  text: string,
+  keyPrefix: string,
+  handlers: PlaceMentionHandlers,
+): ReactNode[] {
+  const places = handlers.places ?? [];
+  if (!places.length || !handlers.onPlaceOpen) return [text];
+
+  const sorted = [...places].sort((a, b) => b.name.length - a.name.length);
+  const byLower = new Map(sorted.map((p) => [p.name.trim().toLowerCase(), p]));
+  const pattern = new RegExp(
+    `\\b(${sorted.map((p) => escapeRegExp(p.name.trim())).filter(Boolean).join("|")})\\b`,
+    "gi",
+  );
+  if (pattern.source === "\\b()\\b") return [text];
+
   const nodes: ReactNode[] = [];
-  const pattern =
-    /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\))/g;
   let last = 0;
   let match: RegExpExecArray | null;
   let idx = 0;
@@ -87,17 +113,65 @@ function inlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
     if (match.index > last) {
       nodes.push(text.slice(last, match.index));
     }
+    const matched = match[1] ?? match[0]!;
+    const card = byLower.get(matched.toLowerCase());
+    if (card) {
+      nodes.push(
+        <PlaceTextMention
+          key={`${keyPrefix}-place-${card.placeId}-${idx}`}
+          card={card}
+          onOpen={handlers.onPlaceOpen}
+          onHover={handlers.onPlaceHover}
+          onHoverEnd={handlers.onPlaceHoverEnd}
+        >
+          {matched}
+        </PlaceTextMention>,
+      );
+    } else {
+      nodes.push(matched);
+    }
+    last = match.index + matched.length;
+    idx += 1;
+  }
+
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes.length > 0 ? nodes : [text];
+}
+
+function inlineMarkdown(
+  text: string,
+  keyPrefix: string,
+  handlers: PlaceMentionHandlers = {},
+): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern =
+    /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\))/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  let idx = 0;
+
+  const pushText = (chunk: string, suffix: string) => {
+    for (const node of linkifyPlaceNames(chunk, `${keyPrefix}-${suffix}`, handlers)) {
+      nodes.push(node);
+    }
+  };
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) {
+      pushText(text.slice(last, match.index), `t${idx}`);
+    }
     const token = match[0];
     if (token.startsWith("**")) {
+      const inner = token.slice(2, -2);
       nodes.push(
         <strong key={`${keyPrefix}-b-${idx}`} className="font-semibold text-slate-900">
-          {token.slice(2, -2)}
+          {linkifyPlaceNames(inner, `${keyPrefix}-b${idx}`, handlers)}
         </strong>,
       );
     } else if (token.startsWith("*")) {
       nodes.push(
         <em key={`${keyPrefix}-i-${idx}`} className="italic">
-          {token.slice(1, -1)}
+          {linkifyPlaceNames(token.slice(1, -1), `${keyPrefix}-i${idx}`, handlers)}
         </em>,
       );
     } else if (token.startsWith("`")) {
@@ -149,7 +223,7 @@ function inlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
     idx += 1;
   }
 
-  if (last < text.length) nodes.push(text.slice(last));
+  if (last < text.length) pushText(text.slice(last), `t-end`);
   return nodes.length > 0 ? nodes : [text];
 }
 
@@ -173,7 +247,7 @@ function parseTableBlock(trimmed: string): { headers: string[]; rows: string[][]
   const sepCells = splitRow(sep);
   const isSeparator =
     sepCells.length === headers.length &&
-    sepCells.every((c) => /^:?-{3,}:?$/.test(c.replace(/\s/g, "")));
+    sepCells.every((c) => /^:?-{3,}:?$/.test(c.replace(/\s+/g, "")));
   if (!isSeparator || headers.length === 0) return null;
 
   const rows = lines.slice(2).map(splitRow).filter((r) => r.some((c) => c.length > 0));
@@ -204,7 +278,6 @@ function tokenizeMarkdown(content: string): Block[] {
       continue;
     }
 
-    // Fenced code
     const fence = line.trim().match(/^```([\w+-]*)\s*$/);
     if (fence) {
       const language = fence[1] || undefined;
@@ -214,19 +287,17 @@ function tokenizeMarkdown(content: string): Block[] {
         body.push(lines[i]!);
         i += 1;
       }
-      if (i < lines.length) i += 1; // closing fence
+      if (i < lines.length) i += 1;
       blocks.push({ type: "code", language, code: body.join("\n") });
       continue;
     }
 
-    // Horizontal rule
     if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line.trim())) {
       blocks.push({ type: "hr" });
       i += 1;
       continue;
     }
 
-    // Heading
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
       blocks.push({
@@ -238,7 +309,6 @@ function tokenizeMarkdown(content: string): Block[] {
       continue;
     }
 
-    // Table: peek ahead
     if (line.includes("|") && i + 1 < lines.length) {
       const tableLines: string[] = [];
       let j = i;
@@ -254,7 +324,6 @@ function tokenizeMarkdown(content: string): Block[] {
       }
     }
 
-    // Blockquote
     if (/^>\s?/.test(line)) {
       const quoteLines: string[] = [];
       while (i < lines.length && /^>\s?/.test(lines[i] ?? "")) {
@@ -265,7 +334,6 @@ function tokenizeMarkdown(content: string): Block[] {
       continue;
     }
 
-    // Unordered list
     if (/^[-*]\s+/.test(line.trim())) {
       const items: string[] = [];
       while (i < lines.length && /^[-*]\s+/.test((lines[i] ?? "").trim())) {
@@ -276,7 +344,6 @@ function tokenizeMarkdown(content: string): Block[] {
       continue;
     }
 
-    // Ordered list
     if (/^\d+\.\s+/.test(line.trim())) {
       const items: string[] = [];
       while (i < lines.length && /^\d+\.\s+/.test((lines[i] ?? "").trim())) {
@@ -287,7 +354,6 @@ function tokenizeMarkdown(content: string): Block[] {
       continue;
     }
 
-    // Paragraph — collect until blank or next special block start
     const para: string[] = [line];
     i += 1;
     while (i < lines.length) {
@@ -312,7 +378,7 @@ function tokenizeMarkdown(content: string): Block[] {
   return blocks;
 }
 
-function renderBlock(block: Block, index: number): ReactNode {
+function renderBlock(block: Block, index: number, handlers: PlaceMentionHandlers): ReactNode {
   switch (block.type) {
     case "code":
       return <CodeBlock key={`code-${index}`} code={block.code} language={block.language} />;
@@ -325,7 +391,7 @@ function renderBlock(block: Block, index: number): ReactNode {
             : "text-sm font-semibold text-slate-800";
       return (
         <p key={`h-${index}`} className={className}>
-          {inlineMarkdown(block.text, `h${index}`)}
+          {inlineMarkdown(block.text, `h${index}`, handlers)}
         </p>
       );
     }
@@ -339,7 +405,7 @@ function renderBlock(block: Block, index: number): ReactNode {
         >
           {block.lines.map((line, li) => (
             <p key={`bql-${index}-${li}`} className="leading-relaxed">
-              {inlineMarkdown(line, `bq${index}${li}`)}
+              {inlineMarkdown(line, `bq${index}${li}`, handlers)}
             </p>
           ))}
         </blockquote>
@@ -349,7 +415,7 @@ function renderBlock(block: Block, index: number): ReactNode {
         <ul key={`ul-${index}`} className="list-disc space-y-1 pl-5 marker:text-slate-400">
           {block.items.map((item, ii) => (
             <li key={`uli-${index}-${ii}`} className="leading-relaxed">
-              {inlineMarkdown(item, `uli${index}${ii}`)}
+              {inlineMarkdown(item, `uli${index}${ii}`, handlers)}
             </li>
           ))}
         </ul>
@@ -359,7 +425,7 @@ function renderBlock(block: Block, index: number): ReactNode {
         <ol key={`ol-${index}`} className="list-decimal space-y-1 pl-5 marker:text-slate-500">
           {block.items.map((item, ii) => (
             <li key={`oli-${index}-${ii}`} className="leading-relaxed">
-              {inlineMarkdown(item, `oli${index}${ii}`)}
+              {inlineMarkdown(item, `oli${index}${ii}`, handlers)}
             </li>
           ))}
         </ol>
@@ -375,7 +441,7 @@ function renderBlock(block: Block, index: number): ReactNode {
                     key={`th-${index}-${hi}`}
                     className="border-b border-slate-200 px-2.5 py-1.5 font-semibold text-slate-800"
                   >
-                    {inlineMarkdown(h, `th${index}${hi}`)}
+                    {inlineMarkdown(h, `th${index}${hi}`, handlers)}
                   </th>
                 ))}
               </tr>
@@ -388,7 +454,7 @@ function renderBlock(block: Block, index: number): ReactNode {
                       key={`td-${index}-${ri}-${ci}`}
                       className="border-b border-slate-100 px-2.5 py-1.5 text-slate-700"
                     >
-                      {inlineMarkdown(row[ci] ?? "", `td${index}${ri}${ci}`)}
+                      {inlineMarkdown(row[ci] ?? "", `td${index}${ri}${ci}`, handlers)}
                     </td>
                   ))}
                 </tr>
@@ -400,7 +466,7 @@ function renderBlock(block: Block, index: number): ReactNode {
     case "paragraph":
       return (
         <p key={`p-${index}`} className="whitespace-pre-wrap leading-relaxed">
-          {inlineMarkdown(block.text, `p${index}`)}
+          {inlineMarkdown(block.text, `p${index}`, handlers)}
         </p>
       );
     default:
@@ -408,12 +474,23 @@ function renderBlock(block: Block, index: number): ReactNode {
   }
 }
 
-export default function MarkdownMessage({ content, className }: MarkdownMessageProps) {
-  const blocks = tokenizeMarkdown(content);
+export default function MarkdownMessage({
+  content,
+  className,
+  places,
+  onPlaceOpen,
+  onPlaceHover,
+  onPlaceHoverEnd,
+}: MarkdownMessageProps) {
+  const blocks = useMemo(() => tokenizeMarkdown(content), [content]);
+  const handlers = useMemo(
+    () => ({ places, onPlaceOpen, onPlaceHover, onPlaceHoverEnd }),
+    [places, onPlaceOpen, onPlaceHover, onPlaceHoverEnd],
+  );
 
   return (
-    <div className={`space-y-2.5 text-sm text-slate-800 ${className ?? ""}`}>
-      {blocks.map((block, index) => renderBlock(block, index))}
+    <div className={`space-y-2.5 text-sm leading-relaxed text-slate-800 ${className ?? ""}`}>
+      {blocks.map((block, index) => renderBlock(block, index, handlers))}
     </div>
   );
 }

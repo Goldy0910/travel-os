@@ -1,5 +1,8 @@
 "use client";
 
+import ChatExploreHeader from "@/app/app/chat/_components/chat-explore-header";
+import AssistantMessageWithPlaces from "@/app/app/chat/_components/assistant-message-with-places";
+import ChatMapPanel from "@/app/app/chat/_components/chat-map-panel";
 import ChatSidebar from "@/app/app/chat/_components/chat-sidebar";
 import ConversationMemoryPanel from "@/app/app/chat/_components/conversation-memory-panel";
 import ConversationToolbar from "@/app/app/chat/_components/conversation-toolbar";
@@ -10,17 +13,23 @@ import DestinationRecommendationCards, {
 import ItineraryEditProposalCard, {
   proposalFromMessageMetadata,
 } from "@/app/app/chat/_components/itinerary-edit-proposal-card";
-import MarkdownMessage from "@/app/app/chat/_components/markdown-message";
 import MessageActions from "@/app/app/chat/_components/message-actions";
+import PlaceDetailsDrawer from "@/app/app/chat/_components/place-details-drawer";
 import SuggestedActions from "@/app/app/chat/_components/suggested-actions";
+import { useUserLocationOptional } from "@/app/app/_components/user-location-provider";
 import type { ChatDestinationCard } from "@/lib/chat/destination-card-types";
 import type { ItineraryEditProposal } from "@/lib/chat/itinerary-edit-types";
+import { formatChatGeminiError } from "@/lib/chat/gemini-errors";
 import { parseChatStreamEvent } from "@/lib/chat/guards";
 import type { ConversationMemory } from "@/lib/chat/memory-types";
 import type { ChatStreamEvent, Conversation, ConversationMessage } from "@/lib/chat/types";
+import { unwrapAssistantContentForDisplay } from "@/lib/chat/structured-response";
+import { LocationService } from "@/lib/location";
+import { placeCardsFromMessageMetadata } from "@/lib/places/chat-place-cards";
+import type { ChatPlaceCard } from "@/lib/places/types";
 import { clientAllowRequest } from "@/lib/rate-limit";
 import { PanelLeft, RotateCcw, SendHorizontal, Square } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type UiMessage = ConversationMessage & {
   status?: "sending" | "streaming" | "failed" | "complete" | "cancelled";
@@ -136,6 +145,7 @@ export default function AIChat({
   tripId = null,
   tripScoped = false,
 }: AIChatProps) {
+  const userLocation = useUserLocationOptional();
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
     initialConversationId,
@@ -143,6 +153,8 @@ export default function AIChat({
   const [messages, setMessages] = useState<UiMessage[]>(
     initialMessages.map((m) => ({
       ...m,
+      content:
+        m.role === "assistant" ? unwrapAssistantContentForDisplay(m.content) : m.content,
       status: m.metadata?.cancelled ? "cancelled" : "complete",
     })),
   );
@@ -155,6 +167,11 @@ export default function AIChat({
   const [retryMode, setRetryMode] = useState<"resend" | "regenerate">("resend");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [createTripOpenSignal, setCreateTripOpenSignal] = useState(0);
+  /** Assistant clientKey waiting for post-stream place card enrichment. */
+  const [pendingPlaceCardsKey, setPendingPlaceCardsKey] = useState<string | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<ChatPlaceCard | null>(null);
+  const [placeDrawerOpen, setPlaceDrawerOpen] = useState(false);
+  const [focusedMapPlaceId, setFocusedMapPlaceId] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -172,6 +189,14 @@ export default function AIChat({
     if (!stickToBottomRef.current) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, sending]);
+
+  // First time opening chat: ask for location once if still unknown (choice remembered).
+  const locationPromptedRef = useRef(false);
+  useEffect(() => {
+    if (!userLocation || locationPromptedRef.current) return;
+    locationPromptedRef.current = true;
+    userLocation.promptForPermissionIfNeeded();
+  }, [userLocation]);
 
   useEffect(() => {
     return () => {
@@ -223,6 +248,22 @@ export default function AIChat({
   const activeTitle =
     conversations.find((c) => c.id === activeConversationId)?.title ?? "New chat";
 
+  const mapPlaces = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      if (m?.role !== "assistant") continue;
+      const cards = placeCardsFromMessageMetadata(m.metadata);
+      if (cards.length) return cards;
+    }
+    return [] as ChatPlaceCard[];
+  }, [messages]);
+
+  const openPlaceDetails = (card: ChatPlaceCard) => {
+    setSelectedPlace(card);
+    setFocusedMapPlaceId(card.placeId);
+    setPlaceDrawerOpen(true);
+  };
+
   const lastAssistantIndex = (() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       if (messages[i]?.role === "assistant") return i;
@@ -257,9 +298,14 @@ export default function AIChat({
       if (requestId !== loadRequestIdRef.current) return;
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to load conversation");
       setActiveConversationId(conversationId);
+      setPlaceDrawerOpen(false);
+      setSelectedPlace(null);
+      setFocusedMapPlaceId(null);
       setMessages(
         (data.messages ?? []).map((m) => ({
           ...m,
+          content:
+            m.role === "assistant" ? unwrapAssistantContentForDisplay(m.content) : m.content,
           status: m.metadata?.cancelled ? "cancelled" : "complete",
         })),
       );
@@ -297,6 +343,9 @@ export default function AIChat({
     setFailedRetryContent(null);
     setRetryMode("resend");
     setLoadingConversation(false);
+    setPlaceDrawerOpen(false);
+    setSelectedPlace(null);
+    setFocusedMapPlaceId(null);
     stickToBottomRef.current = true;
   };
 
@@ -393,16 +442,24 @@ export default function AIChat({
     };
 
     try {
+      // Read from LocationService at send-time (localStorage) so we never miss
+      // a just-granted location due to stale React state.
+      const promptLocation =
+        LocationService.getPromptContext() ?? userLocation?.promptContext ?? null;
+      const locationPayload = promptLocation ? { userLocation: promptLocation } : {};
+
       const payload = regenerate
         ? {
             conversationId: activeConversationId || undefined,
             regenerate: true,
             ...(tripId ? { tripId } : {}),
+            ...locationPayload,
           }
         : {
             message: trimmed,
             conversationId: activeConversationId || undefined,
             ...(tripId ? { tripId } : {}),
+            ...locationPayload,
           };
 
       const res = await fetch("/api/chat", {
@@ -482,10 +539,22 @@ export default function AIChat({
           if (event.type === "assistant_message") {
             sawAssistantFinal = true;
             clearDeltaBuffer();
+            setPendingPlaceCardsKey(assistantClientKey);
+            const cleanContent = unwrapAssistantContentForDisplay(event.message.content);
+            const existingPlaceCards = placeCardsFromMessageMetadata(event.message.metadata);
+            if (existingPlaceCards.length > 0) {
+              setPendingPlaceCardsKey(null);
+            }
             setMessages((prev) =>
               prev.map((m) =>
                 m.clientKey === assistantClientKey
-                  ? { ...event.message, status: "complete" as const }
+                  ? {
+                      ...event.message,
+                      // Keep optimistic key so later place_cards / recommendations still match.
+                      clientKey: assistantClientKey,
+                      content: cleanContent,
+                      status: "complete" as const,
+                    }
                   : m,
               ),
             );
@@ -499,6 +568,23 @@ export default function AIChat({
                   ? {
                       ...m,
                       metadata: { ...m.metadata, recommendations: cards },
+                    }
+                  : m,
+              ),
+            );
+          }
+
+          if (event.type === "place_cards") {
+            const cards: ChatPlaceCard[] = event.cards;
+            setPendingPlaceCardsKey((key) =>
+              key === assistantClientKey ? null : key,
+            );
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.clientKey === assistantClientKey
+                  ? {
+                      ...m,
+                      metadata: { ...m.metadata, placeCards: cards },
                     }
                   : m,
               ),
@@ -522,6 +608,9 @@ export default function AIChat({
           if (event.type === "cancelled") {
             cancelledByUser = true;
             clearDeltaBuffer();
+            setPendingPlaceCardsKey((key) =>
+              key === assistantClientKey ? null : key,
+            );
             setMessages((prev) =>
               prev
                 .map((m): UiMessage => {
@@ -547,7 +636,13 @@ export default function AIChat({
             setConversations((prev) =>
               prev.map((c) =>
                 c.id === event.conversationId
-                  ? { ...c, title: event.title, updated_at: new Date().toISOString() }
+                  ? {
+                      ...c,
+                      title: event.title,
+                      subtitle:
+                        typeof event.subtitle === "string" ? event.subtitle : c.subtitle,
+                      updated_at: new Date().toISOString(),
+                    }
                   : c,
               ),
             );
@@ -563,6 +658,9 @@ export default function AIChat({
 
           if (event.type === "done") {
             sawDone = true;
+            setPendingPlaceCardsKey((key) =>
+              key === assistantClientKey ? null : key,
+            );
           }
         },
         controller.signal,
@@ -607,7 +705,7 @@ export default function AIChat({
         );
         return;
       }
-      const messageText = err instanceof Error ? err.message : "Chat failed";
+      const messageText = formatChatGeminiError(err);
       setError(messageText);
       setFailedRetryContent(trimmed || "retry");
       setRetryMode(userMessageConfirmed ? "regenerate" : "resend");
@@ -685,31 +783,37 @@ export default function AIChat({
         />
       )}
 
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <section
-        className="flex min-h-0 min-w-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm"
+        className="flex min-h-0 min-w-0 flex-1 flex-col"
         aria-label={tripScoped ? "Trip chat" : "AI travel chat"}
       >
-        <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-3 md:px-4">
+        <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2.5 md:px-4">
           {tripScoped ? null : (
             <button
               type="button"
               onClick={() => setMobileSidebarOpen(true)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 md:hidden"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 md:hidden"
               aria-label="Open conversations"
             >
               <PanelLeft className="h-4 w-4" aria-hidden />
             </button>
           )}
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold text-slate-900">
-              {tripScoped ? "Trip chat" : activeTitle}
-            </h2>
-            <p className="text-xs text-slate-500">
-              {tripScoped
-                ? "One conversation for this trip — history stays here."
-                : "Chat to plan your trip. Create a trip when destination and dates are ready."}
-            </p>
-          </div>
+          {tripScoped ? (
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-sm font-semibold text-slate-900">Trip chat</h2>
+              <p className="text-xs text-slate-500">
+                One conversation for this trip — history stays here.
+              </p>
+            </div>
+          ) : (
+            <ChatExploreHeader
+              title={activeTitle}
+              memory={memory}
+              onCreateTrip={() => setCreateTripOpenSignal((n) => n + 1)}
+              createTripDisabled={sending || !activeConversationId}
+            />
+          )}
           <ConversationToolbar
             title={tripScoped ? "Trip chat" : activeTitle}
             conversationId={activeConversationId}
@@ -784,6 +888,14 @@ export default function AIChat({
             const recommendationCards = !isUser
               ? cardsFromMessageMetadata(message.metadata)
               : [];
+            const placeCards = !isUser
+              ? placeCardsFromMessageMetadata(message.metadata)
+              : [];
+            const showPlaceSkeleton =
+              !isUser &&
+              pendingPlaceCardsKey != null &&
+              (message.clientKey ?? message.id) === pendingPlaceCardsKey &&
+              placeCards.length === 0;
             const itineraryProposal = !isUser
               ? proposalFromMessageMetadata(message.metadata)
               : null;
@@ -807,53 +919,87 @@ export default function AIChat({
               >
                 <div className={`flex min-w-0 flex-col ${isUser ? "items-end" : "items-start gap-2"}`}>
                   <div
-                    className={`max-w-[min(100%,42rem)] rounded-2xl px-3.5 py-2.5 ${
-                      isUser
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-50 text-slate-800 ring-1 ring-slate-200"
-                    } ${message.status === "failed" ? "ring-1 ring-rose-300" : ""}`}
+                    className={`w-full max-w-[min(100%,42rem)] ${
+                      isUser ? "" : "space-y-2.5"
+                    }`}
                   >
-                    {isUser ? (
+                  {isUser ? (
+                    <div
+                      className={`rounded-2xl bg-slate-900 px-3.5 py-2.5 text-white ${
+                        message.status === "failed" ? "ring-1 ring-rose-300" : ""
+                      }`}
+                    >
                       <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
-                    ) : isStreamingEmpty ? (
+                    </div>
+                  ) : isStreamingEmpty ? (
+                    <div className="rounded-2xl bg-slate-50 px-3.5 py-2.5 text-slate-800 ring-1 ring-slate-200">
                       <LoadingDots />
-                    ) : (
-                      <div className="text-sm">
-                        <MarkdownMessage content={message.content} />
-                        {isStreamingTokens ? <StreamingCursor /> : null}
-                        {!isStreamingTokens ? (
-                          <>
-                            <DestinationRecommendationCards cards={recommendationCards} />
-                            {itineraryProposal ? (
-                              <ItineraryEditProposalCard
-                                proposal={itineraryProposal}
-                                onStatusChange={(proposalId, status) => {
-                                  setMessages((prev) =>
-                                    prev.map((m) => {
-                                      if ((m.clientKey ?? m.id) !== (message.clientKey ?? message.id)) {
-                                        return m;
-                                      }
-                                      const current = proposalFromMessageMetadata(m.metadata);
-                                      if (!current || current.proposalId !== proposalId) return m;
-                                      return {
-                                        ...m,
-                                        metadata: {
-                                          ...m.metadata,
-                                          itineraryProposal: { ...current, status },
-                                        },
-                                      };
-                                    }),
-                                  );
-                                }}
-                              />
-                            ) : null}
-                          </>
-                        ) : null}
-                      </div>
-                    )}
+                    </div>
+                  ) : (
+                    <div
+                      className={
+                        placeCards.length > 0 || showPlaceSkeleton
+                          ? "min-w-0"
+                          : `rounded-2xl bg-slate-50 px-3.5 py-2.5 text-slate-800 ring-1 ring-slate-200 ${
+                              message.status === "failed" ? "ring-rose-300" : ""
+                            }`
+                      }
+                    >
+                      <AssistantMessageWithPlaces
+                        content={unwrapAssistantContentForDisplay(message.content)}
+                        cards={placeCards}
+                        loadingPlaces={showPlaceSkeleton}
+                        streaming={isStreamingTokens}
+                        streamingCursor={<StreamingCursor />}
+                        onOpenPlace={openPlaceDetails}
+                        onFocusPlaceOnMap={(c) => setFocusedMapPlaceId(c.placeId)}
+                        onHoverPlace={(c) => setFocusedMapPlaceId(c.placeId)}
+                        onHoverPlaceEnd={() => {
+                          // Keep pin highlighted while drawer is open for that place
+                          if (!placeDrawerOpen) setFocusedMapPlaceId(null);
+                        }}
+                        extras={
+                          !isStreamingTokens ? (
+                            <>
+                              <DestinationRecommendationCards cards={recommendationCards} />
+                              {itineraryProposal ? (
+                                <ItineraryEditProposalCard
+                                  proposal={itineraryProposal}
+                                  onStatusChange={(proposalId, status) => {
+                                    setMessages((prev) =>
+                                      prev.map((m) => {
+                                        if (
+                                          (m.clientKey ?? m.id) !==
+                                          (message.clientKey ?? message.id)
+                                        ) {
+                                          return m;
+                                        }
+                                        const current = proposalFromMessageMetadata(m.metadata);
+                                        if (!current || current.proposalId !== proposalId) {
+                                          return m;
+                                        }
+                                        return {
+                                          ...m,
+                                          metadata: {
+                                            ...m.metadata,
+                                            itineraryProposal: { ...current, status },
+                                          },
+                                        };
+                                      }),
+                                    );
+                                  }}
+                                />
+                              ) : null}
+                            </>
+                          ) : null
+                        }
+                      />
+                    </div>
+                  )}
+
                   <div
-                    className={`mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.7rem] ${
-                      isUser ? "text-slate-300" : "text-slate-400"
+                    className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.7rem] ${
+                      isUser ? "justify-end text-slate-300" : "text-slate-400"
                     }`}
                   >
                     <time dateTime={message.created_at}>{formatTimestamp(message.created_at)}</time>
@@ -949,7 +1095,7 @@ export default function AIChat({
                 }
               }}
               rows={1}
-              placeholder="Write a message…"
+              placeholder="Ask anything."
               disabled={sending}
               aria-disabled={sending}
               className="max-h-32 min-h-11 flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-sky-200 placeholder:text-slate-400 focus:ring-2 disabled:opacity-60"
@@ -977,6 +1123,22 @@ export default function AIChat({
           </div>
         </form>
       </section>
+
+      {tripScoped ? null : (
+        <ChatMapPanel
+          places={mapPlaces}
+          focusedPlaceId={focusedMapPlaceId}
+          onSelectPlace={openPlaceDetails}
+          className="hidden w-[min(44%,32rem)] shrink-0 lg:flex xl:w-[min(48%,36rem)]"
+        />
+      )}
+      </div>
+
+      <PlaceDetailsDrawer
+        card={selectedPlace}
+        open={placeDrawerOpen}
+        onClose={() => setPlaceDrawerOpen(false)}
+      />
     </div>
   );
 }

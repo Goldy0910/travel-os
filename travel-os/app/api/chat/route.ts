@@ -1,5 +1,13 @@
-import { generateChatTitle, streamChatCompletion } from "@/lib/chat/gemini-stream";
-import { streamChatCompletionWithTools, type ChatToolCallRecord } from "@/lib/chat/gemini-tools";
+import { streamChatCompletion } from "@/lib/chat/gemini-stream";
+import {
+  buildConversationLabel,
+  conversationLabelIsReady,
+} from "@/lib/chat/conversation-label";
+import {
+  streamChatCompletionWithTools,
+  type ChatToolCallRecord,
+  type ChatToolsStreamResult,
+} from "@/lib/chat/gemini-tools";
 import type { ItineraryEditProposal } from "@/lib/chat/itinerary-edit-types";
 import type { ProposeItineraryEditsOutput } from "@/lib/tools/definitions/propose-itinerary-edits";
 import {
@@ -7,6 +15,15 @@ import {
   resolveDiscoveryPhase,
 } from "@/lib/chat/discovery-agent";
 import { buildChatDestinationCards } from "@/lib/chat/destination-cards";
+import { buildChatPlaceCardsFromEntities } from "@/lib/places/place-enrichment-service";
+import type { ChatPlaceCard } from "@/lib/places/types";
+import { extractPlacesHeuristic } from "@/lib/places/place-extractor";
+import type { ChatEntity, StructuredChatResponse } from "@/lib/chat/structured-response";
+import {
+  mergeChatEntities,
+  parseStructuredChatResponse,
+  stripEntityMarkup,
+} from "@/lib/chat/structured-response";
 import {
   ensureConversationMemory,
   harvestCandidateDestinations,
@@ -18,6 +35,7 @@ import {
 import { emptyConversationMemory } from "@/lib/chat/memory-types";
 import { buildChatRetrievalContext } from "@/lib/chat/context-builder";
 import { buildChatSystemPrompt } from "@/lib/chat/prompts";
+import type { UserLocationPromptContext } from "@/lib/location/types";
 import {
   detectDestinationKnowledgeIntent,
   resolveDestinationSlugs,
@@ -74,10 +92,104 @@ type ChatPostBody = {
   tripId?: unknown;
   /** Re-run the assistant on an existing conversation without inserting another user message. */
   regenerate?: unknown;
+  /**
+   * Optional city/state/country for personalization (client-side LocationService).
+   * Coordinates must never be sent here.
+   */
+  userLocation?: unknown;
 };
 
 function encodeSse(event: ChatStreamEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+/** Accept only city/state/country — strip any accidental coordinates from the client. */
+function parseUserLocationContext(raw: unknown): UserLocationPromptContext | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  // Ignore accidental lat/lng if a client ever sends them
+  const city = typeof o.city === "string" ? o.city.trim() || null : null;
+  const state = typeof o.state === "string" ? o.state.trim() || null : null;
+  const country = typeof o.country === "string" ? o.country.trim() || null : null;
+  if (!city && !state && !country) return null;
+  return { city, state, country };
+}
+
+async function loadProfileLocationContext(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+): Promise<UserLocationPromptContext | null> {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(
+        "location_lat, location_lng, location_city, location_state, location_country, location_enabled",
+      )
+      .eq("id", userId)
+      .maybeSingle();
+    if (error || !data) return null;
+    if (data.location_enabled === false) return null;
+
+    let city =
+      typeof data.location_city === "string" ? data.location_city.trim() || null : null;
+    let state =
+      typeof data.location_state === "string" ? data.location_state.trim() || null : null;
+    let country =
+      typeof data.location_country === "string"
+        ? data.location_country.trim() || null
+        : null;
+
+    // Coords saved but labels missing — reverse-geocode once for the prompt
+    const lat =
+      typeof data.location_lat === "number" && Number.isFinite(data.location_lat)
+        ? data.location_lat
+        : null;
+    const lng =
+      typeof data.location_lng === "number" && Number.isFinite(data.location_lng)
+        ? data.location_lng
+        : null;
+
+    if ((!city && !state && !country) && lat != null && lng != null) {
+      try {
+        const { reverseGeocodeServer } = await import("@/lib/location/geocoder-server");
+        const geo = await reverseGeocodeServer(lat, lng);
+        city = geo.city;
+        state = geo.state;
+        country = geo.country;
+        // Best-effort persist labels for next time
+        if (city || state || country) {
+          void supabase
+            .from("profiles")
+            .update({
+              location_city: city,
+              location_state: state,
+              location_country: country,
+              location_updated_at: new Date().toISOString(),
+            })
+            .eq("id", userId);
+        }
+      } catch {
+        /* keep null */
+      }
+    }
+
+    if (!city && !state && !country) return null;
+    return { city, state, country };
+  } catch {
+    return null;
+  }
+}
+
+/** Prefer client-provided context; fall back to profile. */
+async function resolveUserLocationForPrompt(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+  bodyLocation: unknown,
+): Promise<UserLocationPromptContext | null> {
+  return (
+    parseUserLocationContext(bodyLocation) ??
+    (await loadProfileLocationContext(supabase, userId))
+  );
 }
 
 function isAbortError(error: unknown): boolean {
@@ -286,6 +398,7 @@ export async function POST(req: NextRequest) {
     messageLength: message.length,
     hasConversationId: typeof body.conversationId === "string" && Boolean(body.conversationId),
     hasTripId: typeof body.tripId === "string" && Boolean(body.tripId),
+    hasClientUserLocation: Boolean(parseUserLocationContext(body.userLocation)),
     rateRemaining: rate.remaining,
   });
 
@@ -302,8 +415,6 @@ export async function POST(req: NextRequest) {
 
   let conversationId = requestedConversationId;
   let conversationTitle = "New chat";
-  let isNewConversation = false;
-  let titleSeedMessage = message;
   let activeTripId = requestedTripId;
   let userMessageRow: {
     id: string;
@@ -325,7 +436,6 @@ export async function POST(req: NextRequest) {
     }
     conversationId = ensured.conversation.id;
     conversationTitle = ensured.conversation.title;
-    isNewConversation = ensured.created;
     activeTripId = requestedTripId;
   } else if (conversationId) {
     const { data: existing, error } = await supabase
@@ -380,7 +490,6 @@ export async function POST(req: NextRequest) {
     }
     conversationId = created.id;
     conversationTitle = created.title;
-    isNewConversation = true;
   }
 
   if (!activeTripId) {
@@ -458,11 +567,6 @@ export async function POST(req: NextRequest) {
 
   if (history.length === 0) {
     return Response.json({ ok: false, error: "No messages to reply to" }, { status: 400 });
-  }
-
-  if (!titleSeedMessage) {
-    const firstUser = [...history].reverse().find((h) => h.role === "user");
-    titleSeedMessage = firstUser?.content ?? "New chat";
   }
 
   // Conversation-scoped memory + Discovery Agent state.
@@ -632,6 +736,12 @@ export async function POST(req: NextRequest) {
     chatLogger.warn("chat_context_builder_failed", { requestId, error });
   }
 
+  const resolvedUserLocation = await resolveUserLocationForPrompt(
+    supabase,
+    user.id,
+    body.userLocation,
+  );
+
   chatLogger.info("chat_stream_start", {
     requestId,
     conversationId,
@@ -643,6 +753,8 @@ export async function POST(req: NextRequest) {
     discoveryActive: memory.discovery_active,
     discoveryPhase: memory.discovery_phase,
     hasCompanion: Boolean(companionContext),
+    hasUserLocation: Boolean(resolvedUserLocation),
+    userLocationCity: resolvedUserLocation?.city ?? null,
   });
 
   const systemPrompt = buildChatSystemPrompt(memory, {
@@ -652,6 +764,7 @@ export async function POST(req: NextRequest) {
     tripMemory,
     userTravelMemory,
     retrievedContext,
+    userLocation: resolvedUserLocation,
   });
 
   const signal = req.signal;
@@ -704,16 +817,21 @@ export async function POST(req: NextRequest) {
               });
 
         let toolCalls: ChatToolCallRecord[] = [];
+        let structuredEntities: ChatEntity[] = [];
         if (activeTripId) {
           const toolIter = completion as AsyncGenerator<
             string,
-            ChatToolCallRecord[],
+            ChatToolsStreamResult,
             unknown
           >;
           while (true) {
             const step = await toolIter.next();
             if (step.done) {
-              toolCalls = step.value ?? [];
+              toolCalls = step.value?.toolCalls ?? [];
+              structuredEntities = step.value?.structured.entities ?? [];
+              if (step.value?.structured.response?.trim()) {
+                assistantText = step.value.structured.response;
+              }
               break;
             }
             if (signal.aborted) break;
@@ -721,15 +839,28 @@ export async function POST(req: NextRequest) {
             send({ type: "delta", text: step.value });
           }
         } else {
-          for await (const delta of completion) {
+          const textIter = completion as AsyncGenerator<
+            string,
+            StructuredChatResponse,
+            unknown
+          >;
+          while (true) {
+            const step = await textIter.next();
+            if (step.done) {
+              structuredEntities = step.value?.entities ?? [];
+              if (step.value?.response?.trim()) {
+                assistantText = step.value.response;
+              }
+              break;
+            }
             if (signal.aborted) break;
-            assistantText += delta;
-            send({ type: "delta", text: delta });
+            assistantText += step.value;
+            send({ type: "delta", text: step.value });
           }
         }
 
         if (signal.aborted) {
-          const partial = assistantText.trim();
+          const partial = parseStructuredChatResponse(assistantText).response.trim() || assistantText.trim();
           chatLogger.info("chat_stream_cancelled", {
             requestId,
             conversationId,
@@ -758,9 +889,28 @@ export async function POST(req: NextRequest) {
           return;
         }
 
+        // Always unwrap {response, entities} so we never persist/show raw JSON in the bubble.
+        // Also recover places from mistaken <entity> markup when the model skips the JSON array.
+        const structured = parseStructuredChatResponse(assistantText);
+        if (structured.response.trim()) {
+          assistantText = structured.response;
+        } else {
+          assistantText = stripEntityMarkup(assistantText);
+        }
+        structuredEntities = mergeChatEntities(structuredEntities, structured.entities);
+
         const trimmedAssistant = assistantText.trim();
         if (!trimmedAssistant) {
           throw new Error("Empty AI response");
+        }
+
+        // Last-resort: if the model named places in prose but skipped the entities array,
+        // recover candidates so Google Place cards can still render.
+        if (!structuredEntities.length) {
+          structuredEntities = extractPlacesHeuristic(trimmedAssistant, 6).map((p) => ({
+            type: p.type || "place",
+            name: p.name,
+          }));
         }
 
         // Build inline destination cards during Discovery narrowing/shortlist (no itinerary).
@@ -803,6 +953,60 @@ export async function POST(req: NextRequest) {
         if (itineraryProposal) {
           assistantMetadata.itineraryProposal = itineraryProposal;
         }
+        if (structuredEntities.length > 0) {
+          assistantMetadata.entities = structuredEntities;
+        }
+
+        // Enrich places BEFORE finalizing the assistant message so cards arrive in metadata
+        // (and remain visible even if a later place_cards SSE event is missed).
+        let placeCards: ChatPlaceCard[] = [];
+        try {
+          const enrichPromise = buildChatPlaceCardsFromEntities(structuredEntities, {
+            locationBias:
+              companionContext?.destination ||
+              memory.preferred_destination ||
+              memory.candidate_destinations?.[0] ||
+              resolvedUserLocation?.city ||
+              [resolvedUserLocation?.state, resolvedUserLocation?.country]
+                .filter(Boolean)
+                .join(", ") ||
+              null,
+            limit: 6,
+            signal,
+          });
+          const timeoutPromise = new Promise<ChatPlaceCard[]>((resolve) => {
+            const timer = setTimeout(() => resolve([]), 12_000);
+            signal.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(timer);
+                resolve([]);
+              },
+              { once: true },
+            );
+          });
+          placeCards = await Promise.race([enrichPromise, timeoutPromise]);
+        } catch (error) {
+          chatLogger.warn("chat_place_enrichment_failed", {
+            requestId,
+            conversationId,
+            error: error instanceof Error ? error.message : "unknown",
+            entityCount: structuredEntities.length,
+          });
+          placeCards = [];
+        }
+
+        if (placeCards.length > 0) {
+          assistantMetadata.placeCards = placeCards;
+        }
+
+        chatLogger.info("chat_place_enrichment", {
+          requestId,
+          conversationId,
+          entityCount: structuredEntities.length,
+          placeCardCount: placeCards.length,
+          entities: structuredEntities.map((e) => e.name).slice(0, 8),
+        });
 
         const { data: assistantRow, error: assistantError } = await supabase
           .from("conversation_messages")
@@ -827,6 +1031,9 @@ export async function POST(req: NextRequest) {
         if (itineraryProposal) {
           send({ type: "itinerary_proposal", proposal: itineraryProposal });
         }
+        if (placeCards.length > 0) {
+          send({ type: "place_cards", cards: placeCards });
+        }
 
         // After a narrowing reply, harvest destination shortlist into conversation memory.
         if (
@@ -849,24 +1056,49 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        if (isNewConversation || conversationTitle === "New chat") {
-          try {
-            const title = await generateChatTitle(titleSeedMessage, signal);
-            const { error: titleError } = await supabase
+        // Sidebar label from conversation memory (place + theme) — no LLM title call.
+        const label = buildConversationLabel(memory);
+        const autoTitles = new Set([
+          "new chat",
+          "trip chat",
+          "destination discovery",
+          "trip planning",
+          "untitled",
+          "",
+        ]);
+        const titleIsAuto = autoTitles.has(conversationTitle.trim().toLowerCase());
+        const nextTitle = titleIsAuto && conversationLabelIsReady(label) ? label.title : conversationTitle;
+        const nextSubtitle = label.subtitle;
+        const shouldUpdateLabel =
+          (titleIsAuto && conversationLabelIsReady(label) && nextTitle !== conversationTitle) ||
+          Boolean(nextSubtitle);
+
+        if (shouldUpdateLabel && !signal.aborted) {
+          const payload: { title: string; subtitle?: string } = {
+            title: nextTitle,
+            subtitle: nextSubtitle,
+          };
+          let { error: titleError } = await supabase
+            .from("conversations")
+            .update(payload)
+            .eq("id", conversationId)
+            .eq("user_id", user.id);
+          if (titleError && /subtitle|schema cache|PGRST|column/i.test(titleError.message)) {
+            const retry = await supabase
               .from("conversations")
-              .update({ title })
+              .update({ title: nextTitle })
               .eq("id", conversationId)
               .eq("user_id", user.id);
-            if (!titleError) {
-              send({ type: "title", conversationId, title });
-            }
-          } catch (error) {
-            if (isAbortError(error)) {
-              send({ type: "cancelled", message: asMessageRow(assistantRow) });
-              send({ type: "done" });
-              return;
-            }
-            // Title generation is best-effort
+            titleError = retry.error;
+          }
+          if (!titleError) {
+            conversationTitle = nextTitle;
+            send({
+              type: "title",
+              conversationId,
+              title: nextTitle,
+              subtitle: nextSubtitle,
+            });
           }
         }
 
@@ -875,6 +1107,7 @@ export async function POST(req: NextRequest) {
           conversationId,
           assistantChars: trimmedAssistant.length,
           recommendationCount: recommendationCards.length,
+          placeCardCount: placeCards.length,
           elapsedMs: Date.now() - startedAt,
         });
         send({ type: "done" });
@@ -916,6 +1149,7 @@ export async function POST(req: NextRequest) {
           error,
           elapsedMs: Date.now() - startedAt,
         });
+        // Send raw Gemini error; client formats with local renewal time.
         send({ type: "error", message: messageText });
         send({ type: "done" });
       } finally {

@@ -8,6 +8,11 @@ import type { ToolContext } from "@/lib/tools/types";
 import type { ChatHistoryTurn } from "@/lib/chat/gemini-stream";
 import { GEMINI_GENERATE_MODELS } from "@/lib/ai/gemini-models";
 import { toolsLogger } from "@/lib/observability/logger";
+import {
+  chatStructuredGenerationConfig,
+  parseStructuredChatResponse,
+  type StructuredChatResponse,
+} from "@/lib/chat/structured-response";
 
 registerDefaultTools();
 
@@ -76,13 +81,18 @@ async function generateOnce(input: {
   contents: GeminiContent[];
   tools?: GeminiFunctionDeclaration[];
   signal?: AbortSignal;
+  /** JSON {response, entities} — only when not using function tools. */
+  structuredOutput?: boolean;
 }): Promise<{ parts: GeminiPart[]; finishReason?: string }> {
   throwIfAborted(input.signal);
 
   const body: Record<string, unknown> = {
     systemInstruction: { parts: [{ text: input.systemPrompt }] },
     contents: input.contents,
-    generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+    generationConfig:
+      input.structuredOutput && !(input.tools && input.tools.length > 0)
+        ? chatStructuredGenerationConfig()
+        : { temperature: 0.7, maxOutputTokens: 2048 },
   };
 
   if (input.tools && input.tools.length > 0) {
@@ -129,7 +139,7 @@ export type ChatToolCallRecord = {
 
 /**
  * Non-streaming Gemini turn with optional functionDeclarations.
- * Runs tool calls via the shared executeTool registry, then returns final text.
+ * Runs tool calls via the shared executeTool registry, then returns final text + entities.
  */
 export async function generateChatWithTools(input: {
   systemPrompt: string;
@@ -137,7 +147,7 @@ export async function generateChatWithTools(input: {
   toolNames?: string[];
   toolContext?: ToolContext;
   signal?: AbortSignal;
-}): Promise<{ text: string; toolCalls: ChatToolCallRecord[] }> {
+}): Promise<{ text: string; entities: StructuredChatResponse["entities"]; toolCalls: ChatToolCallRecord[] }> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
@@ -163,24 +173,28 @@ export async function generateChatWithTools(input: {
     try {
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         throwIfAborted(input.signal);
-        const { parts } = await generateOnce({
+        // After tools have run (or on first round), prefer structured JSON for the
+        // user-facing reply. Keep tools enabled so the model can still call them.
+        // Structured schema is only applied when we force a text-only follow-up.
+        let parts: GeminiPart[];
+        ({ parts } = await generateOnce({
           apiKey,
           model,
           systemPrompt: input.systemPrompt,
           contents: roundContents,
           tools: tools.length > 0 ? tools : undefined,
           signal: input.signal,
-        });
+          structuredOutput: false,
+        }));
 
         const calls = extractFunctionCalls(parts);
         if (calls.length === 0) {
-          const text = extractText(parts);
+          let text = extractText(parts);
           if (!text && toolCalls.length === 0) {
             lastError = "Empty AI response";
             break;
           }
           if (!text && toolCalls.length > 0) {
-            // Model returned only function calls earlier; synthesize a short summary.
             const summary = toolCalls
               .map((c) => {
                 const data = c.result as { ok?: boolean; data?: { message?: string }; error?: string };
@@ -191,9 +205,17 @@ export async function generateChatWithTools(input: {
                 return `${c.name} completed`;
               })
               .join(" ");
-            return { text: summary || "Done.", toolCalls };
+            text = summary || "Done.";
           }
-          return { text, toolCalls };
+
+          // Parse structured {response, entities} when the model complies.
+          // Do NOT make a second Gemini call (burns free-tier credits).
+          const structured = parseStructuredChatResponse(text);
+          return {
+            text: structured.response || text,
+            entities: structured.entities,
+            toolCalls,
+          };
         }
 
         toolsLogger.info("gemini_tool_round", {
@@ -249,6 +271,11 @@ export async function generateChatWithTools(input: {
   throw new Error(lastError);
 }
 
+export type ChatToolsStreamResult = {
+  toolCalls: ChatToolCallRecord[];
+  structured: StructuredChatResponse;
+};
+
 /**
  * Async generator wrapper so chat SSE can stream the final text after tools run.
  * Tool rounds are non-streaming; final assistant text is yielded in chunks.
@@ -259,9 +286,13 @@ export async function* streamChatCompletionWithTools(input: {
   toolNames?: string[];
   toolContext?: ToolContext;
   signal?: AbortSignal;
-}): AsyncGenerator<string, ChatToolCallRecord[], unknown> {
-  const { text, toolCalls } = await generateChatWithTools(input);
-  if (!text) return toolCalls;
+}): AsyncGenerator<string, ChatToolsStreamResult, unknown> {
+  const { text, entities, toolCalls } = await generateChatWithTools(input);
+  const structured: StructuredChatResponse = {
+    response: text,
+    entities,
+  };
+  if (!text) return { toolCalls, structured };
 
   // Yield in modest chunks so the UI still feels progressive after tool latency.
   const chunkSize = 48;
@@ -269,5 +300,5 @@ export async function* streamChatCompletionWithTools(input: {
     throwIfAborted(input.signal);
     yield text.slice(i, i + chunkSize);
   }
-  return toolCalls;
+  return { toolCalls, structured };
 }

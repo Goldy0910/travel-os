@@ -1,6 +1,7 @@
 "use client";
 
 import ButtonSpinner from "@/app/app/_components/button-spinner";
+import LocationSettingsPanel from "@/app/app/settings/_components/location-settings-panel";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { upsertProfileOrUserMetadata } from "@/lib/profiles-fallback";
 import { useRouter } from "next/navigation";
@@ -270,6 +271,8 @@ export default function SettingsClient({
           </button>
         </form>
       </section>
+
+      <LocationSettingsPanel />
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">Account</h2>

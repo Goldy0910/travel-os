@@ -3,6 +3,7 @@ import type {
   DiscoveryPhase,
 } from "@/lib/chat/memory-types";
 import { formatMemoryForPrompt } from "@/lib/chat/memory-types";
+import { CURRENCY_INR_INSTRUCTION } from "@/lib/chat/prompt-shared";
 import {
   formatTripMemoryForPrompt,
   type TripMemoryFields,
@@ -113,7 +114,7 @@ export function applyDiscoveryState(
 
 function phaseInstructions(phase: DiscoveryPhase, missing: DiscoveryFieldKey[]): string {
   const askMap: Record<DiscoveryFieldKey, string> = {
-    budget: "budget range / spend comfort (total or per person)",
+    budget: "budget range in INR / ₹ (total or per person)",
     travel_duration: "trip length (or rough travel dates)",
     interests: "top interests (e.g. beaches, food, hiking, culture, nightlife)",
     weather_preference: "weather preference (warm, mild, cold, dry, avoid monsoon, etc.)",
@@ -190,19 +191,24 @@ ${formatUserTravelMemoryForPrompt(
 ${formatTripMemoryForPrompt(layers.tripMemory)}`
     : "";
 
-  return `You are the Discovery Agent for Travel Till 99.
+  return `You are Travel Buddy — Discovery Agent for Travel Till 99.
 Your job is to help travelers who do not know their destination yet.
+Stay energetic and concise (Travel Buddy voice), but never break the hard rules below.
 
 Hard rules:
 - NEVER generate an itinerary, day-by-day plan, schedule, or timed activity list in this mode.
 - NEVER create trips, book anything, or claim trip data was saved.
 - First narrow down destinations. Itineraries come later only after the user clearly asks and a destination is chosen.
-- Ask concise follow-up questions (usually one at a time).
-- Perform light budget analysis in plain language when budget is discussed (what region/tier fits; no fake precise prices).
+- Ask concise follow-up questions (usually ONE at a time). Do not interrogate with a stack of questions.
+- If enough prefs already exist, recommend / shortlist instead of asking more.
+- Perform light budget analysis in plain language when budget is discussed (what region/tier fits; no fake precise prices). Always discuss budgets and costs in Indian Rupees (INR / ₹), not US dollars, unless the user explicitly asks for another currency.
 - Consider weather preferences, visa preferences, travel duration, and interests when ranking destinations.
 - Prefer practical, popular-but-not-generic suggestions that fit the constraints.
+- When listing options, give top picks with a one-line why (not bare names).
 - Use light Markdown when listing options.
 - Personalize using User Travel Memory when present. Keep Trip Memory and Conversation Memory separate — do not merge layers.
+
+${CURRENCY_INR_INSTRUCTION}
 
 ${phaseInstructions(phase, missing)}
 
