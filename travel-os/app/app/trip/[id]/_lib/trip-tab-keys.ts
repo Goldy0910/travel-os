@@ -1,17 +1,17 @@
 /** Tabs shown in the trip detail sticky bar (order matters). */
 export const TRIP_TAB_BAR_KEYS = [
   "chat",
-  "overview",
   "itinerary",
   "expenses",
   "members",
   "docs",
   "guides",
   "language",
+  "tools",
 ] as const;
 
 /** Still routable via `?tab=` but not shown in the sticky bar. */
-export const TRIP_UTILITY_TAB_KEYS = ["checklist", "food", "tools"] as const;
+export const TRIP_UTILITY_TAB_KEYS = ["checklist", "food"] as const;
 
 export const TRIP_TAB_KEYS = [
   ...TRIP_TAB_BAR_KEYS,
@@ -26,7 +26,6 @@ export type ConnectSection = "chat" | "docs" | "members";
 
 export const TRIP_TAB_LABELS: Record<TripTabKey, string> = {
   chat: "Chat",
-  overview: "Overview",
   itinerary: "Itinerary",
   expenses: "Expenses",
   members: "Members",

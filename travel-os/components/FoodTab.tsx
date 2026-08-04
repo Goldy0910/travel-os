@@ -480,105 +480,96 @@ export default function FoodTab({ tripId, destination, initialView = "discover" 
             {isSearching ? "Searching…" : `🍽️ Find restaurants in ${destinationIntel.searchQuery || destination.trim() || "…"}`}
           </button>
 
-          {restaurants.map((r) => {
-            const photoSrc = r.photo_name
-              ? `/api/place-photo?name=${encodeURIComponent(r.photo_name)}&maxH=200`
-              : r.photo_legacy_ref
-                ? `/api/place-photo?ref=${encodeURIComponent(r.photo_legacy_ref)}&maxH=200`
-                : null;
-            return (
-            <div
-              key={r.place_id}
-              className="overflow-hidden rounded-xl border border-gray-100 bg-white"
-            >
-              <div className="flex h-32 items-center justify-center bg-gradient-to-br from-orange-50 to-amber-50">
-                {photoSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- proxied via /api/place-photo
-                  <img
-                    src={photoSrc}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <span className="text-4xl" aria-hidden>
-                    🍽️
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900">{r.name}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">{r.address}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void toggleSave(r)}
-                    className="flex-shrink-0 touch-manipulation text-lg"
-                    aria-label={saved.has(r.place_id) ? "Remove from saved" : "Save restaurant"}
-                  >
-                    {saved.has(r.place_id) ? "❤️" : "🤍"}
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {r.rating != null && (
-                    <span className="rounded-full border border-yellow-100 bg-yellow-50 px-2 py-0.5 text-xs text-yellow-700">
-                      ⭐ {r.rating} ({r.user_rating_count})
-                    </span>
-                  )}
-                  {r.price_level && (
-                    <span className="rounded-full border border-gray-100 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
-                      {getPriceLabel(r.price_level)}
-                    </span>
-                  )}
-                  {r.is_open === true && (
-                    <span className="rounded-full border border-green-100 bg-green-50 px-2 py-0.5 text-xs text-green-700">
-                      Open now
-                    </span>
-                  )}
-                  {r.is_open === false && (
-                    <span className="rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-xs text-red-600">
-                      Closed
-                    </span>
-                  )}
-                </div>
-
-                {r.summary ? (
-                  <p className="text-xs leading-relaxed text-gray-500">{r.summary}</p>
-                ) : null}
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">Group vote:</span>
-                  {VOTES.map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => void castVote(r.place_id, v)}
-                      className={`touch-manipulation rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${
-                        votes[r.place_id] === v
-                          ? VOTE_COLORS[v]
-                          : "border-gray-200 bg-gray-50 text-gray-500"
-                      }`}
-                    >
-                      {VOTE_ICONS[v]}
-                    </button>
-                  ))}
-                </div>
-
-                <a
-                  href={r.maps_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block min-h-11 w-full touch-manipulation rounded-lg border border-gray-200 py-2.5 text-center text-xs font-medium text-gray-700"
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+            {restaurants.map((r) => {
+              const photoSrc = r.photo_name
+                ? `/api/place-photo?name=${encodeURIComponent(r.photo_name)}&maxH=200`
+                : r.photo_legacy_ref
+                  ? `/api/place-photo?ref=${encodeURIComponent(r.photo_legacy_ref)}&maxH=200`
+                  : null;
+              return (
+                <div
+                  key={r.place_id}
+                  className="flex flex-col overflow-hidden rounded-xl border border-gray-100 bg-white"
                 >
-                  🗺️ Get directions
-                </a>
-              </div>
-            </div>
-            );
-          })}
+                  <div className="relative h-20 w-full bg-gradient-to-br from-orange-50 to-amber-50">
+                    {photoSrc ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- proxied via /api/place-photo
+                      <img src={photoSrc} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="flex h-full items-center justify-center text-2xl" aria-hidden>
+                        🍽️
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void toggleSave(r)}
+                      className="absolute right-1 top-1 flex h-6 w-6 touch-manipulation items-center justify-center rounded-full bg-white/90 text-xs shadow-sm"
+                      aria-label={saved.has(r.place_id) ? "Remove from saved" : "Save restaurant"}
+                    >
+                      {saved.has(r.place_id) ? "❤️" : "🤍"}
+                    </button>
+                  </div>
+
+                  <div className="flex flex-1 flex-col gap-1 p-2">
+                    <p className="truncate text-xs font-medium text-gray-900">{r.name}</p>
+                    <p className="truncate text-[11px] text-gray-500">{r.address}</p>
+
+                    <div className="flex flex-wrap items-center gap-1">
+                      {r.rating != null && (
+                        <span className="rounded-full border border-yellow-100 bg-yellow-50 px-1.5 py-0.5 text-[10px] text-yellow-700">
+                          ⭐ {r.rating}
+                        </span>
+                      )}
+                      {r.price_level && (
+                        <span className="rounded-full border border-gray-100 bg-gray-50 px-1.5 py-0.5 text-[10px] text-gray-600">
+                          {getPriceLabel(r.price_level)}
+                        </span>
+                      )}
+                      {r.is_open === true && (
+                        <span className="rounded-full border border-green-100 bg-green-50 px-1.5 py-0.5 text-[10px] text-green-700">
+                          Open
+                        </span>
+                      )}
+                      {r.is_open === false && (
+                        <span className="rounded-full border border-red-100 bg-red-50 px-1.5 py-0.5 text-[10px] text-red-600">
+                          Closed
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-auto flex items-center justify-between gap-1 pt-1">
+                      <div className="flex gap-0.5">
+                        {VOTES.map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => void castVote(r.place_id, v)}
+                            className={`touch-manipulation rounded-full border px-1.5 py-0.5 text-[11px] transition-all ${
+                              votes[r.place_id] === v
+                                ? VOTE_COLORS[v]
+                                : "border-gray-200 bg-gray-50 text-gray-500"
+                            }`}
+                          >
+                            {VOTE_ICONS[v]}
+                          </button>
+                        ))}
+                      </div>
+                      <a
+                        href={r.maps_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex h-6 w-6 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 text-xs"
+                        aria-label="Get directions"
+                      >
+                        🗺️
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
           {searched && !isSearching && restaurants.length === 0 && (
             <div className="py-10 text-center text-sm text-gray-400">

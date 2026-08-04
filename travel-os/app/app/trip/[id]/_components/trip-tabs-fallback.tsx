@@ -1,19 +1,19 @@
 export default function TripTabsFallback() {
   return (
-    <div className="travel-os-content flex flex-col self-center">
+    <div className="flex w-full flex-col">
       <div
         className="scrollbar-hide sticky top-0 z-[115] -mx-4 flex gap-2 overflow-hidden border-b border-slate-200/90 bg-white/95 px-3 pb-0 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-white/90"
         aria-hidden
       >
         {[
           "Chat",
-          "Overview",
           "Itinerary",
           "Expenses",
           "Members",
           "Documents",
           "Guide",
           "Language",
+          "Tools",
         ].map((label) => (
           <div
             key={label}

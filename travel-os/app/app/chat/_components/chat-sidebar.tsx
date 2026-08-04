@@ -22,8 +22,9 @@ type ChatSidebarProps = {
   onNewChat: () => void;
   onConversationsChange: (conversations: Conversation[]) => void;
   onDeletedActive: () => void;
-  mobileOpen?: boolean;
-  onMobileOpenChange?: (open: boolean) => void;
+  /** Shown as an overlay above the chat page on every screen size. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 };
 
 type DateGroup = {
@@ -84,8 +85,8 @@ export default function ChatSidebar({
   onNewChat,
   onConversationsChange,
   onDeletedActive,
-  mobileOpen = false,
-  onMobileOpenChange,
+  open,
+  onOpenChange,
 }: ChatSidebarProps) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -284,7 +285,7 @@ export default function ChatSidebar({
           type="button"
           onClick={() => {
             onNewChat();
-            onMobileOpenChange?.(false);
+            onOpenChange(false);
           }}
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
         >
@@ -402,7 +403,7 @@ export default function ChatSidebar({
                           type="button"
                           onClick={() => {
                             onSelect(conversation.id);
-                            onMobileOpenChange?.(false);
+                            onOpenChange(false);
                           }}
                           className="min-w-0 flex-1 px-2.5 py-2 text-left text-sm"
                         >
@@ -484,38 +485,34 @@ export default function ChatSidebar({
     </div>
   );
 
-  return (
-    <>
-      {/* Desktop sidebar */}
-      <aside className="hidden h-full min-h-0 w-[17.5rem] shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm md:flex">
-        {sidebarBody}
-      </aside>
+  if (!open) return null;
 
-      {/* Mobile drawer */}
-      {mobileOpen ? (
-        <div className="fixed inset-0 z-[130] md:hidden">
+  // Overlay on every breakpoint: the chat page underneath stays mounted and
+  // is revealed (and updated) as soon as the user makes a selection here.
+  // On desktop the app's left nav rail stays put — the overlay (and its
+  // backdrop) starts beside it rather than covering it.
+  return (
+    <div className="fixed inset-0 z-[130] md:left-[var(--travel-os-sidebar-w)]">
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/40"
+        aria-label="Close conversations"
+        onClick={() => onOpenChange(false)}
+      />
+      <div className="absolute inset-y-0 left-0 flex w-[min(22rem,88vw)] flex-col overflow-hidden bg-slate-50 shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
+          <p className="text-sm font-semibold text-slate-900">Conversations</p>
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/40"
-            aria-label="Close conversations"
-            onClick={() => onMobileOpenChange?.(false)}
-          />
-          <div className="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col overflow-hidden bg-slate-50 shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
-              <p className="text-sm font-semibold text-slate-900">Conversations</p>
-              <button
-                type="button"
-                onClick={() => onMobileOpenChange?.(false)}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1">{sidebarBody}</div>
-          </div>
+            onClick={() => onOpenChange(false)}
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-      ) : null}
-    </>
+        <div className="min-h-0 flex-1">{sidebarBody}</div>
+      </div>
+    </div>
   );
 }

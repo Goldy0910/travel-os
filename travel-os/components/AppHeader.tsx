@@ -125,7 +125,7 @@ export function AppHeader() {
       style={{ minHeight: HEADER_H }}
     >
       <div
-        className="travel-os-content flex h-14 items-center gap-2 px-4 pt-[max(0px,env(safe-area-inset-top))] md:px-8"
+        className="flex h-14 w-full items-center gap-2 px-4 pt-[max(0px,env(safe-area-inset-top))] md:px-6 lg:px-10 xl:px-14"
         style={{ minHeight: HEADER_H }}
       >
         <div className="flex w-10 shrink-0 justify-start">
@@ -143,13 +143,11 @@ export function AppHeader() {
           )}
         </div>
 
-        <div className="min-w-0 flex-1 px-1 text-center">
+        <div className="min-w-0 flex-1 px-1 text-left">
           <h1 className="truncate text-[1.05rem] font-semibold tracking-tight text-slate-900">
             {title}
           </h1>
         </div>
-
-        <div className="w-10 shrink-0" aria-hidden />
       </div>
     </header>
   );

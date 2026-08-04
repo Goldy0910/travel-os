@@ -9,6 +9,10 @@ import { UserRound } from "lucide-react";
 
 const LAST_TRIP_STORAGE_KEY = "travel-os-last-trip-id";
 const QUICK_ACTION_EVENT = "travel-os-open-quick-action";
+// Clicking "Chat" while already on the chat landing page is a same-URL no-op for the
+// router (no navigation, no remount), so the conversation picker overlay never gets a
+// chance to reset. This event tells any mounted chat page to show it directly.
+const OPEN_CHAT_PICKER_EVENT = "travel-os-open-chat-picker";
 
 function extractTripIdFromPath(path: string): string | null {
   const m = path.match(/\/trip\/([^/?#]+)/i);
@@ -138,7 +142,6 @@ export default function MobileBottomNav() {
       tripTabParam === "expenses" ||
       tripTabParam === "members" ||
       tripTabParam === "chat" ||
-      tripTabParam === "overview" ||
       tripTabParam === "connect" ||
       tripTabParam === "guides" ||
       tripTabParam === "checklist" ||
@@ -171,7 +174,6 @@ export default function MobileBottomNav() {
       tripTabLower === "tools" ||
       tripTabLower === "members" ||
       tripTabLower === "chat" ||
-      tripTabLower === "overview" ||
       tripTabLower === "connect" ||
       (!tripTabParam && normalizedPath.startsWith("/trip/")) ||
       connectShowsDocsFab);
@@ -278,6 +280,10 @@ export default function MobileBottomNav() {
     setActionsOpen((v) => !v);
   };
 
+  const onChatNavClick = () => {
+    window.dispatchEvent(new CustomEvent(OPEN_CHAT_PICKER_EVENT));
+  };
+
   return (
     <>
       {actionsOpen ? (
@@ -358,6 +364,7 @@ export default function MobileBottomNav() {
               <Link
                 key={tab.label}
                 href={tab.href}
+                onClick={tab.label === "Chat" ? onChatNavClick : undefined}
                 className="relative z-[101] flex min-h-12 w-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 touch-manipulation"
               >
                 <MobileNavTabInner Icon={Icon} active={tab.active} label={tab.label} />
@@ -383,6 +390,7 @@ export default function MobileBottomNav() {
               <Link
                 key={tab.label}
                 href={tab.href}
+                onClick={tab.label === "Chat" ? onChatNavClick : undefined}
                 className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition ${
                   tab.active
                     ? "bg-slate-100 text-slate-900 ring-1 ring-slate-200"

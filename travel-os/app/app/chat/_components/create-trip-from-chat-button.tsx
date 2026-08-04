@@ -74,16 +74,16 @@ export default function CreateTripFromChatButton({
   const openConfirm = () => {
     if (!memory || !conversationId) return;
     const built = buildTripDraftFromMemory(memory);
-    if (!built.ok || !built.draft) {
-      toast.error(built.ok === false ? built.error : "Not enough trip details yet");
-      return;
+    const params = new URLSearchParams({ conversationId });
+    const draft = built.draft;
+    if (draft?.travelPlaceSlug) {
+      params.set("place", draft.travelPlaceSlug);
+    } else if (draft?.location) {
+      params.set("destination", draft.location);
     }
-    setLocation(built.draft.location);
-    setStartDate(built.draft.startDate);
-    setEndDate(built.draft.endDate);
-    setBudget(built.draft.budget ?? "");
-    setTravelers(built.draft.travelers ?? "");
-    setOpen(true);
+    // The create-trip page owns date selection. It also reads this conversation's
+    // memory to prefill any details that the chat already established.
+    router.push(`/app/create-trip?${params.toString()}`);
   };
 
   // SuggestedActions (and similar) can request the existing confirm dialog without reimplementing create.

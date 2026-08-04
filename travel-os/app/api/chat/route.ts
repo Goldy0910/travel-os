@@ -14,9 +14,9 @@ import {
   applyDiscoveryState,
   resolveDiscoveryPhase,
 } from "@/lib/chat/discovery-agent";
-import { buildChatDestinationCards } from "@/lib/chat/destination-cards";
 import { buildChatPlaceCardsFromEntities } from "@/lib/places/place-enrichment-service";
 import type { ChatPlaceCard } from "@/lib/places/types";
+import type { ChatDestinationCard } from "@/lib/chat/destination-card-types";
 import { extractPlacesHeuristic } from "@/lib/places/place-extractor";
 import type { ChatEntity, StructuredChatResponse } from "@/lib/chat/structured-response";
 import {
@@ -79,6 +79,7 @@ const KNOWLEDGE_CONTEXT_MAX_CHARS = 12_000;
 /** Tools exposed to trip-scoped companion chat. */
 const TRIP_CHAT_TOOL_NAMES = [
   "generate_itinerary",
+  "update_trip",
   "propose_itinerary_edits",
   "get_companion_context",
   "query_guide",
@@ -913,19 +914,12 @@ export async function POST(req: NextRequest) {
           }));
         }
 
-        // Build inline destination cards during Discovery narrowing/shortlist (no itinerary).
-        const recommendationCards =
-          memory.discovery_active &&
-          (memory.discovery_phase === "narrowing" || memory.discovery_phase === "shortlist")
-            ? buildChatDestinationCards({
-                memory,
-                candidateNames: [
-                  ...harvestCandidateDestinations(trimmedAssistant),
-                  ...memory.candidate_destinations,
-                ],
-                limit: 4,
-              })
-            : [];
+        // Destination comparison cards used to render alongside the entity-driven place
+        // cards below, but they're sourced from a small hardcoded catalog and fall back to
+        // generic top picks when the model names places outside it — producing a second,
+        // mismatched set of suggestions under the same reply. Disabled so every reply shows
+        // exactly one set of cards, always matching what the model actually said.
+        const recommendationCards: ChatDestinationCard[] = [];
 
         // Capture propose_itinerary_edits proposals for confirmation UI (never auto-applied).
         let itineraryProposal: ItineraryEditProposal | null = null;
@@ -971,7 +965,9 @@ export async function POST(req: NextRequest) {
                 .filter(Boolean)
                 .join(", ") ||
               null,
-            limit: 6,
+            // Keep a card for every place the model explicitly recommends.
+            // The reply UI renders these in a horizontally scrollable strip.
+            limit: structuredEntities.length,
             signal,
           });
           const timeoutPromise = new Promise<ChatPlaceCard[]>((resolve) => {

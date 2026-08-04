@@ -1,4 +1,7 @@
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getMemberRole } from "@/lib/trip-membership";
 import type { ToolDefinition, ToolResult } from "@/lib/tools/types";
+import { revalidatePath } from "next/cache";
 
 export type UpdateTripInput = {
   tripId: string;
@@ -9,15 +12,14 @@ export type UpdateTripInput = {
 };
 
 export type UpdateTripOutput = {
-  status: "stub";
+  status: "updated";
   message: string;
   patch: UpdateTripInput;
-  nextSteps: string[];
 };
 
 /**
- * Framework stub for update_trip.
- * Real updates use updateTripDetailsAction (organizer-only).
+ * Persist trip details for an organizer. The trip chat uses this to extend a
+ * trip before it proposes activities for a newly added day.
  */
 export const updateTripTool: ToolDefinition<UpdateTripInput, UpdateTripOutput> = {
   name: "update_trip",
@@ -58,9 +60,12 @@ export const updateTripTool: ToolDefinition<UpdateTripInput, UpdateTripOutput> =
     },
   },
   async handler(input, ctx): Promise<ToolResult<UpdateTripOutput>> {
-    const tripId = input.tripId || ctx.tripId;
+    const tripId = (input.tripId || ctx.tripId || "").trim();
     if (!tripId) {
       return { ok: false, error: "tripId is required", code: "INVALID_INPUT" };
+    }
+    if (!ctx.userId) {
+      return { ok: false, error: "Authentication required", code: "UNAUTHORIZED" };
     }
 
     const hasPatch =
@@ -77,7 +82,32 @@ export const updateTripTool: ToolDefinition<UpdateTripInput, UpdateTripOutput> =
       };
     }
 
-    if (input.startDate && input.endDate && input.endDate < input.startDate) {
+    const supabase = await createSupabaseServerClient();
+    const role = await getMemberRole(supabase, tripId, ctx.userId);
+    if (role !== "organizer") {
+      return {
+        ok: false,
+        error: "Only the trip organizer can change trip dates or details.",
+        code: "UNAUTHORIZED",
+      };
+    }
+
+    const { data: current, error: currentError } = await supabase
+      .from("trips")
+      .select("start_date, end_date")
+      .eq("id", tripId)
+      .maybeSingle();
+    if (currentError || !current) {
+      return {
+        ok: false,
+        error: currentError?.message || "Trip not found",
+        code: "HANDLER_ERROR",
+      };
+    }
+
+    const startDate = input.startDate?.trim() || String(current.start_date ?? "").slice(0, 10);
+    const endDate = input.endDate?.trim() || String(current.end_date ?? "").slice(0, 10);
+    if (startDate && endDate && endDate < startDate) {
       return {
         ok: false,
         error: "endDate must be on or after startDate",
@@ -86,15 +116,26 @@ export const updateTripTool: ToolDefinition<UpdateTripInput, UpdateTripOutput> =
     }
 
     const patch: UpdateTripInput = { ...input, tripId };
+    const updates: Record<string, string> = {};
+    if (input.title?.trim()) updates.title = input.title.trim();
+    if (input.location?.trim()) updates.location = input.location.trim();
+    if (input.startDate?.trim()) updates.start_date = input.startDate.trim();
+    if (input.endDate?.trim()) updates.end_date = input.endDate.trim();
+
+    const { error: updateError } = await supabase.from("trips").update(updates).eq("id", tripId);
+    if (updateError) {
+      return { ok: false, error: updateError.message, code: "HANDLER_ERROR" };
+    }
+
+    revalidatePath(`/app/trip/${tripId}`);
+    revalidatePath("/app/home");
 
     return {
       ok: true,
       data: {
-        status: "stub",
-        message:
-          "update_trip validated input but did not persist. Connect to updateTripDetailsAction when enabling tool calls.",
+        status: "updated",
+        message: "Trip details updated.",
         patch,
-        nextSteps: ["app/app/trip/[id]/data-actions.ts (updateTripDetailsAction)"],
       },
     };
   },

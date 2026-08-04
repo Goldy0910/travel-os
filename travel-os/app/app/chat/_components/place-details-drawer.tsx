@@ -217,7 +217,9 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
   );
 
   return (
-    <div className="fixed inset-0 z-[130] flex justify-end" role="presentation">
+    // Above the map panel's own floating controls (search/zoom/place-chip bar all sit at
+    // z-[500]) so this drawer always renders on top of the map instead of behind it.
+    <div className="fixed inset-0 z-[520] flex justify-end" role="presentation">
       <button
         type="button"
         className="absolute inset-0 bg-slate-950/35"
@@ -430,37 +432,6 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
             </section>
           ) : null}
         </div>
-
-        {/* Bottom fixed tab bar — stays reachable while scrolled deep into the modal */}
-        {tabsPinned ? (
-          <div className="shrink-0 border-t border-slate-200 bg-white/95 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-            <div
-              className="flex gap-1 overflow-x-auto px-3 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              role="tablist"
-              aria-label="Place sections (fixed)"
-            >
-              {sections.map((section) => {
-                const active = activeSection === section.id;
-                return (
-                  <button
-                    key={`bottom-${section.id}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => scrollToSection(section.id)}
-                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                      active
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
-                    }`}
-                  >
-                    {section.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
       </aside>
     </div>
   );

@@ -9,6 +9,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -31,12 +32,14 @@ import TripUpdateBottomSheet, {
   type TripEditDefaults,
 } from "./trip-update-bottom-sheet";
 import ItineraryCreationSetup from "./itinerary-creation-setup";
-import ActivityDetailsNavLink from "./activity-details-nav-link";
 import TripManageMenu from "./trip-manage-menu";
 import ItineraryAiAssistant, {
   type AiSuggestionCard,
   type AssistantDayActivity,
 } from "./itinerary-ai-assistant";
+import ChatMapPanel from "@/app/app/chat/_components/chat-map-panel";
+import PlaceDetailsDrawer from "@/app/app/chat/_components/place-details-drawer";
+import type { ChatPlaceCard } from "@/lib/places/types";
 
 const FALLBACK_TRIP_EDIT_DEFAULTS: TripEditDefaults = {
   title: "",
@@ -81,6 +84,10 @@ type TripItineraryShellProps = {
   /** Workspace layout hides duplicate headers and uses collapsible day cards. */
   layoutMode?: "classic" | "workspace";
   onRegisterManageTrip?: (open: (() => void) | null) => void;
+  /** Rendered above the hero card, inside the scrollable left column (e.g. a join banner). */
+  topBanner?: import("react").ReactNode;
+  /** Rendered below the AI assistant, inside the scrollable left column (e.g. activity feed). */
+  children?: import("react").ReactNode;
 };
 
 function formatDateLabel(input: string) {
@@ -323,6 +330,8 @@ type ItineraryActivityCardProps = {
   initialComments: EntityCommentDTO[];
   memberLabelByUserId: Record<string, string>;
   onEdit: () => void;
+  onOpenDetails: () => void;
+  onHoverPlace?: (hovering: boolean) => void;
 };
 
 const ItineraryActivityCard = memo(function ItineraryActivityCard({
@@ -334,6 +343,8 @@ const ItineraryActivityCard = memo(function ItineraryActivityCard({
   initialComments,
   memberLabelByUserId,
   onEdit,
+  onOpenDetails,
+  onHoverPlace,
 }: ItineraryActivityCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const fullTitleText = item.activity_name || item.title || "Activity";
@@ -347,9 +358,12 @@ const ItineraryActivityCard = memo(function ItineraryActivityCard({
   return (
     <article className="rounded-xl border border-black/[0.08] bg-white shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:border-black/[0.16] active:scale-[0.99] motion-reduce:transition-none [content-visibility:auto] [contain-intrinsic-size:auto_4.5rem]">
       <div className="flex items-center gap-2 px-3 py-2.5">
-        <ActivityDetailsNavLink
-          href={`/app/trip/${encodeURIComponent(tripId)}/activity/${encodeURIComponent(item.id)}?from=itinerary`}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        <button
+          type="button"
+          onClick={onOpenDetails}
+          onMouseEnter={() => onHoverPlace?.(true)}
+          onMouseLeave={() => onHoverPlace?.(false)}
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <div
             className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${pinTileClass}`}
@@ -388,7 +402,7 @@ const ItineraryActivityCard = memo(function ItineraryActivityCard({
               ) : null}
             </div>
           </div>
-        </ActivityDetailsNavLink>
+        </button>
 
         <div className="flex shrink-0 items-center gap-1.5">
           {commentCount > 0 ? (
@@ -482,6 +496,8 @@ export default function TripItineraryShell({
   itinerarySetupComplete = true,
   layoutMode = "classic",
   onRegisterManageTrip,
+  topBanner,
+  children,
 }: TripItineraryShellProps) {
   const isWorkspace = layoutMode === "workspace";
   const { runAction } = useFormActionFeedback();
@@ -504,6 +520,11 @@ export default function TripItineraryShell({
   const [aiSuggestions, setAiSuggestions] = useState<AiSuggestionCard[]>([]);
   const formKeySeq = useRef(0);
   const [expandedDates, setExpandedDates] = useState<Set<string>>(() => new Set());
+
+  const [itineraryPlaces, setItineraryPlaces] = useState<Record<string, ChatPlaceCard>>({});
+  const [focusedMapPlaceId, setFocusedMapPlaceId] = useState<string | null>(null);
+  const [placeDrawerOpen, setPlaceDrawerOpen] = useState(false);
+  const [placeDrawerCard, setPlaceDrawerCard] = useState<ChatPlaceCard | null>(null);
 
   const openTripUpdate = useCallback(() => {
     tripUpdateKeySeq.current += 1;
@@ -534,6 +555,7 @@ export default function TripItineraryShell({
       queueMicrotask(() => {
         setSheetOpen(false);
         setTripUpdateOpen(false);
+        setPlaceDrawerOpen(false);
       });
     }
   }, [itineraryTabActive]);
@@ -633,6 +655,59 @@ export default function TripItineraryShell({
     setSheetOpen(true);
   };
 
+  const itineraryItemIdsKey = orderedDates
+    .flatMap((d) => (grouped[d] ?? []).map((i) => i.id))
+    .join(",");
+
+  useEffect(() => {
+    if (!itineraryItemIdsKey) {
+      setItineraryPlaces({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/trip/${encodeURIComponent(tripId)}/itinerary-places`);
+        const data = (await res.json()) as { ok?: boolean; places?: Record<string, ChatPlaceCard> };
+        if (!cancelled && res.ok && data.ok && data.places) {
+          setItineraryPlaces(data.places);
+        }
+      } catch {
+        // Map pins are a nice-to-have; ignore lookup failures silently.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tripId, itineraryItemIdsKey]);
+
+  const openActivityDetails = (item: ItineraryItemDTO) => {
+    const card = itineraryPlaces[item.id];
+    const fallback: ChatPlaceCard = {
+      placeId: "",
+      name: item.activity_name || item.title || "Activity",
+      photoName: null,
+      photoUrl: "",
+      rating: null,
+      userRatingCount: 0,
+      category: "",
+      address: item.location || "",
+      openNow: null,
+      mapsUrl: "",
+      priceLevel: "",
+      summary: "",
+      lat: null,
+      lng: null,
+      websiteUrl: "",
+      phone: "",
+    };
+    setPlaceDrawerCard(card ?? fallback);
+    setFocusedMapPlaceId(card?.placeId ?? null);
+    setPlaceDrawerOpen(true);
+  };
+
+  const mapPlaceCards = useMemo(() => Object.values(itineraryPlaces), [itineraryPlaces]);
+
   const emptyState =
     orderedDates.length === 0 ? (
       <p className="mt-3 text-sm text-slate-600">
@@ -698,6 +773,9 @@ export default function TripItineraryShell({
 
   return (
     <>
+    <div className="lg:grid lg:h-full lg:min-h-0 lg:grid-cols-2 lg:items-start lg:gap-4">
+    <div className="min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+      {topBanner ? <div className="mb-4">{topBanner}</div> : null}
       {!isWorkspace ? (
       <section className="rounded-xl bg-[#1a2340] p-5 text-white shadow-md">
         <div className="flex items-start justify-between gap-3">
@@ -877,6 +955,12 @@ export default function TripItineraryShell({
                                 initialComments={itemComments}
                                 memberLabelByUserId={memberLabelByUserId}
                                 onEdit={() => openEdit(item)}
+                                onOpenDetails={() => openActivityDetails(item)}
+                                onHoverPlace={(hovering) => {
+                                  const card = itineraryPlaces[item.id];
+                                  if (!card) return;
+                                  setFocusedMapPlaceId(hovering ? card.placeId : null);
+                                }}
                               />
                               {idx < dateItems.length - 1 && travelMinutes != null ? (
                                 <TravelConnector minutes={travelMinutes} />
@@ -918,6 +1002,22 @@ export default function TripItineraryShell({
           onSuggestion={(card) => setAiSuggestions((prev) => [card, ...prev].slice(0, 6))}
         />
       ) : null}
+      {children ? <div className="mt-4">{children}</div> : null}
+    </div>
+
+    {itineraryTabActive ? (
+      <ChatMapPanel
+        places={mapPlaceCards}
+        focusedPlaceId={focusedMapPlaceId}
+        onSelectPlace={(card) => {
+          setPlaceDrawerCard(card);
+          setFocusedMapPlaceId(card.placeId);
+          setPlaceDrawerOpen(true);
+        }}
+        className="hidden lg:flex lg:h-full lg:rounded-2xl lg:border lg:border-slate-200"
+      />
+    ) : null}
+    </div>
 
       {itineraryTabActive ? (
         <ActivityBottomSheet
@@ -936,6 +1036,14 @@ export default function TripItineraryShell({
           tripId={tripId}
           defaults={tripEditDefaults}
           formKey={`${tripId}-${tripUpdateFormKey}`}
+        />
+      ) : null}
+
+      {itineraryTabActive ? (
+        <PlaceDetailsDrawer
+          card={placeDrawerCard}
+          open={placeDrawerOpen}
+          onClose={() => setPlaceDrawerOpen(false)}
         />
       ) : null}
     </>

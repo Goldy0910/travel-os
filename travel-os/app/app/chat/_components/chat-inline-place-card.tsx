@@ -20,7 +20,7 @@ export default function ChatInlinePlaceCard({
 }: ChatInlinePlaceCardProps) {
   return (
     <article
-      className="w-[min(85vw,19.5rem)] shrink-0 snap-start overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition hover:border-slate-300 hover:shadow-md"
+      className="h-[8.5rem] w-[min(85vw,19.5rem)] shrink-0 snap-start overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition hover:border-slate-300 hover:shadow-md"
       aria-label={`${card.name}${card.category ? `, ${card.category}` : ""}`}
     >
       <button
@@ -109,7 +109,7 @@ export default function ChatInlinePlaceCard({
 export function ChatInlinePlaceCardSkeleton() {
   return (
     <div
-      className="flex w-[min(85vw,19.5rem)] shrink-0 animate-pulse overflow-hidden rounded-2xl border border-slate-200 bg-white"
+      className="flex h-[8.5rem] w-[min(85vw,19.5rem)] shrink-0 animate-pulse overflow-hidden rounded-2xl border border-slate-200 bg-white"
       aria-hidden
     >
       <div className="flex-1 space-y-2 p-3">

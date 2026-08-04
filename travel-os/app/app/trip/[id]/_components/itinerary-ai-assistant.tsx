@@ -453,7 +453,8 @@ export default function ItineraryAiAssistant({
 
   return (
     <>
-      <div className="fixed bottom-[calc(var(--travel-os-fab-bottom)+4.75rem)] right-[max(1rem,env(safe-area-inset-right,0px))] z-[130]">
+      {/* Floating trigger hidden — the itinerary tab no longer surfaces this as a button. */}
+      <div className="hidden">
         <button
           type="button"
           onClick={() => setOpen(true)}

@@ -1,16 +1,13 @@
 "use client";
 
 import {
-  isConversationReadyToCreateTrip,
   resolveDestinationFromMemory,
 } from "@/lib/chat/create-trip-from-conversation";
 import type { ConversationMemory } from "@/lib/chat/memory-types";
 import {
   BedDouble,
-  GitCompareArrows,
   MapPinned,
   Route,
-  Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -31,10 +28,8 @@ export type SuggestedActionsContext = {
 type ActionId =
   | "generate_itinerary"
   | "create_trip"
-  | "add_members"
   | "estimate_budget"
-  | "find_hotels"
-  | "compare_destinations";
+  | "find_hotels";
 
 type SuggestedAction = {
   id: ActionId;
@@ -72,31 +67,25 @@ export function buildSuggestedActions(ctx: {
   if (ctx.tripScoped) {
     return [
       { id: "generate_itinerary", label: "Generate itinerary", Icon: Route },
-      { id: "add_members", label: "Add members", Icon: Users },
       { id: "estimate_budget", label: "Estimate budget", Icon: Wallet },
       { id: "find_hotels", label: "Find hotels", Icon: BedDouble },
-      { id: "compare_destinations", label: "Compare destinations", Icon: GitCompareArrows },
     ];
   }
 
   const standalone: SuggestedAction[] = [
     { id: "create_trip", label: "Create trip", Icon: MapPinned },
-    { id: "compare_destinations", label: "Compare destinations", Icon: GitCompareArrows },
     { id: "estimate_budget", label: "Estimate budget", Icon: Wallet },
     { id: "find_hotels", label: "Find hotels", Icon: BedDouble },
     { id: "generate_itinerary", label: "Generate itinerary", Icon: Route },
-    { id: "add_members", label: "Add members", Icon: Users },
   ];
 
   if (discovering) {
     // Prefer discovery / destination actions while narrowing options.
     const order: ActionId[] = [
-      "compare_destinations",
       "estimate_budget",
       "create_trip",
       "find_hotels",
       "generate_itinerary",
-      "add_members",
     ];
     return order
       .map((id) => standalone.find((a) => a.id === id)!)
@@ -136,28 +125,13 @@ export default function SuggestedActions({
         return;
       }
       case "create_trip": {
-        // Reuse chat-linked create when ready; otherwise the create-trip form.
-        if (
-          conversationId &&
-          memory &&
-          isConversationReadyToCreateTrip(memory) &&
-          onRequestCreateTrip
-        ) {
+        // Always start from the chat-linked form when a conversation exists.
+        // Dates may still be chosen there if the discussion has not set them.
+        if (conversationId && onRequestCreateTrip) {
           onRequestCreateTrip();
           return;
         }
         router.push(createTripHref(memory));
-        return;
-      }
-      case "add_members": {
-        // Members invite UI is trip-scoped.
-        if (tripScoped && tripId) {
-          router.push(tripPath(tripId, "members"));
-          return;
-        }
-        onSendPrompt(
-          "I'd like to plan for a travel group — help me capture how many people are going and what to share when I invite members.",
-        );
         return;
       }
       case "estimate_budget": {
@@ -179,11 +153,6 @@ export default function SuggestedActions({
         onSendPrompt(
           "Suggest neighborhoods and hotel/stay options that fit our destination, dates, budget, and style.",
         );
-        return;
-      }
-      case "compare_destinations": {
-        // Existing find-destination quiz / recommend flow.
-        router.push("/find-destination");
         return;
       }
       default:

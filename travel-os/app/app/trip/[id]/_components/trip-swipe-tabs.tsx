@@ -29,7 +29,6 @@ const TAB_COUNT = TRIP_TAB_KEYS.length;
 
 type Props = {
   chat: ReactNode;
-  overview: ReactNode;
   itinerary: ReactNode;
   expenses: ReactNode;
   members: ReactNode;
@@ -48,7 +47,6 @@ type Props = {
  */
 export default function TripSwipeTabs({
   chat,
-  overview,
   itinerary,
   expenses,
   members,
@@ -83,18 +81,17 @@ export default function TripSwipeTabs({
   const panels: ReactNode[] = useMemo(
     () => [
       chat,
-      overview,
       itinerary,
       expenses,
       members,
       docsPanel,
       guides,
       language,
+      tools,
       checklist,
       food,
-      tools,
     ],
-    [chat, overview, itinerary, expenses, members, docsPanel, guides, language, checklist, food, tools],
+    [chat, itinerary, expenses, members, docsPanel, guides, language, tools, checklist, food],
   );
 
   const tabHrefByKey = useMemo(() => {
@@ -237,7 +234,7 @@ export default function TripSwipeTabs({
   return (
     <TripActiveTabProvider activeTab={activeTabKey}>
       <TripFabRegistryProvider activeTab={activeTabKey}>
-        <div className="travel-os-content flex flex-col self-center">
+        <div className="flex w-full flex-col">
           <nav
             ref={tabBarRef}
             className="scrollbar-hide sticky top-0 z-[115] -mx-4 flex gap-0.5 overflow-x-auto overscroll-x-contain border-b border-slate-200/90 bg-white/95 px-3 pb-0 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 [touch-action:pan-x]"
@@ -291,6 +288,12 @@ export default function TripSwipeTabs({
               const key = TRIP_TAB_KEYS[i]!;
               const visible = i === uiIndex;
               const content = panel ?? panelCacheRef.current[key] ?? null;
+              // Chat fills the tab edge-to-edge (like the standalone chat page) instead of
+              // sitting in the padded content column other tabs use.
+              const isChat = key === "chat";
+              // On large screens the itinerary tab boxes itself to the viewport so its
+              // internal two-pane layout (scrollable list + static map) can size correctly.
+              const isItinerary = key === "itinerary";
               return (
                 <section
                   key={key}
@@ -299,7 +302,13 @@ export default function TripSwipeTabs({
                   aria-labelledby={`trip-tab-${key}`}
                   aria-hidden={!visible}
                   hidden={!visible}
-                  className="box-border w-full px-4 py-4 pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]"
+                  className={
+                    isChat
+                      ? "box-border h-[calc(100dvh-3.5rem-3.25rem-var(--travel-os-bottom-nav-h))] w-full overflow-hidden"
+                      : isItinerary
+                        ? "box-border w-full px-4 py-4 pb-[calc(var(--travel-os-bottom-nav-h)+3rem)] lg:h-[calc(100dvh-3.5rem-3.25rem-var(--travel-os-bottom-nav-h))] lg:overflow-hidden lg:pb-4"
+                        : "box-border w-full px-4 py-4 pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]"
+                  }
                 >
                   {content}
                 </section>

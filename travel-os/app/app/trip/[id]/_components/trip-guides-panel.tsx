@@ -33,14 +33,14 @@ function LinkIcon({ className }: { className?: string }) {
 
 function GuideVideoCard({ title, youtubeId }: { title: string; youtubeId: string }) {
   const href = `https://www.youtube.com/watch?v=${encodeURIComponent(youtubeId)}`;
-  const thumb = `https://img.youtube.com/vi/${encodeURIComponent(youtubeId)}/hqdefault.jpg`;
+  const thumb = `https://img.youtube.com/vi/${encodeURIComponent(youtubeId)}/mqdefault.jpg`;
 
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group relative block w-full overflow-hidden rounded-2xl bg-slate-900 shadow-md ring-1 ring-slate-200/90 transition active:scale-[0.98]"
+      className="group block w-full overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200/90 transition hover:shadow-md active:scale-[0.98]"
     >
       <div className="relative aspect-video w-full overflow-hidden bg-slate-800">
         {/* eslint-disable-next-line @next/next/no-img-element -- external YouTube CDN; no API */}
@@ -51,15 +51,15 @@ function GuideVideoCard({ title, youtubeId }: { title: string; youtubeId: string
           loading="lazy"
         />
         <div
-          className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/50 via-black/20 to-black/30"
+          className="absolute inset-0 flex items-center justify-center bg-black/10 transition group-hover:bg-black/20"
           aria-hidden
         >
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/95 text-slate-900 shadow-lg ring-2 ring-white/80 transition group-hover:scale-110">
-            <PlayIcon className="ml-0.5 h-7 w-7" />
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-900 shadow-md ring-1 ring-white/80 transition group-hover:scale-110">
+            <PlayIcon className="ml-0.5 h-4 w-4" />
           </span>
         </div>
       </div>
-      <p className="line-clamp-2 min-h-[2.75rem] bg-white px-3 py-2.5 text-sm font-semibold leading-snug text-slate-900">
+      <p className="line-clamp-2 min-h-[2.5rem] px-2 py-2 text-xs font-semibold leading-snug text-slate-900">
         {title}
       </p>
     </a>
@@ -87,7 +87,7 @@ function VideoSection({
   if (videos.length === 0) return <EmptyState destinationLabel={destinationLabel} />;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {videos.map((v) => (
         <GuideVideoCard key={`${v.youtubeId}-${v.title}`} {...v} />
       ))}

@@ -2,7 +2,7 @@
 
 import { memoryHasValues } from "@/lib/chat/memory-types";
 import type { ConversationMemory, DiscoveryPhase } from "@/lib/chat/memory-types";
-import { Brain, Compass } from "lucide-react";
+import { Compass } from "lucide-react";
 
 type ConversationMemoryPanelProps = {
   memory: ConversationMemory | null;
@@ -39,20 +39,14 @@ export default function ConversationMemoryPanel({ memory }: ConversationMemoryPa
 
   return (
     <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
-        {discoveryOn ? (
+      {discoveryOn ? (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
           <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-sky-800 ring-1 ring-sky-200">
             <Compass className="h-3 w-3" aria-hidden />
             Discovery · {phaseLabel(memory.discovery_phase)}
           </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5">
-            <Brain className="h-3.5 w-3.5 text-sky-600" aria-hidden />
-            Conversation memory
-          </span>
-        )}
-        <span className="font-normal text-slate-400">(this chat only · no itinerary yet)</span>
-      </div>
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         {memory.preferred_destination ? (
           <Chip label="Destination" value={memory.preferred_destination} />

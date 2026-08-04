@@ -191,8 +191,7 @@ export async function loadTripTabPanelsData(
   // Group `messages` chat is separate; trip AI conversation is loaded in page.tsx.
   const wantsChat = false;
   const wantsMembers = query.activeTab === "members";
-  const wantsOverview = query.activeTab === "overview";
-  const needsRole = wantsExpenses || wantsDocs || wantsMembers || wantsOverview;
+  const needsRole = wantsExpenses || wantsDocs || wantsMembers;
 
   const memberRole = needsRole ? await getMemberRole(supabase, tripId, user.id) : null;
   const isOrganizer = memberRole === "organizer";

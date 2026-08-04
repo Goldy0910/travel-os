@@ -1,4 +1,9 @@
 import { SetAppHeader } from "@/components/AppHeader";
+import {
+  buildTripDraftFromMemory,
+  type ResolvedChatTripDraft,
+} from "@/lib/chat/create-trip-from-conversation";
+import { loadConversationMemory } from "@/lib/chat/memory";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { pickSearchParam } from "@/app/app/_lib/search-params";
 import { getDestinationBySlug } from "@/lib/find-destination/catalog";
@@ -20,6 +25,7 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
       : "";
   const placeHint = pickSearchParam(params, "place");
   const destinationHint = pickSearchParam(params, "destination");
+  const conversationId = pickSearchParam(params, "conversationId");
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -32,12 +38,34 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
     } = await supabase.auth.getSession();
     user = session?.user ?? null;
   }
+
   if (!user) {
     const nextQs = new URLSearchParams();
     if (placeHint) nextQs.set("place", placeHint);
     if (destinationHint) nextQs.set("destination", destinationHint);
     const qs = nextQs.toString();
     redirect(`/app/login?next=${encodeURIComponent(`/app/create-trip${qs ? `?${qs}` : ""}`)}`);
+  }
+
+  // A chat-initiated trip retains this ID through the date-selection form so
+  // submit can attach the existing discussion instead of creating a new one.
+  let chatDraft: Partial<ResolvedChatTripDraft> | null = null;
+  let chatConversationId: string | null = null;
+  if (conversationId) {
+    const { data: conversation } = await supabase
+      .from("conversations")
+      .select("id, trip_id")
+      .eq("id", conversationId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (conversation && !conversation.trip_id) {
+      const memory = await loadConversationMemory(supabase, conversationId);
+      const built = buildTripDraftFromMemory(memory);
+      // A destination can be known before dates are discussed. Keep that
+      // partial draft so the editable form can still prefill the place.
+      chatDraft = built.draft ?? null;
+      chatConversationId = conversationId;
+    }
   }
 
   const { data: placeRows } = await supabase
@@ -58,9 +86,11 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
     })),
   );
 
-  const catalogDest = placeHint ? getDestinationBySlug(placeHint) : null;
+  const effectivePlaceHint = placeHint || chatDraft?.travelPlaceSlug || "";
+  const effectiveDestinationHint = destinationHint || chatDraft?.location || "";
+  const catalogDest = effectivePlaceHint ? getDestinationBySlug(effectivePlaceHint) : null;
   const matchedPlace =
-    travelPlaces.find((p) => p.slug === placeHint) ||
+    travelPlaces.find((p) => p.slug === effectivePlaceHint) ||
     travelPlaces.find((p) => catalogDest && p.slug === catalogDest.travelPlaceSlug) ||
     travelPlaces.find(
       (p) =>
@@ -69,8 +99,8 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
     ) ||
     travelPlaces.find(
       (p) =>
-        destinationHint &&
-        p.canonical_location.toLowerCase().includes(destinationHint.toLowerCase()),
+        effectiveDestinationHint &&
+        p.canonical_location.toLowerCase().includes(effectiveDestinationHint.toLowerCase()),
     ) ||
     null;
 
@@ -78,7 +108,7 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
   const initialQuery =
     matchedPlace?.canonical_location ||
     (catalogDest ? `${catalogDest.name}, ${catalogDest.country}` : "") ||
-    destinationHint ||
+    effectiveDestinationHint ||
     "";
 
   return (
@@ -108,6 +138,9 @@ export default async function CreateTripPage({ searchParams }: CreateTripPagePro
             destinationsLoaded={travelPlaces.length > 0}
             initialPlaceSlug={initialPlaceSlug}
             initialQuery={initialQuery}
+            initialStartDate={chatDraft?.startDate ?? ""}
+            initialEndDate={chatDraft?.endDate ?? ""}
+            conversationId={chatConversationId}
           />
         </div>
         </div>

@@ -36,6 +36,14 @@ type UiMessage = ConversationMessage & {
   clientKey?: string;
 };
 
+/**
+ * The left/bottom nav "Chat" link always points at the plain chat landing URL, so
+ * clicking it while already there is a same-URL no-op for Next's router (no remount,
+ * no fresh initial state). Dispatching this event lets the nav force the conversation
+ * picker open even when no navigation actually occurs.
+ */
+const OPEN_CHAT_PICKER_EVENT = "travel-os-open-chat-picker";
+
 type AIChatProps = {
   initialConversations: Conversation[];
   initialConversationId?: string | null;
@@ -165,7 +173,12 @@ export default function AIChat({
   const [error, setError] = useState("");
   const [failedRetryContent, setFailedRetryContent] = useState<string | null>(null);
   const [retryMode, setRetryMode] = useState<"resend" | "regenerate">("resend");
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  // Standalone Chat opens with the conversation list shown as an overlay above
+  // the page. Choosing (or starting) a conversation closes the overlay and
+  // reveals/updates the chat page underneath.
+  const [conversationPickerOpen, setConversationPickerOpen] = useState(
+    !tripScoped && initialConversationId == null,
+  );
   const [createTripOpenSignal, setCreateTripOpenSignal] = useState(0);
   /** Assistant clientKey waiting for post-stream place card enrichment. */
   const [pendingPlaceCardsKey, setPendingPlaceCardsKey] = useState<string | null>(null);
@@ -197,6 +210,15 @@ export default function AIChat({
     locationPromptedRef.current = true;
     userLocation.promptForPermissionIfNeeded();
   }, [userLocation]);
+
+  // Nav "Chat" clicks while already on this page can't rely on navigation/remount —
+  // force the conversation picker open so the list is always shown, from anywhere.
+  useEffect(() => {
+    if (tripScoped) return;
+    const onOpenPicker = () => setConversationPickerOpen(true);
+    window.addEventListener(OPEN_CHAT_PICKER_EVENT, onOpenPicker);
+    return () => window.removeEventListener(OPEN_CHAT_PICKER_EVENT, onOpenPicker);
+  }, [tripScoped]);
 
   useEffect(() => {
     return () => {
@@ -247,6 +269,14 @@ export default function AIChat({
 
   const activeTitle =
     conversations.find((c) => c.id === activeConversationId)?.title ?? "New chat";
+
+  // Shown beside "Trip chat" instead of a static subtitle + the full memory panel,
+  // so known trip details don't cost extra vertical space.
+  const tripChatSummary = tripScoped
+    ? [memory?.travel_duration?.trim(), memory?.interests?.length ? memory.interests.join(", ") : ""]
+        .filter((v): v is string => Boolean(v))
+        .join(" · ")
+    : "";
 
   const mapPlaces = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -764,9 +794,11 @@ export default function AIChat({
     void sendMessage("regenerate", { regenerate: true });
   };
 
-  const shellClass = tripScoped
-    ? "flex h-[min(36rem,70dvh)] min-h-[24rem] min-w-0 flex-1 flex-col"
-    : "flex h-full min-h-0 gap-3 px-3 py-3 md:gap-4 md:px-6 md:py-4";
+  // Trip chat and the standalone page share the same shell: ChatSidebar is an overlay
+  // (fixed position, no layout footprint) in both cases, so the only real difference is
+  // the header content and hiding "new chat" affordances that don't apply to a single
+  // trip-scoped conversation.
+  const shellClass = "flex h-full min-h-0 gap-3 px-3 py-3 md:gap-4 md:px-6 md:py-4";
 
   return (
     <div className={shellClass}>
@@ -774,12 +806,18 @@ export default function AIChat({
         <ChatSidebar
           conversations={conversations}
           activeConversationId={activeConversationId}
-          onSelect={(id) => void loadConversation(id)}
-          onNewChat={startNewChat}
+          onSelect={(id) => {
+            setConversationPickerOpen(false);
+            void loadConversation(id);
+          }}
+          onNewChat={() => {
+            setConversationPickerOpen(false);
+            startNewChat();
+          }}
           onConversationsChange={setConversations}
           onDeletedActive={startNewChat}
-          mobileOpen={mobileSidebarOpen}
-          onMobileOpenChange={setMobileSidebarOpen}
+          open={conversationPickerOpen}
+          onOpenChange={setConversationPickerOpen}
         />
       )}
 
@@ -792,19 +830,21 @@ export default function AIChat({
           {tripScoped ? null : (
             <button
               type="button"
-              onClick={() => setMobileSidebarOpen(true)}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 md:hidden"
-              aria-label="Open conversations"
+              onClick={() => setConversationPickerOpen(true)}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+              aria-label="Show conversations"
             >
               <PanelLeft className="h-4 w-4" aria-hidden />
             </button>
           )}
           {tripScoped ? (
             <div className="min-w-0 flex-1">
-              <h2 className="truncate text-sm font-semibold text-slate-900">Trip chat</h2>
-              <p className="text-xs text-slate-500">
-                One conversation for this trip — history stays here.
-              </p>
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+                <h2 className="shrink-0 text-sm font-semibold text-slate-900">Trip chat</h2>
+                {tripChatSummary ? (
+                  <p className="min-w-0 truncate text-xs text-slate-500">{tripChatSummary}</p>
+                ) : null}
+              </div>
             </div>
           ) : (
             <ChatExploreHeader
@@ -835,7 +875,7 @@ export default function AIChat({
           />
         )}
 
-        <ConversationMemoryPanel memory={memory} />
+        {tripScoped ? null : <ConversationMemoryPanel memory={memory} />}
 
         <div
           ref={scrollRef}
@@ -1124,14 +1164,12 @@ export default function AIChat({
         </form>
       </section>
 
-      {tripScoped ? null : (
-        <ChatMapPanel
-          places={mapPlaces}
-          focusedPlaceId={focusedMapPlaceId}
-          onSelectPlace={openPlaceDetails}
-          className="hidden w-[min(44%,32rem)] shrink-0 lg:flex xl:w-[min(48%,36rem)]"
-        />
-      )}
+      <ChatMapPanel
+        places={mapPlaces}
+        focusedPlaceId={focusedMapPlaceId}
+        onSelectPlace={openPlaceDetails}
+        className="hidden w-2/5 shrink-0 lg:flex"
+      />
       </div>
 
       <PlaceDetailsDrawer

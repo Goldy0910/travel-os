@@ -9,6 +9,12 @@ import { createTripAction } from "./actions";
 import { TravelPlaceIconLoose } from "./travel-place-icon";
 import type { TravelPlaceDTO } from "./travel-place-types";
 
+type CreateTripPrefill = {
+  slug?: string;
+  query?: string;
+  days?: number;
+};
+
 function normalizeSearch(s: string) {
   return s.trim().toLowerCase();
 }
@@ -28,33 +34,45 @@ export default function CreateTripForm({
   destinationsLoaded,
   initialPlaceSlug = null,
   initialQuery = "",
+  initialStartDate = "",
+  initialEndDate = "",
+  conversationId = null,
+  initialPrefill,
 }: {
   places: TravelPlaceDTO[];
   destinationsLoaded: boolean;
   initialPlaceSlug?: string | null;
   initialQuery?: string;
+  initialStartDate?: string;
+  initialEndDate?: string;
+  /** Existing standalone chat to attach when this trip is created. */
+  conversationId?: string | null;
+  /** Compatibility prefill used by recommendation-session entry points. */
+  initialPrefill?: CreateTripPrefill;
 }) {
+  const effectiveInitialPlaceSlug = initialPlaceSlug ?? initialPrefill?.slug ?? null;
+  const effectiveInitialQuery = initialQuery || initialPrefill?.query || "";
   const { pending, handleForm } = useFormActionFeedback();
   const resolvedInitial = (() => {
-    const bySlug = initialPlaceSlug
-      ? places.find((p) => p.slug === initialPlaceSlug)
+    const bySlug = effectiveInitialPlaceSlug
+      ? places.find((p) => p.slug === effectiveInitialPlaceSlug)
       : null;
     if (bySlug) {
       return { slug: bySlug.slug, query: bySlug.canonical_location };
     }
-    if (initialQuery.trim()) {
-      const byQuery = places.find((p) => placeMatches(p, initialQuery));
+    if (effectiveInitialQuery.trim()) {
+      const byQuery = places.find((p) => placeMatches(p, effectiveInitialQuery));
       if (byQuery) {
         return { slug: byQuery.slug, query: byQuery.canonical_location };
       }
     }
-    return { slug: initialPlaceSlug, query: initialQuery };
+    return { slug: effectiveInitialPlaceSlug, query: effectiveInitialQuery };
   })();
   const [query, setQuery] = useState(resolvedInitial.query);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(resolvedInitial.slug);
   const [listOpen, setListOpen] = useState(false);
-  const [startDateValue, setStartDateValue] = useState("");
-  const [endDateValue, setEndDateValue] = useState("");
+  const [startDateValue, setStartDateValue] = useState(initialStartDate);
+  const [endDateValue, setEndDateValue] = useState(initialEndDate);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const filteredPlaces = useMemo(() => {
@@ -106,6 +124,9 @@ export default function CreateTripForm({
   return (
     <form onSubmit={(e) => handleForm(e, createTripAction)} className="min-w-0 space-y-4">
       <input type="hidden" name="travelPlaceSlug" value={selectedSlug ?? ""} />
+      {/* Raw text the user typed, used to create a trip to a place outside the listed catalog. */}
+      <input type="hidden" name="placeQuery" value={query.trim()} />
+      <input type="hidden" name="conversationId" value={conversationId ?? ""} />
 
       <div ref={containerRef} className="relative min-w-0">
         <label htmlFor="placeQuery" className="mb-1 block text-sm font-medium text-slate-700">
@@ -122,7 +143,7 @@ export default function CreateTripForm({
             setListOpen(true);
           }}
           onFocus={() => destinationsLoaded && setListOpen(true)}
-          disabled={pending || !destinationsLoaded}
+          disabled={pending}
           className={`${fieldClass} ${placeFieldBorder} h-12 w-full disabled:opacity-60`}
         />
 
@@ -157,9 +178,9 @@ export default function CreateTripForm({
         ) : null}
       </div>
 
-      {destinationsLoaded && selectedSlug == null && query.trim().length > 0 ? (
-        <p className="text-xs text-amber-800">
-          Tap a destination in the list to confirm. Only listed places can be saved.
+      {selectedSlug == null && query.trim().length > 0 ? (
+        <p className="text-xs text-slate-500">
+          Not in our list yet — we&apos;ll still create your trip to &ldquo;{query.trim()}&rdquo;.
         </p>
       ) : null}
 
@@ -226,7 +247,7 @@ export default function CreateTripForm({
       <div className="fixed bottom-[var(--travel-os-sticky-cta-bottom)] left-0 right-0 z-[110] box-border pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]">
         <button
           type="submit"
-          disabled={pending || !destinationsLoaded || !selectedSlug}
+          disabled={pending || query.trim().length === 0}
           className="mx-auto flex h-12 w-full max-w-md min-w-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-base font-medium text-white shadow-lg transition hover:bg-slate-800 disabled:opacity-60"
         >
           {pending ? (

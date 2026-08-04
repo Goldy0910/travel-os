@@ -28,7 +28,6 @@ import ChecklistTab from "@/app/app/_components/ChecklistTab";
 import LanguageClient from "@/app/app/trip/[id]/language/_components/LanguageClient";
 import FoodTab from "@/components/FoodTab";
 import TripToolsPanel from "@/app/app/trip/[id]/_components/trip-tools-panel";
-import TripOverviewPanel from "@/app/app/trip/[id]/_components/trip-overview-panel";
 import { loadConversationMemory } from "@/lib/chat/memory";
 import type { ConversationMemory } from "@/lib/chat/memory-types";
 import type { Conversation, ConversationMessage } from "@/lib/chat/types";
@@ -244,19 +243,8 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   };
 
   const itineraryData =
-    activeTab === "itinerary" || activeTab === "overview"
+    activeTab === "itinerary"
       ? await (async () => {
-          if (activeTab === "overview") {
-            const [memberCount, myRole] = await Promise.all([
-              countTripMembers(supabase, tripId),
-              getMemberRole(supabase, tripId, user.id),
-            ]);
-            return {
-              ...itineraryDefaults,
-              memberCount,
-              canDeleteTrip: myRole === "organizer",
-            };
-          }
           if (ymdStart && ymdEnd) {
             try {
               await pruneItineraryOutsideTripRange(supabase, tripId, ymdStart, ymdEnd);
@@ -497,7 +485,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     <>
       <SetAppHeader title={title} showBack />
       <main className="flex w-full flex-col bg-[#f4f4f0] pb-[calc(var(--travel-os-bottom-nav-h)+3rem)]">
-        <div className="travel-os-content flex flex-col md:px-4">
+        <div className="flex w-full flex-col md:px-6 lg:px-10 xl:px-14">
           <Suspense fallback={<TripTabsFallback />}>
             <TripSwipeTabs
               chat={
@@ -522,52 +510,40 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                   )
                 ) : null
               }
-              overview={
-                activeTab === "overview" ? (
-                  <div className="space-y-5">
-                    {showJoinWelcome ? (
-                      <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
-                    ) : null}
-                    <TripOverviewPanel
-                      tripId={tripId}
-                      tripTitle={title}
-                      locationLabel={location || tripPlace}
-                      dateRangeLabel={dateRangeLabel}
-                      memberCount={itineraryData.memberCount}
-                      canDeleteTrip={itineraryData.canDeleteTrip}
-                      tripEditDefaults={tripEditDefaults}
-                    />
-                  </div>
-                ) : null
-              }
               itinerary={
                 activeTab === "itinerary" ? (
-                  <div className="space-y-5">
-                    {showJoinWelcome ? (
-                      <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
-                    ) : null}
-                    <TripItineraryShell
-                      tripId={tripId}
-                      tripTitle={title}
-                      dateRangeLabel={dateRangeLabel}
-                      memberCount={itineraryData.memberCount}
-                      canDeleteTrip={itineraryData.canDeleteTrip}
-                      tripEditDefaults={tripEditDefaults}
-                      orderedDates={itineraryData.orderedDates}
-                      grouped={itineraryData.grouped}
-                      initialError={itineraryError}
-                      defaultDateForAdd={itineraryData.defaultDateForAdd}
-                      activityCommentsByItemId={itineraryData.activityCommentsByItemId}
-                      activityStateByItemId={itineraryData.activityStateByItemId}
-                      currentUserId={user.id}
-                      memberLabelByUserId={itineraryData.memberLabelByUserId}
-                      autoOpenAddActivity={quickAction === "activity"}
-                      itinerarySetupComplete={itinerarySetupComplete}
-                    />
+                  // Banner and activity feed are passed as slots rendered *inside* the
+                  // shell's own scrollable left column (not as siblings around it), so
+                  // everything on the left scrolls together while the map column next to
+                  // it stays independently sized — see TripItineraryShell's `lg:h-full`
+                  // column, which needs this to stay the sole flow child of the tab panel.
+                  <TripItineraryShell
+                    tripId={tripId}
+                    tripTitle={title}
+                    dateRangeLabel={dateRangeLabel}
+                    memberCount={itineraryData.memberCount}
+                    canDeleteTrip={itineraryData.canDeleteTrip}
+                    tripEditDefaults={tripEditDefaults}
+                    orderedDates={itineraryData.orderedDates}
+                    grouped={itineraryData.grouped}
+                    initialError={itineraryError}
+                    defaultDateForAdd={itineraryData.defaultDateForAdd}
+                    activityCommentsByItemId={itineraryData.activityCommentsByItemId}
+                    activityStateByItemId={itineraryData.activityStateByItemId}
+                    currentUserId={user.id}
+                    memberLabelByUserId={itineraryData.memberLabelByUserId}
+                    autoOpenAddActivity={quickAction === "activity"}
+                    itinerarySetupComplete={itinerarySetupComplete}
+                    topBanner={
+                      showJoinWelcome ? (
+                        <JoinWelcomeBanner tripId={tripId} tripTitle={title} />
+                      ) : null
+                    }
+                  >
                     {itinerarySetupComplete && itineraryData.hasActivities ? (
                       <TripActivityFeed tripId={tripId} />
                     ) : null}
-                  </div>
+                  </TripItineraryShell>
                 ) : null
               }
               expenses={

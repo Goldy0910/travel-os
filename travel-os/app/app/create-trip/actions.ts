@@ -1,7 +1,10 @@
 "use server";
 
 import { getFallbackTravelPlaceBySlug } from "@/app/app/create-trip/travel-places-fallback";
+import { formatMemoryForPrompt } from "@/lib/chat/memory-types";
+import { loadConversationMemory } from "@/lib/chat/memory";
 import { ensureTripConversation } from "@/lib/chat/trip-conversation";
+import { generateAndPersistItinerary } from "@/app/app/trip/[id]/_lib/generate-and-persist-itinerary";
 import { actionError, actionSuccess, type FormActionResult } from "@/lib/form-action-result";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
@@ -114,32 +117,55 @@ export async function createTripAction(formData: FormData): Promise<FormActionRe
   }
 
   const travelPlaceSlug = String(formData.get("travelPlaceSlug") ?? "").trim();
+  const placeQuery = String(formData.get("placeQuery") ?? "").trim();
   const startDate = String(formData.get("startDate") ?? "").trim();
   const endDate = String(formData.get("endDate") ?? "").trim();
+  const conversationId = String(formData.get("conversationId") ?? "").trim();
 
-  if (!travelPlaceSlug || !startDate || !endDate) {
-    return actionError("Choose a destination from the list and fill all fields.");
+  if ((!travelPlaceSlug && !placeQuery) || !startDate || !endDate) {
+    return actionError("Enter a destination and fill all fields.");
   }
 
-  const { data: travelPlace, error: placeLookupError } = await supabase
-    .from("travel_places")
-    .select("canonical_location")
-    .eq("slug", travelPlaceSlug)
-    .maybeSingle();
+  // Listed places resolve to their canonical location; anything typed outside the
+  // catalog is still allowed and used as-is so users aren't limited to the dropdown.
+  let location = placeQuery;
+  if (travelPlaceSlug) {
+    const { data: travelPlace, error: placeLookupError } = await supabase
+      .from("travel_places")
+      .select("canonical_location")
+      .eq("slug", travelPlaceSlug)
+      .maybeSingle();
 
-  const fromDb =
-    !placeLookupError && travelPlace?.canonical_location
-      ? String(travelPlace.canonical_location).trim()
-      : "";
-  const fromFallback = getFallbackTravelPlaceBySlug(travelPlaceSlug)?.canonical_location.trim() ?? "";
-  const location = fromDb || fromFallback;
+    const fromDb =
+      !placeLookupError && travelPlace?.canonical_location
+        ? String(travelPlace.canonical_location).trim()
+        : "";
+    const fromFallback = getFallbackTravelPlaceBySlug(travelPlaceSlug)?.canonical_location.trim() ?? "";
+    location = fromDb || fromFallback || placeQuery;
+  }
 
   if (!location) {
-    return actionError("Invalid destination. Please choose a place from the list.");
+    return actionError("Enter a destination.");
   }
 
   if (new Date(endDate) < new Date(startDate)) {
     return actionError("End date must be after start date.");
+  }
+
+  // Only attach a standalone conversation owned by the creator. This preserves
+  // its existing messages when the user starts from the chat create flow.
+  let attachConversationId: string | null = null;
+  if (conversationId) {
+    const { data: conversation, error: conversationError } = await supabase
+      .from("conversations")
+      .select("id, trip_id")
+      .eq("id", conversationId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (conversationError || !conversation || conversation.trip_id) {
+      return actionError("That chat is unavailable or already belongs to another trip.");
+    }
+    attachConversationId = String(conversation.id);
   }
 
   const normalizedLocation = normalizePlace(location);
@@ -155,6 +181,7 @@ export async function createTripAction(formData: FormData): Promise<FormActionRe
       title: location,
       /** Prompt on itinerary tab until user chooses AI / PDF / manual — except Manali starter itinerary. */
       itinerary_setup_complete: seedManaliStarter,
+      conversation_id: attachConversationId,
     })
     .select("id")
     .single();
@@ -190,8 +217,23 @@ export async function createTripAction(formData: FormData): Promise<FormActionRe
   await ensureTripConversation(supabase, {
     tripId,
     userId: user.id,
+    attachConversationId,
     title: location,
   });
+
+  // When this trip originates in chat, build the initial itinerary from the
+  // preferences captured there. A generation failure does not undo the trip:
+  // the linked chat remains available to refine an empty itinerary.
+  if (attachConversationId) {
+    const memory = await loadConversationMemory(supabase, attachConversationId);
+    await generateAndPersistItinerary({
+      supabase,
+      tripId,
+      userId: user.id,
+      preferences: formatMemoryForPrompt(memory),
+      replaceExisting: true,
+    });
+  }
 
   revalidatePath("/app/trips");
   revalidatePath("/app/home");
