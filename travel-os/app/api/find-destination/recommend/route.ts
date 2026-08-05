@@ -4,6 +4,10 @@ import {
   BUDGET_MAX,
   BUDGET_MIN,
 } from "@/app/find-destination/_lib/quiz-constants";
+import { after } from "next/server";
+import { resolveInterestActorId } from "@/lib/destination-interest/actor";
+import { createDestinationInterestService } from "@/lib/destination-interest/server";
+import { trackInterestFireAndForget } from "@/lib/destination-interest/service";
 
 export const runtime = "nodejs";
 
@@ -74,6 +78,23 @@ export async function POST(request: Request) {
         { status: 502 },
       );
     }
+    after(() => {
+      void (async () => {
+        try {
+          const actorId = await resolveInterestActorId();
+          if (!actorId) return;
+          const service = await createDestinationInterestService();
+          trackInterestFireAndForget(
+            service,
+            result.destinations.map((d) => d.slug),
+            "AI_RECOMMENDED",
+            actorId,
+          );
+        } catch {
+          // never affect recommendations
+        }
+      })();
+    });
     return Response.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Recommendation failed";

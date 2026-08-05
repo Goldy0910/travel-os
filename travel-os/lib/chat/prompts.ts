@@ -29,6 +29,12 @@ import {
   MISSING_LOCATION_PROMPT_HINT,
 } from "@/lib/location/format-for-prompt";
 import type { UserLocationPromptContext } from "@/lib/location/types";
+import {
+  EXPERT_RECOMMENDATION_BYPASS_NOTE,
+  EXPERT_RECOMMENDATION_PROMPT_ADDENDUM,
+  isExpertRecommendationModeEnabled,
+  wantsFullOptionsList,
+} from "@/lib/chat/expert-recommendation";
 
 export const STANDALONE_CHAT_SYSTEM_PROMPT = `You are Travel Buddy for Travel Till 99.
 
@@ -94,6 +100,8 @@ export type ChatPromptOptions = ChatPromptMemoryLayers & {
    * Never include coordinates. Omitted when unavailable / disabled.
    */
   userLocation?: UserLocationPromptContext | null;
+  /** Latest user turn — expert mode bypass / mentioned destination. */
+  latestUserMessage?: string | null;
 };
 
 function formatUserLocationBlock(
@@ -180,6 +188,7 @@ ${conversationBlock}${locationBlock}${retrievedBlock}${knowledgeBlock}`;
     return `${buildDiscoverySystemPrompt(memory, {
       userTravelMemory: options.userTravelMemory,
       tripMemory,
+      latestUserMessage: options.latestUserMessage,
     })}
 
 ${TRAVEL_BUDDY_STYLE_INSTRUCTION}
@@ -187,7 +196,17 @@ ${TRAVEL_BUDDY_STYLE_INSTRUCTION}
 ${STRUCTURED_CHAT_OUTPUT_INSTRUCTION}${locationBlock}${retrievedBlock}${knowledgeBlock}`;
   }
 
+  const expertStandalone =
+    isExpertRecommendationModeEnabled() && !memory.preferred_destination
+      ? `\n\n${
+          wantsFullOptionsList(options.latestUserMessage ?? "")
+            ? EXPERT_RECOMMENDATION_BYPASS_NOTE
+            : EXPERT_RECOMMENDATION_PROMPT_ADDENDUM
+        }`
+      : "";
+
   return `${STANDALONE_CHAT_SYSTEM_PROMPT}
+${expertStandalone}
 
 ${layersBlock}
 

@@ -1,6 +1,9 @@
 "use client";
 
 import type { ValidationPayload } from "@/lib/homepage-decision/types";
+import DestinationInterestBadge from "@/components/destination-interest-badge";
+import { useDestinationInterest } from "@/components/use-destination-interest";
+import { resolveTopLevelDestination } from "@/lib/destination-interest/resolve";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -51,6 +54,12 @@ export default function ValidationCard({
 }: Props) {
   const fit = FIT_STYLES[data.fit];
   const FitIcon = fit.icon;
+  const destinationId =
+    data.destinationSlug ||
+    resolveTopLevelDestination({ name: data.destination, type: "city" })?.id ||
+    "";
+  const interestById = useDestinationInterest(destinationId ? [destinationId] : []);
+  const interest = destinationId ? interestById[destinationId] : undefined;
 
   return (
     <article
@@ -71,6 +80,12 @@ export default function ValidationCard({
           {fit.label}
         </span>
         <p className="mt-3 text-sm leading-relaxed text-slate-600">{data.summary}</p>
+        <div className="mt-2">
+          <DestinationInterestBadge
+            count={interest?.totalInterest ?? 0}
+            month={interest?.month}
+          />
+        </div>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2">

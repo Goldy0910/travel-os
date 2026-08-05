@@ -1,5 +1,6 @@
 "use client";
 
+import { trackDestinationInterestClient } from "@/lib/destination-interest/client";
 import { Check, Share2 } from "lucide-react";
 import { useState } from "react";
 
@@ -9,6 +10,7 @@ type PlaceActionsProps = {
   mapsUrl: string;
   lat: number | null;
   lng: number | null;
+  destinationId?: string | null;
 };
 
 export default function PlaceActions({
@@ -17,6 +19,7 @@ export default function PlaceActions({
   mapsUrl,
   lat,
   lng,
+  destinationId = null,
 }: PlaceActionsProps) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -55,6 +58,9 @@ export default function PlaceActions({
       if (!list.some((p) => p.placeId === placeId)) {
         list.unshift({ placeId, name: placeName, savedAt: new Date().toISOString() });
         localStorage.setItem(key, JSON.stringify(list.slice(0, 50)));
+        if (destinationId) {
+          trackDestinationInterestClient(destinationId, "FAVORITE");
+        }
       }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);

@@ -1,5 +1,6 @@
 import { engineResultToHomepagePayload } from "@/lib/recommendation-engine/adapters/homepage";
 import { decideFromHomepageRequest } from "@/lib/recommendation-engine/integration/hooks";
+import { isExpertRecommendationModeEnabled } from "@/lib/chat/expert-recommendation";
 import type { HomepageDecisionRequest, HomepageDecisionResponse } from "./types";
 
 const GEMINI_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-flash"] as const;
@@ -50,6 +51,14 @@ export async function runAiDecision(
   const mode = input.destination?.trim() ? "validation" : "recommendation";
   const itineraryDays = clampRequestedDays(input.days);
 
+  const expertHint = isExpertRecommendationModeEnabled()
+    ? `
+Act as a senior travel consultant: pick ONE best destination confidently.
+whyItFits must be 3–5 personalized reasons referencing the user's days/priorities/budget (not generic tourism copy).
+Include optional fields when recommending: matchScore (55–98 integer), expertOpinion (one confident sentence like "If I were planning this trip, I'd choose X…"), decisionHelper ([{destination, chooseIf: string[]}]) for the primary and each alternative.
+alternatives: at most 2, each with an objective reason they ranked lower.`
+    : "";
+
   const prompt = `You are TravelTill99, a decision-first travel advisor for Indian travelers.
 Return ONLY valid JSON (no markdown) matching this schema:
 ${mode === "recommendation" ? RECOMMEND_SCHEMA : VALIDATION_SCHEMA}
@@ -59,6 +68,7 @@ User input:
 - Priorities: ${input.priorities.join(", ") || "general"}
 - Budget tier: ${input.budget ?? "not specified"}
 - Destination (if checking): ${input.destination ?? "none — recommend one"}
+${expertHint}
 
 Use realistic destinations. Prefer India & South/Southeast Asia for short trips.
 ${
@@ -123,6 +133,12 @@ function normalizeAiResponse(
         requestedItineraryDays,
         ai.destination,
       ),
+      matchScore:
+        typeof ai.matchScore === "number"
+          ? Math.max(55, Math.min(98, Math.round(ai.matchScore)))
+          : ai.matchScore,
+      expertOpinion: ai.expertOpinion?.trim() || undefined,
+      decisionHelper: Array.isArray(ai.decisionHelper) ? ai.decisionHelper : undefined,
     };
   }
   if (ai.mode === "validation" && fallback.mode === "validation") {
@@ -144,7 +160,10 @@ const RECOMMEND_SCHEMA = `{
   "travelEffort": "string",
   "budgetEstimate": "string",
   "itinerary": ["string"],
-  "alternatives": [{"name":"string","slug":"string|null","reason":"string"}]
+  "alternatives": [{"name":"string","slug":"string|null","reason":"string"}],
+  "matchScore": "number|optional",
+  "expertOpinion": "string|optional",
+  "decisionHelper": [{"destination":"string","chooseIf":["string"]}]
 }`;
 
 const VALIDATION_SCHEMA = `{

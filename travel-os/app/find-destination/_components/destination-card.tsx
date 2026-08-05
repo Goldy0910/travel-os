@@ -16,6 +16,10 @@ import {
   loginThenSaveHref,
 } from "@/app/find-destination/_lib/urls";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import DestinationInterestBadge from "@/components/destination-interest-badge";
+import { useDestinationInterest } from "@/components/use-destination-interest";
+import { trackDestinationInterestClient } from "@/lib/destination-interest/client";
+import type { DestinationInterestSnapshot } from "@/lib/destination-interest/types";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -28,7 +32,15 @@ function MatchBadge({ score }: { score: number }) {
   );
 }
 
-export function DestinationCard({ destination }: { destination: DestinationRecommendation }) {
+export function DestinationCard({
+  destination,
+  featured = false,
+  interest,
+}: {
+  destination: DestinationRecommendation;
+  featured?: boolean;
+  interest?: DestinationInterestSnapshot;
+}) {
   const router = useRouter();
   const [saved, setSaved] = useState(() =>
     typeof window !== "undefined" ? isDestinationSaved(destination.slug) : false,
@@ -53,6 +65,7 @@ export function DestinationCard({ destination }: { destination: DestinationRecom
       }
       saveDestinationSlug(destination.slug);
       setSaved(true);
+      trackDestinationInterestClient(destination.slug, "FAVORITE");
       toast.success("Destination saved");
     } catch {
       toast.error("Couldn’t save right now. Try again.");
@@ -94,8 +107,12 @@ export function DestinationCard({ destination }: { destination: DestinationRecom
   };
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-lg shadow-slate-200/50">
-      <div className="relative h-44 w-full overflow-hidden bg-slate-200">
+    <article
+      className={`overflow-hidden rounded-3xl border bg-white shadow-lg shadow-slate-200/50 ${
+        featured ? "border-teal-300 ring-2 ring-teal-100" : "border-slate-200/80"
+      }`}
+    >
+      <div className={`relative w-full overflow-hidden bg-slate-200 ${featured ? "h-52" : "h-44"}`}>
         {/* eslint-disable-next-line @next/next/no-img-element -- matching app convention (no next/image usage) */}
         <img
           src={destination.imageUrl}
@@ -105,12 +122,25 @@ export function DestinationCard({ destination }: { destination: DestinationRecom
           className="h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/50 to-transparent" />
+        {featured ? (
+          <span className="absolute left-3 top-3 rounded-full bg-teal-600 px-2.5 py-1 text-xs font-bold text-white shadow">
+            ⭐ My Recommendation
+          </span>
+        ) : (
+          <span className="absolute left-3 top-3 rounded-full bg-slate-900/65 px-2.5 py-1 text-xs font-semibold text-white">
+            Alternative
+          </span>
+        )}
         <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-2">
           <h3 className="text-lg font-bold text-white drop-shadow">{destination.name}</h3>
           <MatchBadge score={destination.confidenceScore} />
         </div>
       </div>
       <div className="space-y-3 p-4">
+        <DestinationInterestBadge
+          count={interest?.totalInterest ?? 0}
+          month={interest?.month}
+        />
         <p className="text-sm leading-relaxed text-slate-600">{destination.shortDescription}</p>
         <dl className="grid grid-cols-2 gap-2 text-xs text-slate-600">
           <div className="rounded-xl bg-slate-50 px-3 py-2">
@@ -177,20 +207,36 @@ export function DestinationCard({ destination }: { destination: DestinationRecom
 }
 
 export function ResultsGrid({ destinations }: { destinations: DestinationRecommendation[] }) {
+  const interestById = useDestinationInterest(destinations.map((d) => d.slug));
+  const [primary, ...alternatives] = destinations;
   return (
     <div className="space-y-4">
       <div className="text-center">
-        <p className="text-xs font-semibold uppercase tracking-wider text-teal-700">Matched for you</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-teal-700">
+          Expert recommendation
+        </p>
         <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-          Your Perfect Destinations
+          Your Best Match
         </h2>
-        <p className="mt-2 text-sm text-slate-600">Top 3 picks based on your travel vibe.</p>
+        <p className="mt-2 text-sm text-slate-600">
+          One clear pick, plus up to two strong alternatives.
+        </p>
       </div>
-      <div className="space-y-5 md:grid md:grid-cols-3 md:gap-4 md:space-y-0">
-        {destinations.map((d) => (
-          <DestinationCard key={d.slug} destination={d} />
-        ))}
-      </div>
+      {primary ? (
+        <DestinationCard destination={primary} featured interest={interestById[primary.slug]} />
+      ) : null}
+      {alternatives.length > 0 ? (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Top alternatives
+          </p>
+          <div className="space-y-5 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
+            {alternatives.map((d) => (
+              <DestinationCard key={d.slug} destination={d} interest={interestById[d.slug]} />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

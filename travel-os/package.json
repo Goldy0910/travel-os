@@ -10,7 +10,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:recommendation": "npx --yes tsx --test lib/recommendation-engine/scoring/scoring.test.ts"
+    "test:recommendation": "npx --yes tsx --test lib/recommendation-engine/scoring/scoring.test.ts lib/chat/expert-recommendation/expert-recommendation.test.ts",
+    "test:expert-recommendation": "npx --yes tsx --test lib/chat/expert-recommendation/expert-recommendation.test.ts",
+    "test:destination-interest": "npx --yes tsx --test lib/destination-interest/destination-interest.test.ts",
+    "test": "npx --yes tsx --test lib/recommendation-engine/scoring/scoring.test.ts lib/trip-share/sanitize.test.ts lib/unified-trip/hydration/timeline-generator.test.ts lib/chat/expert-recommendation/expert-recommendation.test.ts lib/destination-interest/destination-interest.test.ts"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",

@@ -38,4 +38,5 @@ export type EnrichedPlaceDetails = ChatPlaceCard & {
     relativeTime: string;
   }>;
   photos: string[];
+  types: string[];
 };

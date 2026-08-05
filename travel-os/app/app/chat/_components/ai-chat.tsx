@@ -10,6 +10,8 @@ import CreateTripFromChatButton from "@/app/app/chat/_components/create-trip-fro
 import DestinationRecommendationCards, {
   cardsFromMessageMetadata,
 } from "@/app/app/chat/_components/destination-recommendation-cards";
+import { ChatDestinationInterestStrip } from "@/components/chat-destination-interest-strip";
+import { destinationInterestTargetsFromChat } from "@/lib/destination-interest/from-chat";
 import ItineraryEditProposalCard, {
   proposalFromMessageMetadata,
 } from "@/app/app/chat/_components/itinerary-edit-proposal-card";
@@ -939,6 +941,33 @@ export default function AIChat({
             const itineraryProposal = !isUser
               ? proposalFromMessageMetadata(message.metadata)
               : null;
+            const interestTargets = !isUser
+              ? destinationInterestTargetsFromChat({
+                  entities: Array.isArray(message.metadata?.entities)
+                    ? (message.metadata.entities as Array<{ name?: unknown; type?: unknown }>)
+                    : [],
+                  placeNames: placeCards.map((card) => card.name),
+                  recommendationNames: recommendationCards.map((card) => ({
+                    id: card.id,
+                    slug: card.slug,
+                    name: card.name,
+                  })),
+                  stored: Array.isArray(message.metadata?.destinationInterest)
+                    ? (message.metadata.destinationInterest as Array<{
+                        destinationId: string;
+                        name: string;
+                        uniqueTravelers?: number;
+                        totalInterest?: number;
+                        month?: number;
+                      }>)
+                    : [],
+                  text: message.content,
+                  memoryDestinations: [
+                    memory?.preferred_destination,
+                    ...(memory?.candidate_destinations ?? []),
+                  ].filter((value): value is string => Boolean(value?.trim())),
+                })
+              : [];
             const canRegenerate =
               !sending &&
               !isUser &&
@@ -1001,6 +1030,7 @@ export default function AIChat({
                         extras={
                           !isStreamingTokens ? (
                             <>
+                              <ChatDestinationInterestStrip targets={interestTargets} />
                               <DestinationRecommendationCards cards={recommendationCards} />
                               {itineraryProposal ? (
                                 <ItineraryEditProposalCard

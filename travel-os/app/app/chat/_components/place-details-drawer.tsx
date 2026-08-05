@@ -1,5 +1,10 @@
 "use client";
 
+import DestinationInterestBadge from "@/components/destination-interest-badge";
+import { useDestinationInterest } from "@/components/use-destination-interest";
+import { trackDestinationInterestClient } from "@/lib/destination-interest/client";
+import { detectRegisteredDestinationsInText } from "@/lib/destination-interest/from-chat";
+import { resolveTopLevelDestination } from "@/lib/destination-interest/resolve";
 import type { ChatPlaceCard, EnrichedPlaceDetails } from "@/lib/places/types";
 import {
   Clock,
@@ -59,6 +64,28 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [tabsPinned, setTabsPinned] = useState(false);
   const scrollingToRef = useRef<SectionId | null>(null);
+  const trackedViewRef = useRef<string | null>(null);
+  const resolvedDestination = resolveTopLevelDestination({
+    name: details?.name || card?.name || "",
+    type: "place",
+    googleTypes: details?.types,
+  });
+  const relatedDestinations = useMemo(() => {
+    const seen = new Set<string>();
+    const out = resolvedDestination ? [resolvedDestination] : [];
+    if (resolvedDestination) seen.add(resolvedDestination.id);
+    for (const dest of detectRegisteredDestinationsInText(
+      [details?.name, card?.name, details?.address, card?.address, card?.summary]
+        .filter(Boolean)
+        .join(" · "),
+    )) {
+      if (seen.has(dest.id)) continue;
+      seen.add(dest.id);
+      out.push(dest);
+    }
+    return out;
+  }, [resolvedDestination, details?.name, details?.address, card?.name, card?.address, card?.summary]);
+  const interestById = useDestinationInterest(relatedDestinations.map((dest) => dest.id));
 
   useEffect(() => {
     if (!open || !card?.placeId) {
@@ -103,6 +130,13 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
       cancelled = true;
     };
   }, [open, card?.placeId]);
+
+  useEffect(() => {
+    if (!open || !resolvedDestination) return;
+    if (trackedViewRef.current === resolvedDestination.id) return;
+    trackedViewRef.current = resolvedDestination.id;
+    trackDestinationInterestClient(resolvedDestination.id, "DETAIL_VIEW");
+  }, [open, resolvedDestination]);
 
   useEffect(() => {
     if (!open) return;
@@ -277,6 +311,24 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
                 <h3 className="mt-0.5 text-xl font-semibold tracking-tight text-slate-900">
                   {place.name}
                 </h3>
+                {relatedDestinations.map((dest) => {
+                  const snap = interestById[dest.id];
+                  const count = snap?.totalInterest ?? snap?.uniqueTravelers ?? 0;
+                  if (count < 1) return null;
+                  return (
+                    <div key={dest.id} className="mt-1.5">
+                      {resolvedDestination?.id === dest.id ? null : (
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                          {dest.name}
+                        </p>
+                      )}
+                      <DestinationInterestBadge
+                        count={count}
+                        month={snap?.month}
+                      />
+                    </div>
+                  );
+                })}
                 {place.rating != null ? (
                   <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm font-semibold text-slate-800">
                     <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden />

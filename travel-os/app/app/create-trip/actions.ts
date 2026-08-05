@@ -7,6 +7,8 @@ import { ensureTripConversation } from "@/lib/chat/trip-conversation";
 import { generateAndPersistItinerary } from "@/app/app/trip/[id]/_lib/generate-and-persist-itinerary";
 import { actionError, actionSuccess, type FormActionResult } from "@/lib/form-action-result";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { resolveTopLevelDestination } from "@/lib/destination-interest/resolve";
+import { createDestinationInterestService } from "@/lib/destination-interest/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -237,6 +239,19 @@ export async function createTripAction(formData: FormData): Promise<FormActionRe
 
   revalidatePath("/app/trips");
   revalidatePath("/app/home");
+
+  try {
+    const resolved =
+      resolveTopLevelDestination({ name: travelPlaceSlug || location, type: "city" }) ??
+      resolveTopLevelDestination({ name: location, type: "city" });
+    if (resolved) {
+      const service = await createDestinationInterestService();
+      await service.trackTripAdd(resolved.id, user.id);
+    }
+  } catch {
+    // Analytics must never block trip creation.
+  }
+
   return actionSuccess(
     "Trip created.",
     `/app/trip/${encodeURIComponent(tripId)}?tab=itinerary&setupItinerary=1`,

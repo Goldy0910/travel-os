@@ -15,9 +15,19 @@ export type ChatDestinationCard = {
   bestMonths: string[];
   highlights: string[];
   matchNote?: string;
+  /** Expert mode (optional — backward compatible). */
+  matchScore?: number;
+  role?: "primary" | "alternative";
+  whyReasons?: string[];
+  rankedLowerReasons?: string[];
+  chooseIf?: string[];
+  expertOpinion?: string;
+  uniqueTravelers?: number;
+  totalInterest?: number;
+  month?: number;
 };
 
 export type ChatRecommendationsPayload = {
   cards: ChatDestinationCard[];
-  source: "discovery";
+  source: "discovery" | "expert";
 };

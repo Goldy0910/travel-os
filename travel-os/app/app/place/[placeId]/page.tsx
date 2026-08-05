@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { SetAppHeader } from "@/components/AppHeader";
+import DestinationInterestBadge from "@/components/destination-interest-badge";
 import PlaceActions from "@/app/app/place/[placeId]/_components/place-actions";
 import PlaceGallery from "@/app/app/place/[placeId]/_components/place-gallery";
+import { formatDestinationInterestLabel } from "@/lib/destination-interest/format";
+import { resolveTopLevelDestination } from "@/lib/destination-interest/resolve";
+import { createDestinationInterestService } from "@/lib/destination-interest/server";
 import { GoogleMapsService, buildPhotoUrl } from "@/lib/places/google-maps-service";
 import { formatPlacesMapsError } from "@/lib/chat/gemini-errors";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -23,6 +28,32 @@ export default async function PlaceDetailsPage({ params }: Props) {
   if (!user) redirect("/app/login");
 
   const details = placeId ? await GoogleMapsService.getPlaceDetails(placeId) : null;
+  const topLevelDestination = details
+    ? resolveTopLevelDestination({
+        name: details.name,
+        type: "place",
+        googleTypes: details.types ?? [],
+      })
+    : null;
+  let interestLabel: string | null = null;
+  let interestTravelers = 0;
+  let interestMonth: number | undefined;
+  if (details && topLevelDestination) {
+    after(() => {
+      void createDestinationInterestService()
+        .then((service) => service.trackView(topLevelDestination.id, user.id))
+        .catch(() => undefined);
+    });
+    try {
+      const service = await createDestinationInterestService();
+      const snapshot = await service.getInterest(topLevelDestination.id);
+      interestTravelers = snapshot?.totalInterest ?? 0;
+      interestMonth = snapshot?.month;
+      interestLabel = formatDestinationInterestLabel(interestTravelers, interestMonth);
+    } catch {
+      interestLabel = null;
+    }
+  }
 
   if (!details) {
     return (
@@ -87,6 +118,15 @@ export default async function PlaceDetailsPage({ params }: Props) {
               {details.category ? (
                 <p className="mt-1 text-sm text-white/80">{details.category}</p>
               ) : null}
+              {interestLabel ? (
+                <div className="mt-2">
+                  <DestinationInterestBadge
+                    count={interestTravelers}
+                    month={interestMonth}
+                    className="text-sm font-medium text-white/90"
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -114,6 +154,7 @@ export default async function PlaceDetailsPage({ params }: Props) {
               mapsUrl={details.mapsUrl}
               lat={details.lat}
               lng={details.lng}
+              destinationId={topLevelDestination?.id ?? null}
             />
           </div>
         </section>

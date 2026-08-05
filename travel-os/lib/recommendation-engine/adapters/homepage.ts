@@ -28,6 +28,18 @@ export function engineResultToHomepagePayload(result: EngineResult): HomepageDec
         slug: a.slug,
         reason: a.reason,
       })),
+      matchScore: result.fitScore,
+      expertOpinion: `If I were planning this trip, I'd choose ${result.destination} — it scores highest for your time, budget, and priorities.`,
+      decisionHelper: [
+        {
+          destination: result.destination,
+          chooseIf: result.whyItFits.slice(0, 3),
+        },
+        ...result.alternatives.slice(0, 2).map((a) => ({
+          destination: a.name,
+          chooseIf: [a.reason],
+        })),
+      ],
     };
     return payload;
   }

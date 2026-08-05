@@ -5,6 +5,7 @@ import { useFormActionFeedback } from "@/app/app/_components/use-form-action-fee
 import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { trackDestinationInterestClient } from "@/lib/destination-interest/client";
 import { createTripAction } from "./actions";
 import { TravelPlaceIconLoose } from "./travel-place-icon";
 import type { TravelPlaceDTO } from "./travel-place-types";
@@ -114,6 +115,7 @@ export default function CreateTripForm({
     setSelectedSlug(place.slug);
     setQuery(place.canonical_location);
     setListOpen(false);
+    trackDestinationInterestClient(place.slug, "SEARCH");
   };
 
   const onQueryChange = (value: string) => {

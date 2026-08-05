@@ -15,6 +15,9 @@ import {
   loginThenSaveHref,
 } from "@/app/find-destination/_lib/urls";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import DestinationInterestBadge from "@/components/destination-interest-badge";
+import { useDestinationInterest } from "@/components/use-destination-interest";
+import { trackDestinationInterestClient } from "@/lib/destination-interest/client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -42,12 +45,17 @@ export default function DestinationDetailsView({
     return shouldPersistSave || isDestinationSaved(destination.slug);
   });
 
+  const interestById = useDestinationInterest([destination.slug]);
+  const interest = interestById[destination.slug];
+
   useEffect(() => {
     findDestinationAnalytics.destinationViewed(destination.slug);
+    trackDestinationInterestClient(destination.slug, "DETAIL_VIEW");
     if (!shouldPersistSave) return;
     const already = isDestinationSaved(destination.slug);
     saveDestinationSlug(destination.slug);
     if (!already) {
+      trackDestinationInterestClient(destination.slug, "FAVORITE");
       toast.success("Destination saved");
     }
   }, [destination.slug, shouldPersistSave]);
@@ -85,6 +93,7 @@ export default function DestinationDetailsView({
       }
       saveDestinationSlug(destination.slug);
       setSaved(true);
+      trackDestinationInterestClient(destination.slug, "FAVORITE");
       toast.success("Destination saved");
     } catch {
       toast.error("Couldn’t save right now.");
@@ -117,6 +126,13 @@ export default function DestinationDetailsView({
             </p>
             <h1 className="mt-1 text-2xl font-bold text-white">{destination.name}</h1>
             <p className="mt-1 text-sm text-white/90">{destination.confidenceScore}% match</p>
+            <div className="mt-2 text-white/90">
+              <DestinationInterestBadge
+                count={interest?.totalInterest ?? 0}
+                month={interest?.month}
+                className="text-sm font-medium text-white/90"
+              />
+            </div>
           </div>
         </div>
         <div className="space-y-5 p-4">

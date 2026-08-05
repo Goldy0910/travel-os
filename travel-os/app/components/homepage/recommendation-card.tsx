@@ -2,6 +2,9 @@
 
 import type { RecommendationPayload } from "@/lib/homepage-decision/types";
 import ButtonSpinner from "@/app/app/_components/button-spinner";
+import DestinationInterestBadge from "@/components/destination-interest-badge";
+import { useDestinationInterest } from "@/components/use-destination-interest";
+import { resolveTopLevelDestination } from "@/lib/destination-interest/resolve";
 import {
   ChevronRight,
   Clock,
@@ -27,23 +30,40 @@ export default function RecommendationCard({
   onShare,
   onRefine,
 }: Props) {
+  const destinationId =
+    data.destinationSlug ||
+    resolveTopLevelDestination({ name: data.destination, type: "city" })?.id ||
+    "";
+  const interestById = useDestinationInterest(destinationId ? [destinationId] : []);
+  const interest = destinationId ? interestById[destinationId] : undefined;
   return (
     <article className="homepage-result-enter space-y-5 rounded-3xl border border-teal-100/80 bg-white p-5 shadow-xl shadow-teal-900/5">
       <header>
         <p className="text-xs font-semibold uppercase tracking-wider text-teal-700">
-          Recommended destination
+          ⭐ My Recommendation
         </p>
-        <h3 className="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
+        <h3 className="mt-1 flex flex-wrap items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
           <MapPin className="h-6 w-6 shrink-0 text-teal-600" aria-hidden />
           {data.destination}
+          {typeof data.matchScore === "number" ? (
+            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200">
+              {data.matchScore}% Match
+            </span>
+          ) : null}
         </h3>
         {data.canonicalLocation ? (
           <p className="mt-1 text-sm text-slate-500">{data.canonicalLocation}</p>
         ) : null}
+        <div className="mt-2">
+          <DestinationInterestBadge
+            count={interest?.totalInterest ?? 0}
+            month={interest?.month}
+          />
+        </div>
       </header>
 
       <section>
-        <h4 className="text-sm font-semibold text-slate-800">Why this fits</h4>
+        <h4 className="text-sm font-semibold text-slate-800">Why I&apos;m recommending this</h4>
         <ul className="mt-2 space-y-2">
           {data.whyItFits.map((line) => (
             <li
@@ -56,6 +76,13 @@ export default function RecommendationCard({
           ))}
         </ul>
       </section>
+
+      {data.expertOpinion ? (
+        <section className="rounded-2xl bg-teal-50/80 p-4">
+          <h4 className="text-sm font-semibold text-teal-900">My Opinion</h4>
+          <p className="mt-1.5 text-sm leading-relaxed text-teal-900/90">{data.expertOpinion}</p>
+        </section>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-slate-50 p-4">
@@ -96,7 +123,7 @@ export default function RecommendationCard({
       {data.alternatives.length > 0 ? (
         <section className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Also consider
+            Why they ranked lower
           </p>
           <ul className="mt-2 space-y-2">
             {data.alternatives.map((alt) => (
@@ -107,6 +134,26 @@ export default function RecommendationCard({
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {data.decisionHelper && data.decisionHelper.length > 0 ? (
+        <section>
+          <h4 className="text-sm font-semibold text-slate-800">Decision helper</h4>
+          <div className="mt-2 space-y-3">
+            {data.decisionHelper.map((row) => (
+              <div key={row.destination} className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5">
+                <p className="text-sm font-medium text-slate-800">
+                  Choose {row.destination} if…
+                </p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-sm text-slate-600">
+                  {row.chooseIf.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </section>
       ) : null}
 

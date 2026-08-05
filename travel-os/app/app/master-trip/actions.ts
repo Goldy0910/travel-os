@@ -20,6 +20,8 @@ import type { HomepageDecisionRequest } from "@/lib/homepage-decision/types";
 import { actionError, actionSuccess, type FormActionResult } from "@/lib/form-action-result";
 import { isMissingTripMasterFilesTable } from "@/lib/supabase-schema-errors";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { resolveTopLevelDestination } from "@/lib/destination-interest/resolve";
+import { createDestinationInterestService } from "@/lib/destination-interest/server";
 import { revalidatePath } from "next/cache";
 
 async function getAuthContext() {
@@ -102,6 +104,19 @@ async function createLinkedTrip(
     await supabase.from("trips").delete().eq("id", tripId);
     return null;
   }
+
+  try {
+    const resolved =
+      resolveTopLevelDestination({ name: tripTitle, type: "city" }) ??
+      resolveTopLevelDestination({ name: tripLocation, type: "city" });
+    if (resolved) {
+      const service = await createDestinationInterestService();
+      await service.trackTripAdd(resolved.id, userId);
+    }
+  } catch {
+    // Analytics must never block trip creation.
+  }
+
   return tripId;
 }
 

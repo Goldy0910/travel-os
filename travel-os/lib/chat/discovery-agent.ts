@@ -5,6 +5,12 @@ import type {
 import { formatMemoryForPrompt } from "@/lib/chat/memory-types";
 import { CURRENCY_INR_INSTRUCTION } from "@/lib/chat/prompt-shared";
 import {
+  EXPERT_RECOMMENDATION_BYPASS_NOTE,
+  EXPERT_RECOMMENDATION_PROMPT_ADDENDUM,
+  isExpertRecommendationModeEnabled,
+  wantsFullOptionsList,
+} from "@/lib/chat/expert-recommendation";
+import {
   formatTripMemoryForPrompt,
   type TripMemoryFields,
 } from "@/lib/trip-memory/types";
@@ -134,24 +140,28 @@ Do NOT produce an itinerary, day plan, or packing list.`;
 
   if (phase === "narrowing") {
     return `Phase: NARROWING destinations.
-Using known preferences, briefly introduce 3–5 destination options.
-The UI will render rich Destination Recommendation Cards (image, budget, weather, visa, flights, best months, highlights).
-Keep your text short: a one-line intro + ask which options to shortlist or eliminate.
-Do NOT paste long destination essays.
+Using known preferences, recommend like a senior travel consultant:
+- Lead with ONE best destination (⭐ My Recommendation + match %)
+- Add at most TWO alternatives
+- Follow the Expert Recommendation Mode structure when that mode is active
+Destination Recommendation Cards may appear in the UI — keep prose concise.
+Do NOT list 5+ equals. Do NOT paste long destination essays.
 Do NOT produce an itinerary or day-by-day plan.`;
   }
 
   if (phase === "shortlist") {
     return `Phase: SHORTLIST refinement.
-Compare remaining candidates using budget, weather, visa ease, duration, and interests.
+Compare remaining candidates and confidently pick ONE winner.
+Use budget, weather, visa ease, duration, and interests.
+Include My Opinion + Why They Ranked Lower + Decision Helper when Expert Mode is active.
 Destination cards may appear in the UI — keep prose concise.
-Help the user pick ONE destination.
 Do NOT produce an itinerary yet.`;
   }
 
   if (phase === "complete") {
     return `Phase: DESTINATION SELECTED.
 A preferred destination is set. Stay in conversation mode.
+Validate the choice (pros/cons) — do NOT push a different destination unless the user asks.
 Still do NOT generate a full itinerary unless the user explicitly asks for one later.
 You may offer high-level next topics (visa overview, budget ballpark, best season) without a day plan.`;
   }
@@ -164,6 +174,8 @@ Never jump to an itinerary.`;
 export type DiscoveryPromptLayers = {
   userTravelMemory?: UserTravelMemoryFields | null;
   tripMemory?: TripMemoryFields | null;
+  /** Latest user message — used for expert mode bypass / mentioned-destination handling. */
+  latestUserMessage?: string | null;
 };
 
 export function buildDiscoverySystemPrompt(
@@ -172,6 +184,8 @@ export function buildDiscoverySystemPrompt(
 ): string {
   const missing = getMissingDiscoveryFields(memory);
   const phase = memory.discovery_phase;
+  const expertOn = isExpertRecommendationModeEnabled();
+  const fullList = wantsFullOptionsList(layers.latestUserMessage ?? "");
 
   const userBlock = `User Travel Memory (cross-trip lasting preferences — personalize with these):
 ${formatUserTravelMemoryForPrompt(
@@ -191,6 +205,11 @@ ${formatUserTravelMemoryForPrompt(
 ${formatTripMemoryForPrompt(layers.tripMemory)}`
     : "";
 
+  const expertBlock =
+    expertOn && (phase === "narrowing" || phase === "shortlist")
+      ? `\n\n${fullList ? EXPERT_RECOMMENDATION_BYPASS_NOTE : EXPERT_RECOMMENDATION_PROMPT_ADDENDUM}`
+      : "";
+
   return `You are Travel Buddy — Discovery Agent for Travel Till 99.
 Your job is to help travelers who do not know their destination yet.
 Stay energetic and concise (Travel Buddy voice), but never break the hard rules below.
@@ -204,13 +223,14 @@ Hard rules:
 - Perform light budget analysis in plain language when budget is discussed (what region/tier fits; no fake precise prices). Always discuss budgets and costs in Indian Rupees (INR / ₹), not US dollars, unless the user explicitly asks for another currency.
 - Consider weather preferences, visa preferences, travel duration, and interests when ranking destinations.
 - Prefer practical, popular-but-not-generic suggestions that fit the constraints.
-- When listing options, give top picks with a one-line why (not bare names).
+- When listing options, give top picks with a one-line why (not bare names). Prefer ONE clear winner + up to two alternatives.
 - Use light Markdown when listing options.
 - Personalize using User Travel Memory when present. Keep Trip Memory and Conversation Memory separate — do not merge layers.
 
 ${CURRENCY_INR_INSTRUCTION}
 
 ${phaseInstructions(phase, missing)}
+${expertBlock}
 
 ${userBlock}${tripBlock}
 

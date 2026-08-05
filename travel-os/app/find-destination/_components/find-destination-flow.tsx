@@ -157,8 +157,8 @@ export default function FindDestinationFlow() {
             Find Your Perfect Destination
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-slate-600">
-            Answer a few quick questions. We’ll match you with three destinations that fit your
-            budget, vibe, and travel style.
+            Answer a few quick questions. We’ll confidently recommend the best destination for
+            you — plus up to two strong alternatives.
           </p>
           <div className="mt-6">
             <PrimaryButton onClick={startQuiz}>Start Quiz</PrimaryButton>
@@ -167,7 +167,7 @@ export default function FindDestinationFlow() {
         <ul className="grid grid-cols-1 gap-2 text-sm text-slate-600">
           {[
             "8 short questions",
-            "Personalized top 3 picks",
+            "Personalized best pick + alternatives",
             "Save, share, or create a trip",
           ].map((item) => (
             <li

@@ -17,6 +17,13 @@ import {
 import { buildChatPlaceCardsFromEntities } from "@/lib/places/place-enrichment-service";
 import type { ChatPlaceCard } from "@/lib/places/types";
 import type { ChatDestinationCard } from "@/lib/chat/destination-card-types";
+import {
+  buildExpertChatCards,
+  extractMentionedDestination,
+  isExpertRecommendationModeEnabled,
+  signalsFromConversationMemory,
+  wantsFullOptionsList,
+} from "@/lib/chat/expert-recommendation";
 import { extractPlacesHeuristic } from "@/lib/places/place-extractor";
 import type { ChatEntity, StructuredChatResponse } from "@/lib/chat/structured-response";
 import {
@@ -69,7 +76,14 @@ import { checkChatRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isTripMember } from "@/lib/trip-membership";
 import "@/lib/tools";
-import { NextRequest } from "next/server";
+import { after, NextRequest } from "next/server";
+import {
+  detectRegisteredDestinationsInText,
+  destinationInterestTargetsFromChat,
+} from "@/lib/destination-interest/from-chat";
+import { resolveTopLevelDestinations } from "@/lib/destination-interest/resolve";
+import { createDestinationInterestService } from "@/lib/destination-interest/server";
+import { trackInterestFireAndForget } from "@/lib/destination-interest/service";
 
 export const runtime = "nodejs";
 
@@ -766,6 +780,7 @@ export async function POST(req: NextRequest) {
     userTravelMemory,
     retrievedContext,
     userLocation: resolvedUserLocation,
+    latestUserMessage: message || null,
   });
 
   const signal = req.signal;
@@ -914,12 +929,29 @@ export async function POST(req: NextRequest) {
           }));
         }
 
-        // Destination comparison cards used to render alongside the entity-driven place
-        // cards below, but they're sourced from a small hardcoded catalog and fall back to
-        // generic top picks when the model names places outside it — producing a second,
-        // mismatched set of suggestions under the same reply. Disabled so every reply shows
-        // exactly one set of cards, always matching what the model actually said.
-        const recommendationCards: ChatDestinationCard[] = [];
+        // Expert destination cards: only when discovery is recommending AND we can
+        // match names the model actually said (no generic catalog fallback — that
+        // previously produced a second, mismatched card strip).
+        let recommendationCards: ChatDestinationCard[] = [];
+        const expertCardsEligible =
+          isExpertRecommendationModeEnabled() &&
+          !companionContext &&
+          memory.discovery_active &&
+          (memory.discovery_phase === "narrowing" ||
+            memory.discovery_phase === "shortlist") &&
+          !wantsFullOptionsList(message || "");
+
+        if (expertCardsEligible) {
+          const harvested = harvestCandidateDestinations(trimmedAssistant);
+          if (harvested.length > 0) {
+            recommendationCards = buildExpertChatCards({
+              signals: signalsFromConversationMemory(memory, {
+                mentionedDestination: extractMentionedDestination(message || ""),
+              }),
+              candidateNames: harvested,
+            });
+          }
+        }
 
         // Capture propose_itinerary_edits proposals for confirmation UI (never auto-applied).
         let itineraryProposal: ItineraryEditProposal | null = null;
@@ -953,7 +985,53 @@ export async function POST(req: NextRequest) {
 
         // Enrich places BEFORE finalizing the assistant message so cards arrive in metadata
         // (and remain visible even if a later place_cards SSE event is missed).
+        const interestTargets = destinationInterestTargetsFromChat({
+          entities: structuredEntities,
+          recommendationNames: recommendationCards.map((card) => ({
+            id: card.id,
+            slug: card.slug,
+            name: card.name,
+          })),
+          text: trimmedAssistant,
+        });
+        const interestDestinationIds = [
+          ...new Set([
+            ...interestTargets.map((target) => target.destinationId),
+            ...recommendationCards.map((card) => card.slug || card.id),
+            ...resolveTopLevelDestinations(
+              structuredEntities.map((entity) => ({
+                name: entity.name,
+                type: String(entity.type || ""),
+              })),
+            ).map((dest) => dest.id),
+            ...detectRegisteredDestinationsInText(trimmedAssistant).map((dest) => dest.id),
+          ]),
+        ].filter(Boolean);
+
+        const interestPromise = (async () => {
+          try {
+            if (!interestDestinationIds.length) {
+              return new Map<string, { uniqueTravelers: number; totalInterest: number; month: number }>();
+            }
+            const service = await createDestinationInterestService();
+            const rows = await service.getInterestBatch(interestDestinationIds);
+            return new Map(
+              rows.map((row) => [
+                row.destinationId,
+                {
+                  uniqueTravelers: row.uniqueTravelers,
+                  totalInterest: row.totalInterest,
+                  month: row.month,
+                },
+              ]),
+            );
+          } catch {
+            return new Map<string, { uniqueTravelers: number; totalInterest: number; month: number }>();
+          }
+        })();
+
         let placeCards: ChatPlaceCard[] = [];
+        let interestById = new Map<string, { uniqueTravelers: number; totalInterest: number; month: number }>();
         try {
           const enrichPromise = buildChatPlaceCardsFromEntities(structuredEntities, {
             locationBias:
@@ -981,7 +1059,24 @@ export async function POST(req: NextRequest) {
               { once: true },
             );
           });
-          placeCards = await Promise.race([enrichPromise, timeoutPromise]);
+          const [enriched, interest] = await Promise.all([
+            Promise.race([enrichPromise, timeoutPromise]),
+            interestPromise,
+          ]);
+          placeCards = enriched;
+          interestById = interest;
+          if (recommendationCards.length && interestById.size) {
+            recommendationCards = recommendationCards.map((card) => {
+              const snap = interestById.get(card.slug) ?? interestById.get(card.id);
+              if (!snap) return card;
+              return {
+                ...card,
+                uniqueTravelers: snap.uniqueTravelers,
+                totalInterest: snap.totalInterest,
+                month: snap.month,
+              };
+            });
+          }
         } catch (error) {
           chatLogger.warn("chat_place_enrichment_failed", {
             requestId,
@@ -992,8 +1087,64 @@ export async function POST(req: NextRequest) {
           placeCards = [];
         }
 
+        after(() => {
+          if (!interestDestinationIds.length) return;
+          void createDestinationInterestService()
+            .then((service) => {
+              trackInterestFireAndForget(
+                service,
+                interestDestinationIds,
+                "AI_RECOMMENDED",
+                user.id,
+              );
+            })
+            .catch(() => undefined);
+        });
+
         if (placeCards.length > 0) {
           assistantMetadata.placeCards = placeCards;
+        }
+        if (recommendationCards.length > 0) {
+          assistantMetadata.recommendations = recommendationCards;
+        }
+
+        const displayInterestTargets = destinationInterestTargetsFromChat({
+          entities: structuredEntities,
+          placeNames: placeCards.map((card) => card.name),
+          recommendationNames: recommendationCards.map((card) => ({
+            id: card.id,
+            slug: card.slug,
+            name: card.name,
+          })),
+          text: trimmedAssistant,
+          stored: interestTargets,
+        });
+        if (displayInterestTargets.length > 0) {
+          assistantMetadata.destinationInterest = displayInterestTargets.map((target) => {
+            const snap = interestById.get(target.destinationId);
+            return {
+              destinationId: target.destinationId,
+              name: target.name,
+              uniqueTravelers: snap?.uniqueTravelers ?? target.uniqueTravelers ?? 0,
+              totalInterest: snap?.totalInterest ?? target.totalInterest ?? 0,
+              month: snap?.month ?? target.month,
+            };
+          });
+        }
+
+        // Prefer destination recommendation cards when both name the same place.
+        if (recommendationCards.length > 0 && placeCards.length > 0) {
+          const destNames = new Set(
+            recommendationCards.map((c) => c.name.toLowerCase().trim()),
+          );
+          placeCards = placeCards.filter(
+            (p) => !destNames.has(p.name.toLowerCase().trim()),
+          );
+          if (placeCards.length > 0) {
+            assistantMetadata.placeCards = placeCards;
+          } else {
+            delete assistantMetadata.placeCards;
+          }
         }
 
         chatLogger.info("chat_place_enrichment", {

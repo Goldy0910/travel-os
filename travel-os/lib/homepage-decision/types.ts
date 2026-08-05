@@ -31,6 +31,10 @@ export type RecommendationPayload = {
   budgetEstimate: string;
   itinerary: string[];
   alternatives: Array<{ name: string; slug: string | null; reason: string }>;
+  /** Expert mode optional fields (backward compatible). */
+  matchScore?: number;
+  expertOpinion?: string;
+  decisionHelper?: Array<{ destination: string; chooseIf: string[] }>;
 };
 
 export type ValidationFit = "strong" | "okay" | "weak";

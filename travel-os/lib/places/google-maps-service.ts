@@ -124,6 +124,7 @@ function toDetails(data: PlacesDetailsPayload): EnrichedPlaceDetails | null {
     photos,
     reviews,
     openingHours,
+    types: Array.isArray(data.types) ? data.types.filter((t): t is string => typeof t === "string") : [],
   };
 }
 

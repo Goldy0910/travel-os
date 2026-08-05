@@ -3,6 +3,8 @@ import { loadConversationMemory } from "@/lib/chat/memory";
 import { ensureTripConversation } from "@/lib/chat/trip-conversation";
 import { getFallbackTravelPlaceBySlug } from "@/app/app/create-trip/travel-places-fallback";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { resolveTopLevelDestination } from "@/lib/destination-interest/resolve";
+import { createDestinationInterestService } from "@/lib/destination-interest/server";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -170,6 +172,7 @@ export async function POST(req: NextRequest) {
       title: location,
     });
 
+    void trackTripAddInterest(location, draft.travelPlaceSlug, user.id);
     return Response.json({
       ok: true,
       tripId,
@@ -204,6 +207,7 @@ export async function POST(req: NextRequest) {
     title: location,
   });
 
+  void trackTripAddInterest(location, draft.travelPlaceSlug, user.id);
   return Response.json({
     ok: true,
     tripId,
@@ -212,6 +216,24 @@ export async function POST(req: NextRequest) {
     draft,
     warnings: draft.warnings,
   });
+}
+
+async function trackTripAddInterest(
+  location: string,
+  travelPlaceSlug: string | null | undefined,
+  userId: string,
+) {
+  try {
+    const resolved =
+      (travelPlaceSlug
+        ? resolveTopLevelDestination({ name: travelPlaceSlug, type: "city" })
+        : null) ?? resolveTopLevelDestination({ name: location, type: "city" });
+    if (!resolved) return;
+    const service = await createDestinationInterestService();
+    await service.trackTripAdd(resolved.id, userId);
+  } catch {
+    // Analytics must never block trip creation.
+  }
 }
 
 async function insertOrganizer(

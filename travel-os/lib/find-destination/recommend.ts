@@ -5,23 +5,19 @@ import type {
   QuizAnswers,
   RecommendationResponse,
 } from "@/app/find-destination/_lib/types";
-
-function durationDays(duration: QuizAnswers["duration"]): number {
-  switch (duration) {
-    case "weekend":
-      return 2;
-    case "3-5-days":
-      return 4;
-    case "1-week":
-      return 7;
-    case "2-weeks":
-      return 14;
-    default:
-      return 18;
-  }
-}
+import {
+  buildExpertRecommendation,
+  isExpertRecommendationModeEnabled,
+  scoreDestinationExpert,
+  signalsFromQuizAnswers,
+} from "@/lib/chat/expert-recommendation";
 
 function scoreDestination(dest: DestinationRecommendation, answers: QuizAnswers): number {
+  if (isExpertRecommendationModeEnabled()) {
+    return scoreDestinationExpert(dest, signalsFromQuizAnswers(answers)).matchScore;
+  }
+
+  // Legacy heuristic (kept when expert mode is disabled via env).
   let score = 40;
 
   if (answers.region === "india" && dest.region === "india") score += 18;
@@ -33,7 +29,16 @@ function scoreDestination(dest: DestinationRecommendation, answers: QuizAnswers)
   const budgetDelta = Math.abs(mid - budget) / Math.max(budget, 1);
   score += Math.max(0, 16 - budgetDelta * 20);
 
-  const days = durationDays(answers.duration);
+  const days =
+    answers.duration === "weekend"
+      ? 2
+      : answers.duration === "3-5-days"
+        ? 4
+        : answers.duration === "1-week"
+          ? 7
+          : answers.duration === "2-weeks"
+            ? 14
+            : 18;
   if (days <= 5 && dest.idealDuration.includes("3")) score += 6;
   if (days >= 6 && days <= 10 && (dest.idealDuration.includes("6") || dest.idealDuration.includes("7") || dest.idealDuration.includes("5")))
     score += 6;
@@ -117,6 +122,38 @@ function formatBudget(value: number): string {
 }
 
 export function recommendDestinationsMock(answers: QuizAnswers): RecommendationResponse {
+  if (isExpertRecommendationModeEnabled()) {
+    const expert = buildExpertRecommendation({
+      signals: signalsFromQuizAnswers(answers),
+      limit: 3,
+    });
+    if (expert) {
+      const ranked = [expert.primary, ...expert.alternatives]
+        .map((row) => {
+          const catalog = DESTINATION_CATALOG.find((d) => d.slug === row.slug);
+          if (!catalog) return null;
+          return {
+            ...catalog,
+            confidenceScore: row.matchScore,
+            whyItMatches:
+              row.role === "primary"
+                ? `${row.whyReasons[0] ?? catalog.whyItMatches} ${expert.expertOpinion}`
+                : `${row.rankedLowerReasons[0] ?? catalog.whyItMatches}`,
+            shortDescription: row.summary || catalog.shortDescription,
+          };
+        })
+        .filter((d): d is DestinationRecommendation => d != null);
+
+      if (ranked.length > 0) {
+        return {
+          destinations: ranked,
+          generatedAt: new Date().toISOString(),
+          source: "mock",
+        };
+      }
+    }
+  }
+
   const ranked = DESTINATION_CATALOG.map((dest) => {
     const confidenceScore = scoreDestination(dest, answers);
     return {
@@ -246,8 +283,12 @@ async function recommendWithGemini(answers: QuizAnswers): Promise<Recommendation
     tags: d.topAttractions.slice(0, 3),
   }));
 
-  const systemPrompt =
-    "You are a travel destination recommender. Return ONLY valid JSON with key destinations (array of 3). Prefer slugs from the provided catalog. Each item needs: slug, name, country, shortDescription, whyItMatches, confidenceScore (60-99).";
+  const systemPrompt = isExpertRecommendationModeEnabled()
+    ? `You are an expert travel advisor for Indian travelers. Return ONLY valid JSON with key destinations (array of exactly 3, ranked best-first). Prefer slugs from the provided catalog.
+The first item MUST be your single best recommendation. Scores must be unique integers 60–99 (no ties).
+Each item needs: slug, name, country, shortDescription, whyItMatches (personalized to the quiz answers — reference budget, duration, weather, interests, companion), confidenceScore.
+Act confident: do not hedge with "all are good".`
+    : "You are a travel destination recommender. Return ONLY valid JSON with key destinations (array of 3). Prefer slugs from the provided catalog. Each item needs: slug, name, country, shortDescription, whyItMatches, confidenceScore (60-99).";
 
   const userPrompt = JSON.stringify({ answers, catalog: catalogBrief }, null, 0);
   let last = "AI response unavailable";
