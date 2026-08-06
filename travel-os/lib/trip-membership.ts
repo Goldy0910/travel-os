@@ -5,9 +5,38 @@ type FetchTripsViaMembershipOptions = {
   tripColumns?: string;
 };
 
+function asTripRow(
+  value: Record<string, unknown> | Record<string, unknown>[] | null | undefined,
+): Record<string, unknown> | null {
+  if (!value) return null;
+  const trip = Array.isArray(value) ? value[0] : value;
+  if (!trip || trip.id == null) return null;
+  return trip;
+}
+
+function tripSortKey(trip: Record<string, unknown>): string {
+  const start =
+    (typeof trip.start_date === "string" && trip.start_date) ||
+    (typeof trip.created_at === "string" && trip.created_at) ||
+    "";
+  return start;
+}
+
+function sortTripsNewestFirst(trips: Record<string, unknown>[]): Record<string, unknown>[] {
+  return [...trips].sort((a, b) => {
+    const ak = tripSortKey(a);
+    const bk = tripSortKey(b);
+    if (ak && bk) return bk.localeCompare(ak);
+    if (ak) return -1;
+    if (bk) return 1;
+    return String(b.id ?? "").localeCompare(String(a.id ?? ""));
+  });
+}
+
 /**
- * Load trips only where the user has a `members` row (membership-first embed).
- * Equivalent to: `select * from trips where exists (select 1 from members where …)`.
+ * Load every trip the user created or belongs to.
+ * Membership-first, then union with `trips.user_id` ownership (covers legacy rows
+ * missing an organizer members entry). Best-effort backfills organizer membership.
  */
 export async function fetchTripsViaMembership(
   supabase: SupabaseClient,
@@ -19,32 +48,79 @@ export async function fetchTripsViaMembership(
   error: { message: string } | null;
 }> {
   const cols = options?.tripColumns ?? "*";
-  const { data, error } = await supabase
+  const byId = new Map<string, Record<string, unknown>>();
+  let firstError: { message: string } | null = null;
+
+  const { data: memberData, error: memberError } = await supabase
     .from("members")
     .select(`trip_id, trips(${cols})`)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .limit(500);
 
-  if (error) {
-    return { trips: [], tripIds: [], error: { message: error.message } };
-  }
-
-  type MemberTripRow = {
-    trip_id?: string;
-    trips?: Record<string, unknown> | Record<string, unknown>[] | null;
-  };
-  const rows = (data ?? []) as MemberTripRow[];
-
-  const byId = new Map<string, Record<string, unknown>>();
-  for (const row of rows) {
-    const nested = row.trips;
-    const trip = Array.isArray(nested) ? nested[0] : nested;
-    if (trip?.id != null) {
-      byId.set(String(trip.id), trip);
+  if (memberError) {
+    firstError = { message: memberError.message };
+  } else {
+    for (const row of (memberData ?? []) as Array<{
+      trip_id?: string;
+      trips?: Record<string, unknown> | Record<string, unknown>[] | null;
+    }>) {
+      const trip = asTripRow(row.trips);
+      if (trip) byId.set(String(trip.id), trip);
     }
   }
 
-  const trips = [...byId.values()];
-  const tripIds = [...byId.keys()];
+  // Owned trips (creator) — includes rows where membership backfill never ran.
+  const { data: ownedData, error: ownedError } = await supabase
+    .from("trips")
+    .select(cols)
+    .eq("user_id", userId)
+    .limit(500);
+
+  if (ownedError && !firstError) {
+    firstError = { message: ownedError.message };
+  } else {
+    for (const row of (ownedData ?? []) as Record<string, unknown>[]) {
+      if (row?.id == null) continue;
+      const id = String(row.id);
+      if (!byId.has(id)) byId.set(id, row);
+    }
+  }
+
+  // Best-effort: ensure creator has an organizer members row for owned trips.
+  const missingOrganizer: string[] = [];
+  for (const [id, trip] of byId) {
+    if (String(trip.user_id ?? "") !== userId) continue;
+    missingOrganizer.push(id);
+  }
+  if (missingOrganizer.length > 0) {
+    const { data: existingMembers } = await supabase
+      .from("members")
+      .select("trip_id")
+      .eq("user_id", userId)
+      .in("trip_id", missingOrganizer);
+    const have = new Set(
+      (existingMembers ?? []).map((row) => String((row as { trip_id?: string }).trip_id ?? "")),
+    );
+    const toInsert = missingOrganizer.filter((id) => !have.has(id));
+    if (toInsert.length > 0) {
+      await supabase.from("members").insert(
+        toInsert.map((tripId) => ({
+          trip_id: tripId,
+          user_id: userId,
+          name: "Organizer",
+          email: "",
+          role: "organizer",
+        })),
+      );
+    }
+  }
+
+  if (byId.size === 0 && firstError) {
+    return { trips: [], tripIds: [], error: firstError };
+  }
+
+  const trips = sortTripsNewestFirst([...byId.values()]);
+  const tripIds = trips.map((trip) => String(trip.id));
   return { trips, tripIds, error: null };
 }
 
@@ -58,17 +134,22 @@ export async function getTripIdsForUser(
   const { data, error } = await supabase
     .from("members")
     .select("trip_id")
-    .eq("user_id", userId);
-
-  if (error || !data?.length) {
-    return [];
-  }
+    .eq("user_id", userId)
+    .limit(500);
 
   const ids = new Set<string>();
-  for (const row of data) {
-    const tid = row.trip_id as string | undefined;
-    if (tid) ids.add(String(tid));
+  if (!error && data?.length) {
+    for (const row of data) {
+      const tid = row.trip_id as string | undefined;
+      if (tid) ids.add(String(tid));
+    }
   }
+
+  const { data: owned } = await supabase.from("trips").select("id").eq("user_id", userId).limit(500);
+  for (const row of owned ?? []) {
+    if (row.id != null) ids.add(String(row.id));
+  }
+
   return [...ids];
 }
 
@@ -85,7 +166,16 @@ export async function isTripMember(
     .eq("user_id", userId)
     .maybeSingle();
 
-  return !!memberRow;
+  if (memberRow) return true;
+
+  const { data: owned } = await supabase
+    .from("trips")
+    .select("id")
+    .eq("id", tripId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  return !!owned;
 }
 
 /** Organizer/member from `members` row only (matches strict trip RLS). */
@@ -105,7 +195,14 @@ export async function getMemberRole(
     return data.role as string;
   }
 
-  return null;
+  const { data: owned } = await supabase
+    .from("trips")
+    .select("id")
+    .eq("id", tripId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  return owned ? "organizer" : null;
 }
 
 export async function countTripMembers(

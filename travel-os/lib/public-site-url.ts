@@ -1,18 +1,28 @@
 import { headers } from "next/headers";
+import {
+  CANONICAL_PUBLIC_ORIGIN,
+  isBrandPublicOrigin,
+  isEphemeralPublicOrigin,
+  normalizePublicOrigin,
+  trimOrigin,
+} from "@/lib/public-site-url-shared";
+
+export {
+  CANONICAL_PUBLIC_ORIGIN,
+  ensureBrandShareUrl,
+  isBrandPublicOrigin,
+  isEphemeralPublicOrigin,
+  normalizePublicOrigin,
+} from "@/lib/public-site-url-shared";
 
 /**
- * Public origin for invite links, WhatsApp text, etc.
+ * Public origin for invite links, WhatsApp text, OG URLs, etc.
  *
- * `getPublicSiteUrl()` — env + Vercel only (no request); fine for scripts.
+ * Production always uses https://traveltill99.com so Copy link never hands out
+ * stale Vercel / old-domain URLs from env.
  *
- * `getResolvedPublicSiteUrl()` — use in Server Components: prefers env, then the
- * actual request host (custom domain, preview URL), then VERCEL_URL, then localhost.
+ * Preview / local keep request host or VERCEL_URL so deploys stay testable.
  */
-
-function trimOrigin(value: string | undefined): string | undefined {
-  const v = value?.trim().replace(/\/$/, "");
-  return v || undefined;
-}
 
 function explicitSiteUrl(): string | undefined {
   return (
@@ -28,6 +38,10 @@ function vercelSiteUrl(): string | undefined {
     return vercel;
   }
   return `https://${vercel}`;
+}
+
+function isVercelProduction(): boolean {
+  return process.env.VERCEL_ENV === "production";
 }
 
 /** First non-empty segment from comma-separated forwarded headers. */
@@ -54,54 +68,46 @@ function originFromIncomingHeaders(h: Headers): string | undefined {
 }
 
 export function getPublicSiteUrl(): string {
-  return (
-    explicitSiteUrl() ?? vercelSiteUrl() ?? "http://localhost:3000"
-  );
+  if (isVercelProduction()) {
+    return CANONICAL_PUBLIC_ORIGIN;
+  }
+
+  const explicit = explicitSiteUrl();
+  if (explicit && isBrandPublicOrigin(explicit)) {
+    return normalizePublicOrigin(explicit);
+  }
+  if (explicit && !isEphemeralPublicOrigin(explicit)) {
+    return normalizePublicOrigin(explicit);
+  }
+
+  return explicit ?? vercelSiteUrl() ?? "http://localhost:3000";
 }
 
 export async function getResolvedPublicSiteUrl(): Promise<string> {
+  if (isVercelProduction()) {
+    return CANONICAL_PUBLIC_ORIGIN;
+  }
+
+  try {
+    const h = await headers();
+    const fromRequest = originFromIncomingHeaders(h);
+    if (fromRequest && isBrandPublicOrigin(fromRequest)) {
+      return normalizePublicOrigin(fromRequest);
+    }
+    if (fromRequest) {
+      return fromRequest;
+    }
+  } catch {
+    // headers() unavailable outside a request
+  }
+
   const explicit = explicitSiteUrl();
-  if (explicit) {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[public-site-url] resolved (explicit env):", explicit, {
-        NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-        NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
-        VERCEL_URL: process.env.VERCEL_URL,
-      });
-    }
-    return explicit;
+  if (explicit && isBrandPublicOrigin(explicit)) {
+    return normalizePublicOrigin(explicit);
+  }
+  if (explicit && !isEphemeralPublicOrigin(explicit)) {
+    return normalizePublicOrigin(explicit);
   }
 
-  const h = await headers();
-  const fromRequest = originFromIncomingHeaders(h);
-  if (fromRequest) {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[public-site-url] resolved (request host):", fromRequest, {
-        NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-        VERCEL_URL: process.env.VERCEL_URL,
-      });
-    }
-    return fromRequest;
-  }
-
-  const vercel = vercelSiteUrl();
-  if (vercel) {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[public-site-url] resolved (VERCEL_URL):", vercel, {
-        NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-        VERCEL_URL: process.env.VERCEL_URL,
-      });
-    }
-    return vercel;
-  }
-
-  if (process.env.NODE_ENV === "development") {
-    console.log("[public-site-url] resolved (fallback localhost). ENV CHECK:", {
-      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-      NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
-      VERCEL_URL: process.env.VERCEL_URL,
-    });
-  }
-
-  return "http://localhost:3000";
+  return explicit ?? vercelSiteUrl() ?? "http://localhost:3000";
 }

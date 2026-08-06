@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { ensureBrandShareUrl } from "@/lib/public-site-url-shared";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 type Props = {
@@ -14,18 +15,22 @@ export default function InviteShareBlock({
   whatsappHref,
 }: Props) {
   const [copied, setCopied] = useState(false);
+  const publicJoinUrl = useMemo(() => ensureBrandShareUrl(joinUrl), [joinUrl]);
+  const publicWhatsAppHref = useMemo(() => {
+    if (publicJoinUrl === joinUrl) return whatsappHref;
+    return `https://wa.me/?text=${encodeURIComponent(`Join my trip: ${publicJoinUrl}`)}`;
+  }, [joinUrl, publicJoinUrl, whatsappHref]);
 
   const copyLink = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(joinUrl);
+      await navigator.clipboard.writeText(publicJoinUrl);
       setCopied(true);
       toast.success("Invite link copied.");
       window.setTimeout(() => setCopied(false), 2200);
     } catch {
-      const msg = "Could not copy. Select the link below and copy manually.";
-      toast.error(msg);
+      toast.error("Could not copy. Select the link below and copy manually.");
     }
-  }, [joinUrl]);
+  }, [publicJoinUrl]);
 
   return (
     <div className="space-y-3">
@@ -38,7 +43,7 @@ export default function InviteShareBlock({
           {copied ? "Copied" : "Copy link"}
         </button>
         <a
-          href={whatsappHref}
+          href={publicWhatsAppHref}
           target="_blank"
           rel="noreferrer"
           className="flex min-h-10 w-full touch-manipulation items-center justify-center gap-1.5 rounded-lg bg-[#25D366] px-3 text-sm font-semibold text-white transition active:scale-[0.99] active:bg-[#20BD5A]"
