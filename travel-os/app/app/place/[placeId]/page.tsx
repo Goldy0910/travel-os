@@ -123,7 +123,7 @@ export default async function PlaceDetailsPage({ params }: Props) {
                   <DestinationInterestBadge
                     count={interestTravelers}
                     month={interestMonth}
-                    className="text-sm font-medium text-white/90"
+                    tone="onMedia"
                   />
                 </div>
               ) : null}
@@ -155,6 +155,11 @@ export default async function PlaceDetailsPage({ params }: Props) {
               lat={details.lat}
               lng={details.lng}
               destinationId={topLevelDestination?.id ?? null}
+              address={details.address}
+              category={details.category}
+              photoName={details.photoName}
+              photoUrl={details.photoUrl}
+              rating={details.rating}
             />
           </div>
         </section>

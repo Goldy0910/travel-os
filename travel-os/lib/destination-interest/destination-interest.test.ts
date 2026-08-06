@@ -151,11 +151,11 @@ describe("badge rendering", () => {
     assert.equal(formatDestinationInterestLabel(-1), null);
     assert.equal(
       formatDestinationInterestLabel(1),
-      "🌍 1 traveler explored this destination this month",
+      "1 traveler explored this destination this month",
     );
     assert.equal(
       formatDestinationInterestLabel(124),
-      "🌍 124 travelers explored this destination this month",
+      "124 travelers explored this destination this month",
     );
     assert.equal(displayInterestCount({ uniqueTravelers: 1, totalInterest: 8 }), 8);
     assert.equal(displayInterestCount({ uniqueTravelers: 3 }), 3);

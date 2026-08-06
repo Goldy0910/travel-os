@@ -30,6 +30,7 @@ import {
   mergeChatEntities,
   parseStructuredChatResponse,
   stripEntityMarkup,
+  filterEntitiesForPlaceCards,
 } from "@/lib/chat/structured-response";
 import {
   ensureConversationMemory,
@@ -914,6 +915,7 @@ export async function POST(req: NextRequest) {
           assistantText = stripEntityMarkup(assistantText);
         }
         structuredEntities = mergeChatEntities(structuredEntities, structured.entities);
+        structuredEntities = filterEntitiesForPlaceCards(structuredEntities);
 
         const trimmedAssistant = assistantText.trim();
         if (!trimmedAssistant) {
@@ -923,10 +925,12 @@ export async function POST(req: NextRequest) {
         // Last-resort: if the model named places in prose but skipped the entities array,
         // recover candidates so Google Place cards can still render.
         if (!structuredEntities.length) {
-          structuredEntities = extractPlacesHeuristic(trimmedAssistant, 6).map((p) => ({
-            type: p.type || "place",
-            name: p.name,
-          }));
+          structuredEntities = filterEntitiesForPlaceCards(
+            extractPlacesHeuristic(trimmedAssistant, 6).map((p) => ({
+              type: p.type || "place",
+              name: p.name,
+            })),
+          );
         }
 
         // Expert destination cards: only when discovery is recommending AND we can

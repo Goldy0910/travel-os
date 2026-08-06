@@ -1,7 +1,8 @@
 "use client";
 
 import type { ChatPlaceCard } from "@/lib/places/types";
-import { Heart, MapPin, Plus, Star } from "lucide-react";
+import SavePlaceButton from "@/components/save-place-button";
+import { MapPin, Star } from "lucide-react";
 
 type ChatInlinePlaceCardProps = {
   card: ChatPlaceCard;
@@ -20,7 +21,7 @@ export default function ChatInlinePlaceCard({
 }: ChatInlinePlaceCardProps) {
   return (
     <article
-      className="h-[8.5rem] w-[min(85vw,19.5rem)] shrink-0 snap-start overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition hover:border-slate-300 hover:shadow-md"
+      className="relative h-[8.5rem] w-[min(85vw,19.5rem)] shrink-0 snap-start overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition hover:border-slate-300 hover:shadow-md"
       aria-label={`${card.name}${card.category ? `, ${card.category}` : ""}`}
     >
       <button
@@ -86,22 +87,27 @@ export default function ChatInlinePlaceCard({
               <MapPin className="h-6 w-6 text-slate-300" aria-hidden />
             </div>
           )}
-          <div className="absolute right-1.5 top-1.5 flex gap-1">
-            <span
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-slate-600 shadow-sm ring-1 ring-slate-200/80"
-              aria-hidden
-            >
-              <Heart className="h-3 w-3" />
-            </span>
-            <span
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-slate-600 shadow-sm ring-1 ring-slate-200/80"
-              aria-hidden
-            >
-              <Plus className="h-3 w-3" />
-            </span>
-          </div>
         </div>
       </button>
+
+      <div className="absolute right-1.5 top-1.5 z-[1]">
+        <SavePlaceButton
+          variant="icon"
+          stopPropagation
+          place={{
+            placeId: card.placeId,
+            name: card.name,
+            address: card.address,
+            category: card.category,
+            photoName: card.photoName,
+            photoUrl: card.photoUrl,
+            rating: card.rating,
+            mapsUrl: card.mapsUrl,
+            lat: card.lat,
+            lng: card.lng,
+          }}
+        />
+      </div>
     </article>
   );
 }

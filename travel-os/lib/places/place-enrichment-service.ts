@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ChatEntity } from "@/lib/chat/structured-response";
+import { isBlockedChatEntityName } from "@/lib/chat/structured-response";
 import { GoogleMapsService } from "@/lib/places/google-maps-service";
 import type { ChatPlaceCard, ExtractedPlace } from "@/lib/places/types";
 
@@ -16,7 +17,7 @@ function entitiesToExtractedPlaces(entities: ChatEntity[]): ExtractedPlace[] {
   const seen = new Set<string>();
   for (const entity of entities) {
     const name = entity.name.trim();
-    if (name.length < 2) continue;
+    if (name.length < 2 || isBlockedChatEntityName(name)) continue;
     const type = String(entity.type || "place").trim() || "place";
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
@@ -70,6 +71,7 @@ export class PlaceEnrichmentService {
 
     for (const place of candidates.slice(0, limit)) {
       if (options?.signal?.aborted) break;
+      if (isBlockedChatEntityName(place.name)) continue;
       const query = bias ? `${place.name}, ${bias}` : place.name;
       const placeId = await GoogleMapsService.searchPlaceId(query);
       if (!placeId || seen.has(placeId)) continue;

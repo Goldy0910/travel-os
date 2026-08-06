@@ -41,6 +41,10 @@ const STOP_NAMES = new Set(
     "absolutely",
     "google maps",
     "travel os",
+    "travel buddy",
+    "travel till",
+    "travel till 99",
+    "travel till99",
   ].map((s) => s.toLowerCase()),
 );
 

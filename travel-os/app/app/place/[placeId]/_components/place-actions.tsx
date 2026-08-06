@@ -1,7 +1,7 @@
 "use client";
 
-import { trackDestinationInterestClient } from "@/lib/destination-interest/client";
-import { Check, Share2 } from "lucide-react";
+import SavePlaceButton from "@/components/save-place-button";
+import { Share2 } from "lucide-react";
 import { useState } from "react";
 
 type PlaceActionsProps = {
@@ -11,6 +11,11 @@ type PlaceActionsProps = {
   lat: number | null;
   lng: number | null;
   destinationId?: string | null;
+  address?: string;
+  category?: string;
+  photoName?: string | null;
+  photoUrl?: string;
+  rating?: number | null;
 };
 
 export default function PlaceActions({
@@ -20,9 +25,13 @@ export default function PlaceActions({
   lat,
   lng,
   destinationId = null,
+  address = "",
+  category = "",
+  photoName = null,
+  photoUrl = "",
+  rating = null,
 }: PlaceActionsProps) {
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   const detailsPath =
     typeof window !== "undefined"
@@ -48,27 +57,6 @@ export default function PlaceActions({
     }
   }
 
-  async function save() {
-    try {
-      const key = "travel-os-saved-places";
-      const raw = localStorage.getItem(key);
-      const list: Array<{ placeId: string; name: string; savedAt: string }> = raw
-        ? (JSON.parse(raw) as typeof list)
-        : [];
-      if (!list.some((p) => p.placeId === placeId)) {
-        list.unshift({ placeId, name: placeName, savedAt: new Date().toISOString() });
-        localStorage.setItem(key, JSON.stringify(list.slice(0, 50)));
-        if (destinationId) {
-          trackDestinationInterestClient(destinationId, "FAVORITE");
-        }
-      }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch {
-      // ignore
-    }
-  }
-
   return (
     <div className="flex flex-wrap gap-2">
       {directionsUrl ? (
@@ -89,14 +77,22 @@ export default function PlaceActions({
         <Share2 className="h-4 w-4" aria-hidden />
         {copied ? "Link copied" : "Share"}
       </button>
-      <button
-        type="button"
-        onClick={() => void save()}
+      <SavePlaceButton
+        place={{
+          placeId,
+          name: placeName,
+          address,
+          category,
+          photoName,
+          photoUrl,
+          rating,
+          mapsUrl,
+          lat,
+          lng,
+          destinationId,
+        }}
         className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800"
-      >
-        {saved ? <Check className="h-4 w-4 text-emerald-600" aria-hidden /> : null}
-        {saved ? "Saved" : "Save"}
-      </button>
+      />
     </div>
   );
 }

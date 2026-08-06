@@ -130,7 +130,8 @@ export default function DestinationDetailsView({
               <DestinationInterestBadge
                 count={interest?.totalInterest ?? 0}
                 month={interest?.month}
-                className="text-sm font-medium text-white/90"
+                destinationName={destination.name}
+                tone="onMedia"
               />
             </div>
           </div>

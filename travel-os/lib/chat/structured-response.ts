@@ -76,6 +76,8 @@ Rules:
 - Prefer specific venues/areas over the whole destination city when recommending highlights.
 - When listing recommended places, use the EXACT same proper names in the Markdown as in "entities" so the app can link them. Write clear readable prose first; place preview cards are shown separately under the reply.
 - If none, use "entities":[].
+- Greetings, chitchat, capability intros, and replies with no concrete place recommendations MUST use "entities":[].
+- NEVER put product, brand, or assistant role names in entities (e.g. "Travel Buddy", "Travel Till", "Travel Till 99", "Travel OS").
 - If you cannot emit JSON, write a normal Markdown reply with NO <entity> tags.`;
 
 const PLACE_LIKE = new Set([
@@ -98,6 +100,37 @@ const PLACE_LIKE = new Set([
   "neighborhood",
   "area",
 ]);
+
+/** Product / assistant phrases the model sometimes mis-emits as place entities. */
+const BLOCKED_CHAT_ENTITY_NAMES = new Set(
+  [
+    "travel buddy",
+    "travel till",
+    "travel till 99",
+    "travel till99",
+    "traveltill99",
+    "travel os",
+    "travelos",
+    "ai travel buddy",
+    "your travel buddy",
+  ].map((s) => s.toLowerCase()),
+);
+
+const BLOCKED_CHAT_ENTITY_NAME_RE =
+  /^(?:my |your |the )?(?:ai )?travel(?:\s|-)?(?:buddy|till(?:\s*99)?|os)\b/i;
+
+export function isBlockedChatEntityName(name: string): boolean {
+  const n = name.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!n) return true;
+  if (BLOCKED_CHAT_ENTITY_NAMES.has(n)) return true;
+  if (BLOCKED_CHAT_ENTITY_NAME_RE.test(n)) return true;
+  return false;
+}
+
+/** Drop non-place / product names before Google place-card enrichment. */
+export function filterEntitiesForPlaceCards(entities: ChatEntity[]): ChatEntity[] {
+  return entities.filter((entity) => !isBlockedChatEntityName(entity.name));
+}
 
 export function isPlaceLikeEntityType(type: string): boolean {
   return PLACE_LIKE.has(type.trim().toLowerCase());
@@ -143,7 +176,7 @@ export function mergeChatEntities(...lists: ChatEntity[][]): ChatEntity[] {
   for (const list of lists) {
     for (const entity of list) {
       const name = entity.name.trim();
-      if (name.length < 2) continue;
+      if (name.length < 2 || isBlockedChatEntityName(name)) continue;
       const key = name.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
@@ -165,7 +198,7 @@ export function normalizeChatEntities(raw: unknown): ChatEntity[] {
     const row = item as { type?: unknown; name?: unknown };
     const name = typeof row.name === "string" ? row.name.trim() : "";
     const type = typeof row.type === "string" ? row.type.trim().toLowerCase() : "place";
-    if (name.length < 2 || name.length > 120) continue;
+    if (name.length < 2 || name.length > 120 || isBlockedChatEntityName(name)) continue;
     const key = `${type}:${name.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);

@@ -17,6 +17,8 @@ type RegistryContextValue = {
   setOpenActivity: (fn: OpenFn) => void;
   setOpenExpense: (fn: OpenFn) => void;
   setOpenUpload: (fn: OpenFn) => void;
+  /** Open the registered "add activity" sheet (itinerary tab). */
+  triggerAddActivity: () => void;
 };
 
 const TripFabRegistryContext = createContext<RegistryContextValue | null>(null);
@@ -54,6 +56,10 @@ export function TripFabRegistryProvider({
     openUploadRef.current = fn;
   }, []);
 
+  const triggerAddActivity = useCallback(() => {
+    openActivityRef.current?.();
+  }, []);
+
   const onFabPress = useCallback(() => {
     const t = activeTabRef.current;
     if (t === "itinerary") openActivityRef.current?.();
@@ -62,8 +68,8 @@ export function TripFabRegistryProvider({
   }, []);
 
   const ctx = useMemo(
-    () => ({ setOpenActivity, setOpenExpense, setOpenUpload }),
-    [setOpenActivity, setOpenExpense, setOpenUpload],
+    () => ({ setOpenActivity, setOpenExpense, setOpenUpload, triggerAddActivity }),
+    [setOpenActivity, setOpenExpense, setOpenUpload, triggerAddActivity],
   );
 
   const showFab = activeTab === "docs";

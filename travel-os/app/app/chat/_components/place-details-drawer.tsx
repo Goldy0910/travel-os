@@ -1,6 +1,8 @@
 "use client";
 
 import DestinationInterestBadge from "@/components/destination-interest-badge";
+import PlacePhotoLightbox from "@/components/place-photo-lightbox";
+import SavePlaceButton from "@/components/save-place-button";
 import { useDestinationInterest } from "@/components/use-destination-interest";
 import { trackDestinationInterestClient } from "@/lib/destination-interest/client";
 import { detectRegisteredDestinationsInText } from "@/lib/destination-interest/from-chat";
@@ -63,6 +65,7 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
   const [heroFailed, setHeroFailed] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [tabsPinned, setTabsPinned] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const scrollingToRef = useRef<SectionId | null>(null);
   const trackedViewRef = useRef<string | null>(null);
   const resolvedDestination = resolveTopLevelDestination({
@@ -94,6 +97,7 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
       setLoading(false);
       setActiveSection("overview");
       setTabsPinned(false);
+      setLightboxIndex(null);
       return;
     }
 
@@ -104,6 +108,7 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
     setHeroFailed(false);
     setActiveSection("overview");
     setTabsPinned(false);
+    setLightboxIndex(null);
 
     void (async () => {
       try {
@@ -139,13 +144,13 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
   }, [open, resolvedDestination]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || lightboxIndex != null) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, lightboxIndex]);
 
   const place = details ?? card;
   const galleryNames = (details?.photos ?? []).filter((n) => n.startsWith("places/"));
@@ -206,13 +211,31 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
     }, 450);
   };
 
+  const hero = place
+    ? placePhotoSrc({
+        photoUrl: details?.photoUrl || card?.photoUrl,
+        photoName: details?.photos?.[0] || card?.photoName,
+        maxH: 900,
+      })
+    : "";
+  const lightboxImages = useMemo(() => {
+    const urls: string[] = [];
+    const seen = new Set<string>();
+    const push = (url: string) => {
+      const trimmed = url.trim();
+      if (!trimmed || seen.has(trimmed)) return;
+      seen.add(trimmed);
+      urls.push(trimmed);
+    };
+    if (hero) push(hero.replace(/([?&]maxH=)\d+/, "$11600"));
+    for (const name of galleryNames) {
+      push(`/api/place-photo?name=${encodeURIComponent(name)}&maxH=1600`);
+    }
+    return urls;
+  }, [hero, galleryNames]);
+
   if (!open || !card || !place) return null;
 
-  const hero = placePhotoSrc({
-    photoUrl: details?.photoUrl || card.photoUrl,
-    photoName: details?.photos?.[0] || card.photoName,
-    maxH: 900,
-  });
   const mapEmbed =
     place.lat != null && place.lng != null
       ? `https://maps.google.com/maps?q=${place.lat},${place.lng}&z=15&output=embed`
@@ -267,17 +290,36 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
         className="relative z-[1] flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl animate-in slide-in-from-right duration-200 sm:w-[40vw] sm:max-w-[40vw]"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-          <h2 id={titleId} className="truncate text-sm font-semibold text-slate-900">
+          <h2 id={titleId} className="min-w-0 truncate text-sm font-semibold text-slate-900">
             {place.name}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <SavePlaceButton
+              variant="icon"
+              place={{
+                placeId: place.placeId,
+                name: place.name,
+                address: place.address,
+                category: place.category,
+                photoName: place.photoName,
+                photoUrl: place.photoUrl,
+                rating: place.rating,
+                mapsUrl: place.mapsUrl,
+                lat: place.lat,
+                lng: place.lng,
+                destinationId: resolvedDestination?.id ?? null,
+              }}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+            />
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Always-visible section tabs (fixed above scroll content) */}
@@ -287,13 +329,20 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
           <section data-section="overview" className="scroll-mt-2">
             <div className="relative aspect-[16/10] w-full bg-slate-200">
               {hero && !heroFailed ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={hero}
-                  alt={`Photo of ${place.name}`}
-                  className="h-full w-full object-cover"
-                  onError={() => setHeroFailed(true)}
-                />
+                <button
+                  type="button"
+                  className="h-full w-full cursor-zoom-in"
+                  onClick={() => setLightboxIndex(0)}
+                  aria-label="View photo full screen"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={hero}
+                    alt={`Photo of ${place.name}`}
+                    className="h-full w-full object-cover"
+                    onError={() => setHeroFailed(true)}
+                  />
+                </button>
               ) : (
                 <div className="flex h-full items-center justify-center">
                   <MapPin className="h-10 w-10 text-slate-300" aria-hidden />
@@ -311,24 +360,25 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
                 <h3 className="mt-0.5 text-xl font-semibold tracking-tight text-slate-900">
                   {place.name}
                 </h3>
-                {relatedDestinations.map((dest) => {
-                  const snap = interestById[dest.id];
-                  const count = snap?.totalInterest ?? snap?.uniqueTravelers ?? 0;
-                  if (count < 1) return null;
-                  return (
-                    <div key={dest.id} className="mt-1.5">
-                      {resolvedDestination?.id === dest.id ? null : (
-                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                          {dest.name}
-                        </p>
-                      )}
-                      <DestinationInterestBadge
-                        count={count}
-                        month={snap?.month}
-                      />
-                    </div>
-                  );
-                })}
+                {relatedDestinations.some(
+                  (dest) => (interestById[dest.id]?.totalInterest ?? interestById[dest.id]?.uniqueTravelers ?? 0) > 0,
+                ) ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {relatedDestinations.map((dest) => {
+                      const snap = interestById[dest.id];
+                      const count = snap?.totalInterest ?? snap?.uniqueTravelers ?? 0;
+                      if (count < 1) return null;
+                      return (
+                        <DestinationInterestBadge
+                          key={dest.id}
+                          destinationName={dest.name}
+                          count={count}
+                          month={snap?.month}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : null}
                 {place.rating != null ? (
                   <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm font-semibold text-slate-800">
                     <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden />
@@ -360,6 +410,21 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
               ) : null}
 
               <div className="flex flex-wrap gap-2">
+                <SavePlaceButton
+                  place={{
+                    placeId: place.placeId,
+                    name: place.name,
+                    address: place.address,
+                    category: place.category,
+                    photoName: place.photoName,
+                    photoUrl: place.photoUrl,
+                    rating: place.rating,
+                    mapsUrl: place.mapsUrl,
+                    lat: place.lat,
+                    lng: place.lng,
+                    destinationId: resolvedDestination?.id ?? null,
+                  }}
+                />
                 {place.mapsUrl ? (
                   <a
                     href={place.mapsUrl}
@@ -457,16 +522,29 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
             <section data-section="photos" className="scroll-mt-2 border-t border-slate-100 px-4 py-4">
               <h4 className="mb-2 text-sm font-semibold text-slate-900">Photos</h4>
               <div className="grid grid-cols-2 gap-2">
-                {galleryNames.slice(0, 8).map((name) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={name}
-                    src={`/api/place-photo?name=${encodeURIComponent(name)}&maxH=400`}
-                    alt=""
-                    className="aspect-[4/3] w-full rounded-xl object-cover ring-1 ring-slate-200"
-                    loading="lazy"
-                  />
-                ))}
+                {galleryNames.slice(0, 8).map((name, index) => {
+                  const src = `/api/place-photo?name=${encodeURIComponent(name)}&maxH=400`;
+                  const fullIndex = lightboxImages.findIndex((url) =>
+                    url.includes(encodeURIComponent(name)),
+                  );
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      className="overflow-hidden rounded-xl ring-1 ring-slate-200"
+                      onClick={() => setLightboxIndex(fullIndex >= 0 ? fullIndex : index)}
+                      aria-label={`View photo ${index + 1} full screen`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={src}
+                        alt=""
+                        className="aspect-[4/3] w-full object-cover transition hover:opacity-95"
+                        loading="lazy"
+                      />
+                    </button>
+                  );
+                })}
               </div>
             </section>
           ) : null}
@@ -485,6 +563,15 @@ export default function PlaceDetailsDrawer({ card, open, onClose }: PlaceDetails
           ) : null}
         </div>
       </aside>
+
+      <PlacePhotoLightbox
+        open={lightboxIndex != null && lightboxImages.length > 0}
+        images={lightboxImages}
+        index={lightboxIndex ?? 0}
+        alt={`Photo of ${place.name}`}
+        onClose={() => setLightboxIndex(null)}
+        onIndexChange={setLightboxIndex}
+      />
     </div>
   );
 }

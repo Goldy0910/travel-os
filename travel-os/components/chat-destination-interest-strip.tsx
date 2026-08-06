@@ -62,19 +62,17 @@ export function ChatDestinationInterestStrip({
   if (!visible.length) return null;
 
   return (
-    <div className="mt-3 space-y-2">
+    <div
+      className="mt-2.5 flex max-w-full flex-wrap items-center gap-2"
+      data-testid="chat-destination-interest-strip"
+      role="list"
+      aria-label="Destination interest this month"
+    >
       {visible.map((target) => (
-        <div
-          key={target.destinationId}
-          className="rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-2"
-          data-testid="chat-destination-interest-strip"
-        >
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-sky-800">
-            {target.name}
-          </p>
+        <div key={target.destinationId} role="listitem" className="min-w-0">
           <DestinationInterestBadge
+            destinationName={target.name}
             count={counts[target.destinationId] ?? 0}
-            className="mt-1 text-[0.7rem] font-medium leading-snug text-sky-900"
           />
         </div>
       ))}

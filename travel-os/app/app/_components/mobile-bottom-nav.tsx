@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import MobileNavTabInner from "./mobile-nav-tab-inner";
 import LinkLoadingIndicator from "@/app/_components/link-loading-indicator";
-import { UserRound } from "lucide-react";
+import { Heart, UserRound } from "lucide-react";
 
 const LAST_TRIP_STORAGE_KEY = "travel-os-last-trip-id";
 const QUICK_ACTION_EVENT = "travel-os-open-quick-action";
@@ -52,6 +52,16 @@ function TripsIcon({ active }: { active: boolean }) {
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="M8 3v4M16 3v4M3 10h18" />
     </svg>
+  );
+}
+
+function SavedIcon({ active }: { active: boolean }) {
+  return (
+    <Heart
+      className={`h-5 w-5 ${active ? "text-slate-900" : "text-slate-400"}`}
+      strokeWidth={2}
+      aria-hidden
+    />
   );
 }
 
@@ -218,6 +228,12 @@ export default function MobileBottomNav() {
       icon: TripsIcon,
     },
     {
+      label: "Saved",
+      href: "/app/saved",
+      active: normalizedPath === "/saved" || normalizedPath.startsWith("/saved/"),
+      icon: SavedIcon,
+    },
+    {
       label: "Profile",
       href: "/app/settings",
       active: normalizedPath === "/settings",
@@ -357,7 +373,7 @@ export default function MobileBottomNav() {
         className="pointer-events-auto fixed inset-x-0 bottom-0 z-[100] border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 md:hidden"
         aria-label="App"
       >
-        <div className="mx-auto grid w-full max-w-md grid-cols-3 px-0.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+        <div className="mx-auto grid w-full max-w-md grid-cols-4 px-0.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (

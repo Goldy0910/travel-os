@@ -4,9 +4,9 @@ Monthly analytics for top-level destinations. The database still tracks unique t
 
 **UI (temporary):** badges show **`total_interest`** (every search / AI rec / detail view / trip add / favorite this month), not unique travelers. Switch display back to `unique_travelers` later.
 
-UI copy (never “planning to visit”):
+UI copy (compact chip, never “planning to visit”):
 
-> 🌍 124 travelers explored this destination this month
+> Manali · **4** travelers explored this month
 
 ## What is tracked
 

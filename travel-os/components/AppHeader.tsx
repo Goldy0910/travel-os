@@ -45,6 +45,9 @@ function defaultHeaderForPath(pathname: string): AppHeaderOverride {
   if (path === "/app/trips") {
     return { title: "Trips", showBack: true };
   }
+  if (path === "/app/saved") {
+    return { title: "Saved", showBack: false };
+  }
   if (path === "/app/create-trip") {
     return { title: "Create trip", showBack: true };
   }

@@ -1,7 +1,5 @@
 /**
  * Badge copy. Returns null when there is nothing trustworthy to show (0 / invalid).
- * 1 traveler → singular; otherwise plural.
- *
  * Early product: pass total event count (`totalInterest`), not unique travelers.
  */
 export function formatDestinationInterestLabel(
@@ -11,7 +9,15 @@ export function formatDestinationInterestLabel(
   if (!Number.isFinite(count) || count < 1) return null;
   const value = Math.floor(count);
   const noun = value === 1 ? "traveler" : "travelers";
-  return `🌍 ${value.toLocaleString("en-US")} ${noun} explored this destination this month`;
+  return `${value.toLocaleString("en-US")} ${noun} explored this destination this month`;
+}
+
+/** Short secondary line for compact chips. */
+export function formatDestinationInterestShortLabel(count: number): string | null {
+  if (!Number.isFinite(count) || count < 1) return null;
+  const value = Math.floor(count);
+  const noun = value === 1 ? "traveler" : "travelers";
+  return `${noun} explored this month`;
 }
 
 /** Display metric for badges. Swap to uniqueTravelers when that ships. */
