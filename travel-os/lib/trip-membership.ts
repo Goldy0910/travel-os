@@ -5,6 +5,17 @@ type FetchTripsViaMembershipOptions = {
   tripColumns?: string;
 };
 
+function asRecordRows(data: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(data)) return [];
+  const rows: Record<string, unknown>[] = [];
+  for (const row of data) {
+    if (row != null && typeof row === "object" && !Array.isArray(row)) {
+      rows.push(row as Record<string, unknown>);
+    }
+  }
+  return rows;
+}
+
 function asTripRow(
   value: Record<string, unknown> | Record<string, unknown>[] | null | undefined,
 ): Record<string, unknown> | null {
@@ -60,11 +71,14 @@ export async function fetchTripsViaMembership(
   if (memberError) {
     firstError = { message: memberError.message };
   } else {
-    for (const row of (memberData ?? []) as Array<{
-      trip_id?: string;
-      trips?: Record<string, unknown> | Record<string, unknown>[] | null;
-    }>) {
-      const trip = asTripRow(row.trips);
+    for (const row of asRecordRows(memberData)) {
+      const trip = asTripRow(
+        row.trips as
+          | Record<string, unknown>
+          | Record<string, unknown>[]
+          | null
+          | undefined,
+      );
       if (trip) byId.set(String(trip.id), trip);
     }
   }
@@ -76,11 +90,11 @@ export async function fetchTripsViaMembership(
     .eq("user_id", userId)
     .limit(500);
 
-  if (ownedError && !firstError) {
-    firstError = { message: ownedError.message };
+  if (ownedError) {
+    if (!firstError) firstError = { message: ownedError.message };
   } else {
-    for (const row of (ownedData ?? []) as Record<string, unknown>[]) {
-      if (row?.id == null) continue;
+    for (const row of asRecordRows(ownedData)) {
+      if (row.id == null) continue;
       const id = String(row.id);
       if (!byId.has(id)) byId.set(id, row);
     }

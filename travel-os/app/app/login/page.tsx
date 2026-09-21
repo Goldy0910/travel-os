@@ -77,7 +77,10 @@ function formatAuthError(error: unknown): string {
     combined.includes("networkerror") ||
     combined.includes("authretryable")
   ) {
-    return "Can't reach Supabase auth. Check your internet connection, and confirm NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in travel-os/.env.local point to an active project (then restart npm run dev).";
+    if (process.env.NODE_ENV === "development") {
+      return "Can't reach Supabase auth. Check your internet connection, and confirm NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY in travel-os/.env.local point to an active project (then restart npm run dev).";
+    }
+    return "Can't reach the sign-in service. This is a server configuration problem, not your password. The app’s Supabase project URL is unreachable — restore that project or update NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY on the host and redeploy.";
   }
   return msg.trim() || "Something went wrong. Try again.";
 }

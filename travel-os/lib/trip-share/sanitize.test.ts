@@ -5,7 +5,7 @@ import type { MasterTripFile } from "@/lib/master-trip-file/types";
 
 const baseFile: MasterTripFile = {
   schemaVersion: 1,
-  preferences: { days: 5, priorities: ["culture"] },
+  preferences: { days: 5, priorities: ["food-culture"] },
   destination: {
     name: "Goa",
     slug: "goa",
