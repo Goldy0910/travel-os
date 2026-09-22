@@ -74,6 +74,8 @@ Rules:
 - NEVER wrap place names in XML/HTML tags such as <entity>, <place>, or similar. Write normal prose in "response".
 - "entities" MUST list every concrete place you recommend (beaches, restaurants, cafes, hotels, markets, churches, landmarks, neighborhoods). Use precise proper names (e.g. "Palolem Beach", not "the beach").
 - Prefer specific venues/areas over the whole destination city when recommending highlights.
+- When the reply is about destinations other than the user's current city, entities MUST be places in those destinations. Do not list restaurants, cafes, or sights in the user's home city.
+- Qualify venue names with the destination when comparing places, e.g. "Abbey Falls, Coorg" or "Edakkal Caves, Wayanad".
 - When listing recommended places, use the EXACT same proper names in the Markdown as in "entities" so the app can link them. Write clear readable prose first; place preview cards are shown separately under the reply.
 - If none, use "entities":[].
 - Greetings, chitchat, capability intros, and replies with no concrete place recommendations MUST use "entities":[].

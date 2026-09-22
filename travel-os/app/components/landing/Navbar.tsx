@@ -1,28 +1,45 @@
 import Link from "next/link";
 import LandingLink from "./landing-link";
 
+const links = [
+  { href: "/find-destination", label: "Discover" },
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/#ai-advisor", label: "AI Advisor" },
+];
+
 export default function Navbar() {
   return (
-    <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200/90 bg-white/95 backdrop-blur-md">
-      <div className="travel-os-public-frame flex w-full items-center justify-between gap-3 px-4 py-3.5 md:px-10">
+    <header className="sticky top-0 z-50 shrink-0 border-b border-sky-100/80 bg-white/90 backdrop-blur-md">
+      <div className="travel-os-public-frame flex w-full items-center justify-between gap-3 px-4 py-3 md:px-10">
         <Link
           href="/"
-          className="text-base font-bold tracking-tight text-slate-900 md:text-lg"
+          className="text-[15px] font-bold tracking-tight text-slate-900 md:text-lg"
         >
-          TravelTill99
+          Travel Till 99
         </Link>
+        <nav className="hidden items-center gap-1 lg:flex">
+          {links.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="rounded-full px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-sky-50 hover:text-slate-900"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
         <div className="flex items-center gap-2">
           <LandingLink
-            href="/find-destination"
-            className="hidden min-h-11 items-center justify-center rounded-full px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 md:inline-flex"
+            href="/app/login"
+            className="inline-flex min-h-10 items-center justify-center rounded-full px-3 text-sm font-semibold text-slate-700 touch-manipulation"
           >
-            Find destination
+            Log in
           </LandingLink>
           <LandingLink
             href="/app/login"
-            className="inline-flex min-h-11 min-w-[5.25rem] items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold leading-none text-slate-800 shadow-sm transition active:scale-[0.98] touch-manipulation"
+            className="inline-flex min-h-10 items-center justify-center rounded-full bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] touch-manipulation"
           >
-            Log in
+            Start your trip
           </LandingLink>
         </div>
       </div>

@@ -2,12 +2,20 @@ import "server-only";
 
 import type { ChatEntity } from "@/lib/chat/structured-response";
 import { isBlockedChatEntityName } from "@/lib/chat/structured-response";
+import {
+  placeCardLooksLikeUserHomeLeak,
+  searchQueryForPlace,
+  type ChatPlaceSearchBias,
+} from "@/lib/places/chat-place-search-bias";
 import { GoogleMapsService } from "@/lib/places/google-maps-service";
 import type { ChatPlaceCard, ExtractedPlace } from "@/lib/places/types";
 
 export type PlaceEnrichmentOptions = {
   /** Bias text search toward a trip destination (e.g. "Tokyo"). */
   locationBias?: string | null;
+  /** Destination-aware query builder (preferred over a raw locationBias string). */
+  searchBias?: ChatPlaceSearchBias | null;
+  replyText?: string | null;
   limit?: number;
   signal?: AbortSignal;
 };
@@ -56,8 +64,13 @@ export class PlaceEnrichmentService {
     options?: PlaceEnrichmentOptions,
   ): Promise<ChatPlaceCard[]> {
     const limit = options?.limit ?? 6;
-    const bias = options?.locationBias?.trim() || "";
-    const biasKey = bias.toLowerCase();
+    const searchBias = options?.searchBias ?? {
+      replyDestinations: [],
+      defaultBias: options?.locationBias?.trim() || null,
+      rejectAddressCity: null,
+    };
+    const replyText = options?.replyText ?? "";
+    const biasKey = (searchBias.defaultBias ?? "").toLowerCase();
 
     // Prefer specific venues over the destination itself when both appear.
     let candidates = places;
@@ -72,12 +85,13 @@ export class PlaceEnrichmentService {
     for (const place of candidates.slice(0, limit)) {
       if (options?.signal?.aborted) break;
       if (isBlockedChatEntityName(place.name)) continue;
-      const query = bias ? `${place.name}, ${bias}` : place.name;
+      const query = searchQueryForPlace(place.name, searchBias, replyText);
       const placeId = await GoogleMapsService.searchPlaceId(query);
       if (!placeId || seen.has(placeId)) continue;
 
       const card = await GoogleMapsService.getPlaceCard(placeId);
       if (!card) continue;
+      if (placeCardLooksLikeUserHomeLeak(card, searchBias)) continue;
 
       seen.add(placeId);
       cards.push(card);

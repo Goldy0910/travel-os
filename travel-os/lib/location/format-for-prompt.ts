@@ -23,11 +23,12 @@ export function formatUserLocationForPrompt(
     "",
     "Location usage rules (required):",
     `- The user is in/near ${where}. Treat this as known fact.`,
-    `- For "around me", "near me", "nearby", "weekend trips", cafes, trekking, or similar — recommend places for ${where}.`,
+    `- For "around me", "near me", or "nearby" with no other destination named — recommend places for ${where}.`,
     "- NEVER say you cannot access, don't have, or still need their location when this block is present.",
     "- NEVER open with asking where they are if Current User Location is present.",
     "- If an earlier message in this chat claimed location was unavailable, ignore that — you have it now.",
     "- If the user explicitly names another city/region/country, that place overrides this location for the answer.",
+    `- When comparing or recommending trip destinations (hill stations, beaches, cities to visit), recommend places IN those destinations — not cafes or sights in ${where}.`,
     "- Never reveal exact coordinates. Never invent a different home city.",
   ].filter((line): line is string => line != null);
 

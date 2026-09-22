@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TravelTill99 — Decide where to go",
+  title: "Travel Till 99 — Group Trips. Made Simple.",
   description:
-    "Not sure where to go? Tell us your time and trip style — we'll recommend a destination or validate your pick, then help you plan.",
+    "Plan a trip with your friends without the chaos. Discover where to go, plan together, organize your itinerary and split expenses — all in one place.",
 };
 
 export const viewport = {

@@ -25,6 +25,7 @@ import {
   wantsFullOptionsList,
 } from "@/lib/chat/expert-recommendation";
 import { extractPlacesHeuristic } from "@/lib/places/place-extractor";
+import { resolveChatPlaceSearchBias } from "@/lib/places/chat-place-search-bias";
 import type { ChatEntity, StructuredChatResponse } from "@/lib/chat/structured-response";
 import {
   mergeChatEntities,
@@ -1038,15 +1039,16 @@ export async function POST(req: NextRequest) {
         let interestById = new Map<string, { uniqueTravelers: number; totalInterest: number; month: number }>();
         try {
           const enrichPromise = buildChatPlaceCardsFromEntities(structuredEntities, {
-            locationBias:
-              companionContext?.destination ||
-              memory.preferred_destination ||
-              memory.candidate_destinations?.[0] ||
-              resolvedUserLocation?.city ||
-              [resolvedUserLocation?.state, resolvedUserLocation?.country]
-                .filter(Boolean)
-                .join(", ") ||
-              null,
+            searchBias: resolveChatPlaceSearchBias({
+              replyText: trimmedAssistant,
+              userMessage: message || null,
+              entities: structuredEntities,
+              tripDestination: companionContext?.destination || null,
+              preferredDestination: memory.preferred_destination || null,
+              candidateDestinations: memory.candidate_destinations || null,
+              userCity: resolvedUserLocation?.city || null,
+            }),
+            replyText: trimmedAssistant,
             // Keep a card for every place the model explicitly recommends.
             // The reply UI renders these in a horizontally scrollable strip.
             limit: structuredEntities.length,
